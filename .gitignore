@@ -1,0 +1,17 @@
+bin/
+obj/
+publish/
+*.user
+*.suo
+.vs/
+
+# Speech models are large and downloaded at install time, never committed.
+models/
+
+# Captured frames must never be committed except the curated golden set.
+!WarCommand.Agent.Tests/Capture/frames/
+*.png
+!WarCommand.Agent.Tests/Capture/frames/*.png
+
+*.log
+TestResults/
