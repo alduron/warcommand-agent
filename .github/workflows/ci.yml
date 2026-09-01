@@ -42,11 +42,37 @@ jobs:
           ssh-key: ${{ secrets.CONTRACTS_REPO_KEY }}
 
       # Fails here with the reason rather than 40 lines into a test stack trace.
+      # The generated near-floor pair list lives only in the umbrella, and the parser degrades
+      # without it: two IntentParser rows resolve differently. Sparse, read-only, same deploy-key
+      # pattern as above.
+      - name: Check out the generated contracts
+        uses: actions/checkout@v4
+        with:
+          repository: alduron/warcommand
+          path: _umbrella
+          sparse-checkout: contracts/generated
+          sparse-checkout-cone-mode: false
+          ssh-key: ${{ secrets.UMBRELLA_REPO_KEY }}
+
+      # ContractFixtures walks UP from the test binary looking for these paths, so they have to sit
+      # at the workspace root beside warcommand-agent/ and warcommand-api/, not under _umbrella/.
+      - name: Place the generated contracts
+        shell: bash
+        working-directory: .
+        run: |
+          mkdir -p contracts
+          cp -r _umbrella/contracts/generated contracts/generated
+          test -f contracts/generated/near-floor-pairs.json
+
       - name: Confirm the parse spec is present
         shell: bash
         run: |
           if [ ! -f ../warcommand-api/tests/unit/fixtures/utterances.yaml ]; then
             echo "::error::utterances.yaml is missing. CONTRACTS_REPO_KEY must be a read-only deploy key for alduron/warcommand-api."
+            exit 1
+          fi
+          if [ ! -f ../contracts/generated/near-floor-pairs.json ]; then
+            echo "::error::near-floor-pairs.json is missing. UMBRELLA_REPO_KEY must be a read-only deploy key for alduron/warcommand."
             exit 1
           fi
 
