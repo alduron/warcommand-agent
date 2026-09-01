@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Windows only. Five of the eight assemblies target net8.0-windows and the test project
+    # references the Vosk native package, so a linux runner cannot build this solution at all.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore WarCommand.Agent.sln
+
+      # Directory.Build.props sets TreatWarningsAsErrors, so this is the analyzer gate too.
+      - name: Build
+        run: dotnet build WarCommand.Agent.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test WarCommand.Agent.sln -c Release --no-build --logger "trx;LogFileName=test-results.trx"
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: ignore

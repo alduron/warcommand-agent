@@ -1,0 +1,79 @@
+<!--
+    The overlay's design tokens, from docs/design/mocks/_ovl.css. This dictionary is the only place
+    a colour or a font is named: nothing under WarCommand.Agent.Overlay writes a literal hex.
+
+    The six colours are all state. Role colour is web-only, per
+    Decision_WarCommandOverlayColorIsStateOnlyWebOwnsRoleHue.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <!-- State colours. -->
+    <SolidColorBrush x:Key="Ink" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Dim" Color="#A9ACAF" />
+    <SolidColorBrush x:Key="Urgent" Color="#E2685C" />
+    <SolidColorBrush x:Key="Yours" Color="#7BCB5A" />
+    <SolidColorBrush x:Key="Warn" Color="#E3AC43" />
+    <SolidColorBrush x:Key="Squad" Color="#D9A840" />
+
+    <!-- Panel chrome. scrim is rgba(14,16,18,.68); edge is rgba(255,255,255,.16). -->
+    <SolidColorBrush x:Key="Scrim" Color="#AD0E1012" />
+    <SolidColorBrush x:Key="Edge" Color="#29FFFFFF" />
+    <SolidColorBrush x:Key="RowDivider" Color="#17FFFFFF" />
+    <SolidColorBrush x:Key="TrackEmpty" Color="#38FFFFFF" />
+    <SolidColorBrush x:Key="BoxEdge" Color="#8CFFFFFF" />
+    <SolidColorBrush x:Key="Transparent" Color="#00000000" />
+    <SolidColorBrush x:Key="TakenWash" Color="#24F0A020" />
+
+    <!-- Chrome for the settings tabs. The same family as the scrim, opaque because these sit on
+         the window rather than over terrain. -->
+    <SolidColorBrush x:Key="Surface" Color="#22262A" />
+    <SolidColorBrush x:Key="SurfaceRaised" Color="#2C3136" />
+    <SolidColorBrush x:Key="Field" Color="#16191C" />
+    <SolidColorBrush x:Key="Ground" Color="#1A1D20" />
+    <SolidColorBrush x:Key="Hover" Color="#33FFFFFF" />
+
+    <!-- The terrain the overlay is designed to sit on. Second-screen mode has no game behind it,
+         so it paints the same gradient and the scrim reads exactly as it was drawn. -->
+    <LinearGradientBrush x:Key="Terrain" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#4E5457" Offset="0" />
+        <GradientStop Color="#3B4144" Offset="0.55" />
+        <GradientStop Color="#2E3336" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- Neither family ships with Windows. Both fall back the way the mock's own CSS does, so the
+         layout is right today and sharpens the moment the faces are installed or bundled. -->
+    <FontFamily x:Key="MonoFont">IBM Plex Mono, Cascadia Mono, Consolas</FontFamily>
+    <FontFamily x:Key="CondensedFont">Saira Condensed, Saira, Bahnschrift Condensed, Segoe UI</FontFamily>
+
+    <sys:Double x:Key="BodySize">13</sys:Double>
+    <sys:Double x:Key="SmallSize">12</sys:Double>
+    <sys:Double x:Key="LabelSize">14</sys:Double>
+    <sys:Double x:Key="SlotSize">24</sys:Double>
+
+    <!-- Every panel is 380 wide, on every screen in the mocks. -->
+    <sys:Double x:Key="PanelWidth">380</sys:Double>
+
+    <DropShadowEffect x:Key="TextScrim" BlurRadius="4" ShadowDepth="1" Direction="270"
+                      Color="#000000" Opacity="0.85" />
+
+    <Style x:Key="Mono" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="FontSize" Value="{StaticResource BodySize}" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
+    </Style>
+
+    <!-- The mock's .up: uppercase, condensed, semibold. WPF has no letter-spacing, so the .09em
+         tracking on these labels is the one thing that cannot be reproduced exactly. -->
+    <Style x:Key="Up" TargetType="TextBlock" BasedOn="{StaticResource Mono}">
+        <Setter Property="FontFamily" Value="{StaticResource CondensedFont}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style x:Key="DimMono" TargetType="TextBlock" BasedOn="{StaticResource Mono}">
+        <Setter Property="Foreground" Value="{StaticResource Dim}" />
+    </Style>
+
+</ResourceDictionary>

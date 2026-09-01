@@ -18,7 +18,13 @@ public class ArchitectureTests
         (@"\bSendInput\b",           "input synthesis"),
         (@"\bkeybd_event\b",         "input synthesis"),
         (@"\bmouse_event\b",         "input synthesis"),
-        (@"\bSetWindowsHookEx\w*\s*\([^)]*hMod\s*:\s*(?!IntPtr\.Zero)", "hook into a foreign module"),
+        // The whitespace run is atomic on purpose. Written `\s*(?!IntPtr\.Zero)` the run
+        // backtracks to zero width, the lookahead then reads " IntPtr.Zero" rather than
+        // "IntPtr.Zero", and the pattern fires on the one call shape that is CORRECT.
+        // Passing the handle positionally still evades this line, which is why
+        // WarCommand.Agent.Tests/Input/KeyCodeConfinementTests asserts a zero module
+        // handle at every install site independently of the name.
+        (@"\bSetWindowsHookEx\w*\s*\([^)]*hMod\s*:(?>\s*)(?!IntPtr\.Zero)", "hook into a foreign module"),
         (@"\bIDXGISwapChain\b",      "Present hook"),
         (@"\bOverwolf\b",            "injecting overlay SDK"),
     ];

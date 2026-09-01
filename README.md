@@ -14,6 +14,10 @@ dotnet test
 dotnet publish WarCommand.Agent/WarCommand.Agent.csproj -c Release -o publish/
 ```
 
+`DEVELOPING.md` is the local loop: dev profile, TLS proxy, tray-only mode, fake coordinates.
+`RELEASING.md` is how a build reaches users: one `v*` tag builds the installer in GitHub Actions and
+publishes it, and `warcommand.app/download` follows within minutes.
+
 ## Assemblies
 
 | Assembly | Owns | Target |

@@ -1,9 +1,21 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- No platform dependency, and no package that would drag one in. System.Text.Json and
+       System.Text.RegularExpressions are both in the shared framework. -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RootNamespace>WarCommand.Agent.Core</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
+
+  <!-- The bundled contract fallback 10-agent-spec.md requires: first run with no network works,
+       and a served document that fails validation falls back to something known good. Copied
+       verbatim by scripts/contracts.ps1, which fails -Check on a stale copy. Never hand-edited. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Contracts\Bundled\*.json" LogicalName="WarCommand.Agent.Core.Bundled.%(Filename)%(Extension)" />
+  </ItemGroup>
 
 </Project>

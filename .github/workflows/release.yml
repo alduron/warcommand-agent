@@ -1,0 +1,146 @@
+name: release
+
+# One tag ships the agent. Nothing else is touched: the API reads agent-release.json from this
+# release's `latest` URL, and warcommand.app/download renders whatever that says.
+#
+#   git tag v1.4.0 && git push origin v1.4.0
+#
+# See RELEASING.md.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, without the leading v (dry run, publishes nothing)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # The tag is the single source of the version. Nothing in the repo carries it, so a release
+      # cannot disagree with its own tag, and a rebuild of the same tag is byte-for-byte the same
+      # decision.
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $version = if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            '${{ github.event.inputs.version }}'
+          } else {
+            '${{ github.ref_name }}' -replace '^v', ''
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "version '$version' is not MAJOR.MINOR.PATCH" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "setup=WarCommand-Setup-$version.exe" >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore WarCommand.Agent.sln
+
+      - name: Build
+        run: dotnet build WarCommand.Agent.sln -c Release --no-restore -p:Version=${{ steps.version.outputs.version }}
+
+      # A release that has not passed its own tests is the failure this step exists to prevent.
+      - name: Test
+        run: dotnet test WarCommand.Agent.sln -c Release --no-build
+
+      # Self-contained so no user installs a .NET runtime first, and NOT single-file: Vosk
+      # P/Invokes libvosk.dll by name and the self-extract path for native libraries is the part
+      # that breaks. A folder publish inside an installer has neither problem.
+      - name: Publish
+        run: >
+          dotnet publish WarCommand.Agent/WarCommand.Agent.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:Version=${{ steps.version.outputs.version }}
+          -p:PublishSingleFile=false
+          -p:PublishTrimmed=false
+          -o publish/
+
+      # sign.ps1 is a no-op with no certificate configured, so an unsigned release is a
+      # deliberate default rather than a broken step. See RELEASING.md "SmartScreen".
+      - name: Sign the application
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: pwsh
+        run: ./installer/sign.ps1 -Path publish/WarCommand.Agent.exe
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc `
+            /DAppVersion=${{ steps.version.outputs.version }} `
+            /Oartifacts `
+            /F"WarCommand-Setup-${{ steps.version.outputs.version }}" `
+            installer/warcommand.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+
+      - name: Sign the installer
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: pwsh
+        run: ./installer/sign.ps1 -Path artifacts/${{ steps.version.outputs.setup }}
+
+      # The manifest is written AFTER signing, because signing changes the bytes and therefore the
+      # digest. A checksum computed before it would be wrong on every signed release.
+      - name: Write the release manifest
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $setup   = '${{ steps.version.outputs.setup }}'
+          $path    = "artifacts/$setup"
+          $sha     = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
+          $notesFile = "installer/notes/$version.txt"
+          if (-not (Test-Path $notesFile)) {
+            New-Item -ItemType Directory -Force -Path installer/notes | Out-Null
+            "WarCommand Agent $version." | Set-Content $notesFile -Encoding utf8
+          }
+          $notes = (Get-Content $notesFile -Raw).Trim()
+          [ordered]@{
+            version      = $version
+            notes        = $notes
+            url          = "https://github.com/${{ github.repository }}/releases/download/v$version/$setup"
+            sha256       = $sha
+            size_bytes   = (Get-Item $path).Length
+            published_at = (Get-Date).ToUniversalTime().ToString('o')
+          } | ConvertTo-Json | Set-Content artifacts/agent-release.json -Encoding utf8
+          Get-Content artifacts/agent-release.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ steps.version.outputs.version }}
+          path: artifacts/*
+
+      # `releases/latest/download/agent-release.json` is the URL the API polls, and GitHub points
+      # it at whichever release is newest. A prerelease is excluded from `latest`, which is exactly
+      # the behaviour wanted: tag a prerelease and nobody's download page moves.
+      - name: Publish the GitHub release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: WarCommand Agent ${{ steps.version.outputs.version }}
+          body_path: installer/notes/${{ steps.version.outputs.version }}.txt
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/${{ steps.version.outputs.setup }}
+            artifacts/agent-release.json

@@ -15,6 +15,27 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- NotifyIcon lives in WinForms; there is no WPF tray icon control. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- Grey (unpaired/no session), matching the tray's own default state on first launch. -->
+    <ApplicationIcon>Resources\Icons\tray-panicked.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WarCommand.Agent.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Resources\Icons\*.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- UseWindowsForms swaps the SDK's implicit-usings set to the WinForms one, which drops
+         System.IO. Restore it rather than hand-adding "using System.IO;" to every file that
+         already relied on it being implicit. -->
+    <Using Include="System.IO" />
+  </ItemGroup>
 
 </Project>

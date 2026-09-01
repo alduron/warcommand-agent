@@ -8,6 +8,13 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- DllImport is deliberate: LibraryImport cannot marshal the hook callback delegate. -->
+    <NoWarn>$(NoWarn);SYSLIB1054</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WarCommand.Agent.Tests" />
+  </ItemGroup>
 
 </Project>

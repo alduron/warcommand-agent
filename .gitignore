@@ -15,3 +15,7 @@ models/
 
 *.log
 TestResults/
+
+# Local dev TLS proxy: each developer generates their own cert and key. See DEVELOPING.md.
+dev/cert.pem
+dev/key.pem

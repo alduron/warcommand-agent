@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "profile_version": 1,
+  "generated_note": "SOURCE OF TRUTH for every fact about the game itself. Served at GET /v1/catalog/game-profile with an ETag. NOTHING in this file may become a constant in agent code. When Wardogs patches, this file changes and every agent picks it up on its next startup or config.changed, with no release.",
+
+  "game": {
+    "display": "Wardogs",
+    "process_names": ["Wardogs", "Wardogs-Win64-Shipping"],
+    "process_names_note": "A list, not a string. UE5 shipping builds commonly rename the executable between Early Access and release, and a launcher may sit in front of it.",
+    "steam_app_id": null,
+    "steam_app_id_note": "UNKNOWN. Needed only by the Steam deployment detector. Null disables that detector cleanly rather than guessing an id.",
+    "min_supported_build": null,
+    "window_poll_ms": 2000
+  },
+
+  "teams": {
+    "teams_per_match": 3,
+    "team_names": ["Lonestar", "Valkyra", "Manticore"],
+    "players_per_team": 33,
+    "players_per_match": 100,
+    "note": "Used for headcount context and after-action only. Nothing enforces these."
+  },
+
+  "map_readout": {
+    "confidence": "measured_once",
+    "confidence_note": "Measured from a single 2509x1259 screenshot per Insight_WardogsMapReadoutMeasured. Every field below is a candidate for change at release.",
+    "pattern": "[xy]\\d+\\.\\d\\d",
+    "anchored_pattern": "^[xy]\\d+\\.\\d\\d$",
+    "glyphs": ["x", "y", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "."],
+    "near_white_threshold": 240,
+    "near_white_note": "All channels at or above this value. Raise it if a bright snow map produces false runs; lower it if the readout is dimmer than measured.",
+    "expected_matches_per_frame": 2,
+    "scan_strategy": "scan_panel_for_pattern",
+    "scan_strategy_note": "NEVER a fixed rectangle. The readout is anchored to the moving crosshair. See binding rule 5.",
+    "corroboration_frames": 3,
+    "corroboration_window_ms": 60,
+    "corroboration_note": "At key-down, sample this many frames across this window and require the extracted strings to be IDENTICAL. Disagreement renders READOUT UNCLEAR and submits nothing. One frame, one atlas pass and no corroboration meant a confident misread was unfalsifiable end to end: x85.53 read as x35.53 satisfies the anchored pattern, fits numeric(7,2), and is never compared to anything. Three frames cost roughly 60 ms of a budget that already spends 1200 ms on the preview.",
+    "max_jump_units": 20.0,
+    "max_jump_window_s": 30,
+    "moved_threshold_units": 15.0,
+    "moved_threshold_note": "Separate from max_jump_units and pointed the other way. max_jump guards the point being SUBMITTED; this one marks an EXISTING open request stale when its requester is later seen a long way from it, which is what renders REQUESTER MOVED on the provider's row. It is the observable proxy that replaced the REQUESTER DOWN marker, because presence carries device liveness and not player life state and there is no way to see that somebody died. Lower than max_jump_units on purpose: being wrong here only dims a row, while being wrong there blocks a submit. STARTING GUESS.",
+    "max_jump_note": "The delta check, and the only layer that catches a misread all three corroboration frames agree on, because a stable UI renders the same wrong glyph three times. A point more than max_jump_units from this requester's last ACCEPTED point, taken within max_jump_window_s of it, is NOT rejected: it requires an explicit confirm keypress and the overlay reads FAR FROM LAST POINT - TAP TO CONFIRM. Rejecting would be wrong, because a player who boarded a helicopter legitimately jumped. 20.0 units is 2 km at the default scale and 30 s is chosen so the check lapses rather than nagging somebody who has genuinely moved. Both are STARTING GUESSES with no measurement behind them; the first requester to fly a Blackhawk will tell you whether 20.0 is too tight.",
+    "glyph_margin_floor": 0.15,
+    "glyph_margin_floor_note": "The atlas emits, per glyph, the normalised margin between its best and second-best match. Any glyph below this floor rejects the WHOLE readout, never just that character: a readout with one uncertain digit is a wrong coordinate, not a partial one. 0.15 is a STARTING GUESS, not a measurement. It has never been run against a rendered digit pair, and the confusable set to worry about is 3 versus 8, 5 versus 6, 0 versus 8 and 1 versus 7 at the smaller ui_scales. Tune it from the agent_capture_glyph_margin histogram once real traffic exists, and expect the first value to be wrong in one direction or the other.",
+    "ui_scales": [1.0, 1.25, 1.5, 1.75, 2.0],
+    "ui_scales_note": "The glyph atlas is pre-rendered at each of these. Add a scale here rather than adding a code path.",
+    "zoom_independent": null,
+    "zoom_independent_note": "UNKNOWN AND BLOCKING. If the readout changes with map zoom, the core relay mechanism breaks and a normalisation step is needed. Question 00 in docs/design/16-open-questions.md. Null means the agent has not been told either way and must not assume."
+  },
+
+  "point_confidence": {
+    "note": "Applies to BOTH coordinate sources, which is why it sits beside map_readout rather than inside it. request_points.confidence was previously written and never read, scoped to being 'diagnosable after the fact', so a 0.31 point rendered identically to a 0.99 one on every provider's overlay. These two thresholds are the only thing that makes the field mean anything.",
+    "floor": 0.55,
+    "floor_note": "Below this the agent REJECTS the point and submits nothing, rendering LOW CONF - SAY AGAIN. Agent-side, before the wire, because a bad coordinate that reaches the board has already cost somebody a glance.",
+    "warn": 0.75,
+    "warn_note": "Between floor and warn the point is accepted and the row renders a dim LOW CONF. Between warn and 1.0 it renders normally.",
+    "confidence": "guessed",
+    "confidence_note": "Both numbers are guesses. Neither has been calibrated against a recognizer run or an atlas run, and the two sources do not even produce comparable scales, which is the honest weakness here: a Vosk per-token score and an atlas match margin are different measurements wearing one field name. Calibrate each source separately from the warcmd_point_confidence histogram, split by source, before trusting either threshold.",
+    "source_note": "For a map_readout point the value is derived from the worst per-glyph atlas margin in the readout. For a spoken_grid point it is the MINIMUM PER-TOKEN confidence over the grid digits, never the utterance-level intent score: min_intent_confidence is an intent score over the whole utterance, so a confident 'mortar' plus one badly heard digit clears it and produces a well-formed wrong grid.",
+    "tts_readback_default": "spoken_grid_only",
+    "tts_readback_note": "Readback defaults ON for spoken_grid points and OFF for map_readout points. Reading back a number the user did not say tells them nothing they can check; reading back a number they DID say is the only digit-level guard the spoken path has."
+  },
+
+  "speech": {
+    "note": "Audio properties of the capture device, not confidence scores, which is why they sit outside point_confidence. Nothing here is ever written to disk or sent anywhere: peak energy is computed in the ring buffer and discarded with it, per binding rule 3.",
+    "noise_floor_dbfs": -45.0,
+    "noise_floor_note": "A PTT hold whose PEAK input energy never rose above this is counted as silent. A device that does not exist is already handled well; a device that exists and delivers silence is not, and today the user speaks, gets a menu, and is never told why.",
+    "silent_holds_before_warning": 3,
+    "silent_holds_note": "Consecutive silent holds before the overlay goes amber with NO AUDIO FROM <device>. Consecutive, not cumulative: one hold where somebody thought better of it mid-press must not accumulate toward a warning over a whole match. Three is short enough to catch a muted mic in the first minute and long enough that deliberate hesitation never trips it.",
+    "confidence": "guessed",
+    "confidence_note": "-45 dBFS is a plausible gate for a headset mic in a quiet room and has been measured against nothing. It is the number most likely to need a per-device rather than a global value: a hot gaming headset and a laptop array microphone do not share a floor. If the warning proves noisy, the fix is a first-run level check that calibrates per device, not a lower global constant."
+  },
+
+  "maps": [
+    {
+      "id": "bakurani", "display": "Bakurani", "region": "Kolchia",
+      "size_m": 16000,
+      "coord_min": 0.0, "coord_max": 160.0,
+      "units_to_meters": 100.0,
+      "units_confidence": "inferred",
+      "heightmap": null
+    },
+    {
+      "id": "ozeti", "display": "Ozeti", "region": "Western Europe",
+      "size_m": 16000,
+      "coord_min": 0.0, "coord_max": 160.0,
+      "units_to_meters": 100.0,
+      "units_confidence": "inferred",
+      "heightmap": null
+    }
+  ],
+  "maps_note": "Per map, not global. Two maps happen to share a scale today and there is no reason a third has to. units_to_meters here overrides the fallback in ballistics.json.",
+  "default_units_to_meters": 100.0,
+
+  "detection": {
+    "log_tail": {
+      "enabled": false,
+      "search_paths": [
+        "%LOCALAPPDATA%\\Wardogs\\Saved\\Logs",
+        "%LOCALAPPDATA%\\Wardogs\\Wardogs\\Saved\\Logs"
+      ],
+      "file_glob": "*.log",
+      "connect_patterns": [
+        "LogNet: Browse: (?<addr>[0-9.]+:[0-9]+)",
+        "LogNet: Join succeeded: (?<addr>[^\\s]+)"
+      ],
+      "confidence": "guessed",
+      "note": "UE5 conventions, not observed Wardogs output. Patterns are a list so a new one can be added without a release. An unmatched line yields null, never a guess."
+    },
+    "steam": {
+      "enabled": false,
+      "poll_seconds": 30,
+      "field_priority": ["gameserversteamid", "gameserverip", "lobbysteamid"],
+      "note": "Server-side only. Requires steam_app_id and a public profile. Unverified that Wardogs populates any of these."
+    }
+  },
+
+  "coordinate_handoff": {
+    "note": "Lives here rather than in request-types.json because the text format is a fact about the game, not about our request vocabulary. Wardogs reportedly has a way to put coordinates into chat. The mechanic is UNCONFIRMED, which is exactly why it is a template.",
+    "clipboard_enabled_default": true,
+    "formats": [
+      { "id": "plain",    "display": "85.53 69.42",          "template": "{x} {y}" },
+      { "id": "prefixed", "display": "x85.53 y69.42",        "template": "x{x} y{y}" },
+      { "id": "comma",    "display": "85.53, 69.42",         "template": "{x}, {y}" },
+      { "id": "labelled", "display": "MTR-14 x85.53 y69.42", "template": "{ticket} x{x} y{y}" }
+    ],
+    "default_format": "prefixed",
+    "hard_rule": "WarCommand writes the clipboard and NEVER presses a key. Synthesising the paste would be input injection, which binding rule 1 forbids outright."
+  },
+
+  "coordinate_sources": {
+    "note": "How a point is obtained is a swappable implementation, not a fact about the product. Screen capture is the way in today because Wardogs exposes nothing else; if a game API, a mod interface or a log line ever gives a coordinate directly, it becomes another entry here and nothing above it changes. The agent asks the enabled sources in priority order at PTT key-down and takes the first non-null answer.",
+    "enabled": ["spoken_grid", "typed_grid", "map_readout"],
+    "priority": ["map_readout", "typed_grid", "spoken_grid"],
+    "priority_note": "First non-null wins. map_readout leads when capture is on because it needs no words and no keys. typed_grid and spoken_grid are the M1 paths and remain available forever, because capture is opt-in and a person may simply turn it off.",
+    "known": [
+      { "id": "map_readout", "display": "Map readout (screen capture)", "gives": "the coordinate under the map cursor", "status": "M2, opt-in" },
+      { "id": "spoken_grid", "display": "Spoken grid", "gives": "whatever the requester says", "status": "M1" },
+      { "id": "typed_grid",  "display": "Typed grid (menu digits)", "gives": "whatever the requester types", "status": "M1" },
+      { "id": "manual",      "display": "Placed by hand on the web board", "gives": "a point clicked on a map", "status": "M3" },
+      { "id": "game_api",    "display": "A game-provided coordinate", "gives": "UNKNOWN, see the caveat below", "status": "hypothetical, not implemented" }
+    ],
+    "caveat_before_swapping_to_game_api": "Do not assume a game API is a drop-in replacement. Every source above answers 'where is the requester POINTING', which is the cursor on an open map. A game API is far more likely to expose 'where is the player STANDING', and those are different questions: a fire mission is aimed at somewhere the requester is deliberately not standing. A self-position API would enable arity-0 request types (medic, resupply, fire team, where the provider comes to you) and would NOT replace map_readout for anything aimed at a target. Both can be enabled at once, which is why this is a list.",
+    "stamping": "The winning source's id is written to ops.request_points.source verbatim, so every point carries its provenance for the life of the request. Adding a source is a value in this list, never a schema migration; see 09-data-model.md on why source is a validated text column rather than a database enum."
+  },
+
+  "feature_flags": {
+    "note": "A kill switch per feature. When a patch breaks something, flip it here and every agent stops trying on its next fetch. No release, no reinstall, and no support thread telling people to turn it off themselves.",
+    "capture": true,
+    "fire_solutions": true,
+    "log_detector": false,
+    "steam_detector": false,
+    "coordinate_clipboard": true,
+    "voice": true
+  },
+
+  "unverified": [
+    "map_readout.zoom_independent",
+    "map_readout.pattern",
+    "map_readout.near_white_threshold",
+    "map_readout.ui_scales",
+    "map_readout.glyph_margin_floor",
+    "map_readout.corroboration_frames",
+    "map_readout.max_jump_units",
+    "map_readout.max_jump_window_s",
+    "map_readout.moved_threshold_units",
+    "point_confidence.floor",
+    "point_confidence.warn",
+    "speech.noise_floor_dbfs",
+    "maps[].units_to_meters",
+    "game.steam_app_id",
+    "game.process_names",
+    "detection.log_tail.search_paths",
+    "detection.log_tail.connect_patterns",
+    "coordinate_handoff.formats"
+  ],
+  "unverified_note": "Every path listed here is a guess or a single-sample measurement. The agent surfaces a tray warning when a failing feature depends on an unverified field, so the first person to hit a post-patch break is told which knob to turn instead of filing a bug.",
+
+  "client_rules": {
+    "fetch": "GET /v1/catalog/game-profile with If-None-Match on startup, and again on a config.changed frame.",
+    "bundled_fallback": "The agent ships with a copy of this file. First run with no network, or a served profile that fails validation, falls back to the bundle.",
+    "validation": "A fetched profile is validated before adoption. On failure the agent KEEPS the previous profile, logs it, and shows a tray warning. A bad data push must never brick a fleet of agents.",
+    "unknown_fields": "Ignored, per the additive-change rule in 07-api-http.md. An older agent must keep working against a newer profile.",
+    "game_build_stamp": "The agent reports the game build string it observed alongside its own version, so a drop in capture success rate can be correlated with a game patch rather than guessed at."
+  }
+}

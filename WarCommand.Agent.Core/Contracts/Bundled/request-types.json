@@ -1,0 +1,1502 @@
+{
+  "version": 2,
+  "generated_note": "SOURCE OF TRUTH. The API validates against this, the web renders from it, and the agent compiles its speech grammar from it. Run scripts/contracts.ps1 after editing. Never hand-edit the generated copies.",
+  "game_note": "Roles and types are derived from what Wardogs actually contains. Wardogs has no fixed classes; it has six XP tracks (Assault, Medic, Recon, Support, Driver, Pilot) and players buy the kit for the job. A WarCommand role is 'who do I ask for this', not a class the game enforces.",
+  "roles": [
+    {
+      "id": "mortar",
+      "display": "Mortar",
+      "ticket_prefix": "MTR",
+      "color_group": "indirect",
+      "game_note": "FOB-built mortars. Wardogs mortars want a separate spotter, which is why spotter_request exists."
+    },
+    {
+      "id": "artillery",
+      "display": "Artillery",
+      "ticket_prefix": "ART",
+      "color_group": "indirect",
+      "game_note": "SPH-2 self-propelled gun."
+    },
+    {
+      "id": "armor",
+      "display": "Armor",
+      "ticket_prefix": "ARM",
+      "color_group": "ground",
+      "game_note": "L2A6 main battle tank."
+    },
+    {
+      "id": "anti_air",
+      "display": "Anti-Air",
+      "ticket_prefix": "AAA",
+      "color_group": "ground",
+      "game_note": "Flakpanzer Gepard, and FOB-built AA."
+    },
+    {
+      "id": "air_support",
+      "display": "Air Support",
+      "ticket_prefix": "CAS",
+      "color_group": "air",
+      "game_note": "AH-6M (miniguns), AH-6R (rockets), Havoc, armed UH-1Y."
+    },
+    {
+      "id": "air_transport",
+      "display": "Air Transport",
+      "ticket_prefix": "LFT",
+      "color_group": "air",
+      "game_note": "MH-6 (6 seats), UH-1Y (9 seats)."
+    },
+    {
+      "id": "ground_transport",
+      "display": "Ground Transport",
+      "ticket_prefix": "TPT",
+      "color_group": "ground",
+      "game_note": "Bobcat, Dune Buggy, Kodiak, Humvee."
+    },
+    {
+      "id": "logistics",
+      "display": "Logistics",
+      "ticket_prefix": "LOG",
+      "color_group": "support",
+      "game_note": "Ural family and supply pallets. The Support and Driver tracks."
+    },
+    {
+      "id": "engineer",
+      "display": "Engineer",
+      "ticket_prefix": "ENG",
+      "color_group": "support",
+      "game_note": "FOB construction and vehicle repair. Wardogs calls this the Support track; 'engineer' reads better on a 380px overlay."
+    },
+    {
+      "id": "medic",
+      "display": "Medic",
+      "ticket_prefix": "MED",
+      "color_group": "support"
+    },
+    {
+      "id": "recon",
+      "display": "Recon",
+      "ticket_prefix": "RCN",
+      "color_group": "ground",
+      "game_note": "Binoculars, monocular, rangefinder, IR rangefinder, and marking."
+    },
+    {
+      "id": "uav",
+      "display": "UAV",
+      "ticket_prefix": "UAV",
+      "color_group": "air",
+      "game_note": "Wardogs has both recon UAVs and FPV strike drones. Separated from recon because a drone operator is sitting still somewhere safe flying a camera, which is a different person doing a different job from a scout with binoculars."
+    },
+    {
+      "id": "infantry",
+      "display": "Infantry",
+      "ticket_prefix": "INF",
+      "color_group": "ground",
+      "game_note": "The Assault track. The target for maneuver requests: flank, hold, breach, anti-tank."
+    },
+    {
+      "id": "command",
+      "display": "Command",
+      "ticket_prefix": "CMD",
+      "color_group": "command",
+      "receives_all": true,
+      "grant_only": true,
+      "note": "Subscribing to command receives every request in the SUBSCRIBER'S DEPLOYMENT regardless of target role. Never group-wide.",
+      "grant_only_note": "Requires groups.memberships.can_command, set by owner or admin through role.command.grant. Subscription decides what you receive; a capability decides what you may see. Self-service command is the one privilege escalation this product could plausibly introduce, and it also degrades the subscriber's own board to 100 percent of the deployment's traffic on nine slots."
+    }
+  ],
+  "default_enabled_roles": [
+    "mortar",
+    "artillery",
+    "armor",
+    "air_support",
+    "air_transport",
+    "ground_transport",
+    "logistics",
+    "engineer",
+    "medic",
+    "recon",
+    "uav",
+    "infantry"
+  ],
+  "default_enabled_roles_note": "Roles a group has on by default. The join default is every ENABLED role EXCEPT those marked grant_only, so a member who joins with no role_ids never lands on the command board. command is deliberately absent from this list as well as grant-gated: a role that is enabled but grant_only is still a role an admin can hand out without a group setting change.",
+  "structure_kinds": [
+    {
+      "id": "sandbags",
+      "display": "Sandbags",
+      "overlay_label": "SANDBAG",
+      "hammer": "small",
+      "spoken_aliases": [
+        "sandbags",
+        "sandbag"
+      ],
+      "menu_path": "build.2.1"
+    },
+    {
+      "id": "wire",
+      "display": "Barbed Wire",
+      "overlay_label": "WIRE",
+      "hammer": "small",
+      "spoken_aliases": [
+        "wire",
+        "barbed wire"
+      ],
+      "menu_path": "build.2.2"
+    },
+    {
+      "id": "barrier",
+      "display": "Barrier",
+      "overlay_label": "BARRIER",
+      "hammer": "small",
+      "spoken_aliases": [
+        "barrier",
+        "barriers"
+      ],
+      "menu_path": "build.2.3"
+    },
+    {
+      "id": "trench",
+      "display": "Trench",
+      "overlay_label": "TRENCH",
+      "hammer": "small",
+      "spoken_aliases": [
+        "trench",
+        "trenches"
+      ],
+      "menu_path": "build.2.4"
+    },
+    {
+      "id": "hesco",
+      "display": "HESCO Wall",
+      "overlay_label": "WALL",
+      "hammer": "medium",
+      "spoken_aliases": [
+        "wall",
+        "walls",
+        "hesco"
+      ],
+      "menu_path": "build.2.5"
+    },
+    {
+      "id": "gate",
+      "display": "Gate",
+      "overlay_label": "GATE",
+      "hammer": "medium",
+      "spoken_aliases": [
+        "gate",
+        "door"
+      ],
+      "menu_path": "build.2.6"
+    },
+    {
+      "id": "aa_gun",
+      "display": "AA Gun",
+      "overlay_label": "AA GUN",
+      "hammer": "large",
+      "spoken_aliases": [
+        "anti air gun",
+        "ack ack"
+      ],
+      "menu_path": "build.3.1"
+    },
+    {
+      "id": "mortar_pit",
+      "display": "Mortar",
+      "overlay_label": "MTR PIT",
+      "hammer": "large",
+      "spoken_aliases": [
+        "mortar pit",
+        "mortar emplacement"
+      ],
+      "menu_path": "build.3.2"
+    },
+    {
+      "id": "sniper_tower",
+      "display": "Sniper Tower",
+      "overlay_label": "TOWER",
+      "hammer": "large",
+      "spoken_aliases": [
+        "tower",
+        "sniper tower"
+      ],
+      "menu_path": "build.3.3"
+    },
+    {
+      "id": "drill_rig",
+      "display": "Drill Rig",
+      "overlay_label": "DRILL",
+      "hammer": "large",
+      "spoken_aliases": [
+        "drill",
+        "drill rig"
+      ],
+      "menu_path": "build.3.4"
+    },
+    {
+      "id": "spawn",
+      "display": "Spawn",
+      "overlay_label": "SPAWN",
+      "hammer": "vehicle",
+      "spoken_aliases": [
+        "spawn",
+        "spawn point"
+      ],
+      "menu_path": "build.3.5"
+    }
+  ],
+  "menu_categories": {
+    "fire": 1,
+    "air": 2,
+    "move": 3,
+    "supply": 4,
+    "medical": 5,
+    "build": 6,
+    "infantry": 7,
+    "recon": 8,
+    "intel": 9
+  },
+  "menu_note": "The request menu tree in 06-overlay-ux.md is GENERATED from these paths, not hand-drawn. A path is category.slot, or category.slot.slot for the third level under build. A type may appear at more than one leaf on purpose: EXTRACT sits under AIR, MOVE and MEDICAL because somebody under fire should find it down whichever branch they guessed first, and a duplicate entry costs one line of a static menu. Two DIFFERENT types may never share a leaf, which scripts/contracts.ps1 enforces.",
+  "structure_kinds_note": "Wardogs builds through hammer tiers: small does sandbags, wire and barriers; medium does HESCO walls, gates and doors; large does AA guns, mortars, sniper towers and drill rigs. Spawn support is vehicle-based rather than hammered. UNVERIFIED against a live build menu; the game is not out. Expect this list to move.",
+  "supply_kinds": [
+    {
+      "id": "ammo",
+      "display": "Ammo",
+      "overlay_label": "AMMO",
+      "spoken_aliases": [
+        "ammo",
+        "ammunition",
+        "rounds"
+      ],
+      "menu_path": "supply.1"
+    },
+    {
+      "id": "build",
+      "display": "Build",
+      "overlay_label": "BUILD",
+      "spoken_aliases": [
+        "build",
+        "building",
+        "build supplies"
+      ],
+      "menu_path": "supply.2"
+    },
+    {
+      "id": "fuel",
+      "display": "Fuel",
+      "overlay_label": "FUEL",
+      "spoken_aliases": [
+        "fuel",
+        "gas",
+        "petrol"
+      ],
+      "menu_path": "supply.3"
+    },
+    {
+      "id": "mechanical",
+      "display": "Mechanical",
+      "overlay_label": "MECH",
+      "spoken_aliases": [
+        "mechanical",
+        "mech",
+        "parts"
+      ],
+      "menu_path": "supply.4"
+    }
+  ],
+  "request_types": [
+    {
+      "id": "mortar_fire",
+      "display": "Mortar",
+      "overlay_label": "MORTAR",
+      "target_roles": [
+        "mortar"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 600,
+      "spoken_aliases": [
+        "mortar",
+        "mortars",
+        "mortar fire",
+        "fire mission",
+        "indirect"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "smoke",
+        "he",
+        "willy_pete"
+      ],
+      "takes_quantity": "rounds",
+      "default_priority": "normal",
+      "computes_solution": "l81_mortar",
+      "menu_paths": [
+        "fire.1"
+      ]
+    },
+    {
+      "id": "artillery_fire",
+      "display": "Artillery",
+      "overlay_label": "ARTY",
+      "target_roles": [
+        "artillery"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 600,
+      "spoken_aliases": [
+        "artillery",
+        "arty",
+        "big guns"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "smoke",
+        "he"
+      ],
+      "takes_quantity": "rounds",
+      "default_priority": "normal",
+      "computes_solution": "sph2",
+      "menu_paths": [
+        "fire.2"
+      ]
+    },
+    {
+      "id": "gun_run",
+      "display": "Gun Run",
+      "overlay_label": "GUNS",
+      "target_roles": [
+        "air_support"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 600,
+      "spoken_aliases": [
+        "close air",
+        "gun run",
+        "strafe",
+        "cas"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "game_note": "AH-6M miniguns or armed UH-1Y. Anti-infantry.",
+      "alias_note": "Never alias to bare 'air support'. It collides with 'air transport'.",
+      "menu_paths": [
+        "air.1"
+      ]
+    },
+    {
+      "id": "rocket_run",
+      "display": "Rocket Run",
+      "overlay_label": "ROCKETS",
+      "target_roles": [
+        "air_support"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 600,
+      "spoken_aliases": [
+        "rockets",
+        "rocket run",
+        "rocket strike"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "game_note": "AH-6R rockets or Havoc. Anti-armour and anti-structure. Split from gun_run because the airframe and the effect differ.",
+      "menu_paths": [
+        "air.2"
+      ]
+    },
+    {
+      "id": "armor_support",
+      "display": "Armor",
+      "overlay_label": "ARMOR",
+      "target_roles": [
+        "armor"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 900,
+      "spoken_aliases": [
+        "tank",
+        "tanks",
+        "armor support",
+        "tracks"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "alias_note": "Bare 'armor' is FORBIDDEN as an alias. It is a near-homophone of 'mortar'.",
+      "menu_paths": [
+        "fire.3"
+      ]
+    },
+    {
+      "id": "anti_tank",
+      "display": "Anti-Tank",
+      "overlay_label": "AT",
+      "target_roles": [
+        "infantry",
+        "armor",
+        "air_support"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 600,
+      "spoken_aliases": [
+        "anti tank",
+        "enemy armor",
+        "launcher"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "urgent",
+      "alias_note": "Never alias to 'A T'. Letter names are the worst case for the recognizer, and it collides with 'eight'.",
+      "menu_paths": [
+        "fire.4",
+        "infantry.7"
+      ]
+    },
+    {
+      "id": "anti_air_cover",
+      "display": "Anti-Air",
+      "overlay_label": "AA",
+      "target_roles": [
+        "anti_air"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "area"
+      ],
+      "ttl_s": 900,
+      "spoken_aliases": [
+        "anti air",
+        "air cover",
+        "enemy air"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "urgent",
+      "game_note": "Flakpanzer Gepard or FOB AA.",
+      "menu_paths": [
+        "fire.5"
+      ]
+    },
+    {
+      "id": "smoke_screen",
+      "display": "Smoke Screen",
+      "overlay_label": "SCREEN",
+      "target_roles": [
+        "mortar",
+        "artillery"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "screen",
+        "smoke screen"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "urgent",
+      "alias_note": "Bare 'smoke' is FORBIDDEN here. It is already a modifier on mortar_fire and the two would be indistinguishable.",
+      "menu_paths": [
+        "fire.6"
+      ]
+    },
+    {
+      "id": "transport_move",
+      "display": "Transport",
+      "overlay_label": "TRANSPORT",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 2,
+      "point_labels": [
+        "pickup",
+        "dropoff"
+      ],
+      "ttl_s": 1200,
+      "spoken_aliases": [
+        "transport",
+        "ride",
+        "taxi",
+        "pickup"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "takes_quantity": "passengers",
+      "default_priority": "normal",
+      "menu_paths": [
+        "move.1"
+      ]
+    },
+    {
+      "id": "air_transport_move",
+      "display": "Air Lift",
+      "overlay_label": "LIFT",
+      "target_roles": [
+        "air_transport"
+      ],
+      "arity": 2,
+      "point_labels": [
+        "pickup",
+        "dropoff"
+      ],
+      "ttl_s": 1200,
+      "spoken_aliases": [
+        "lift",
+        "air lift",
+        "helo",
+        "bird"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "takes_quantity": "passengers",
+      "default_priority": "normal",
+      "menu_paths": [
+        "air.3",
+        "move.2"
+      ]
+    },
+    {
+      "id": "paradrop",
+      "display": "Paradrop",
+      "overlay_label": "PARADROP",
+      "target_roles": [
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "drop zone"
+      ],
+      "ttl_s": 900,
+      "spoken_aliases": [
+        "paradrop",
+        "para",
+        "jump",
+        "drop us"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "takes_quantity": "jumpers",
+      "default_priority": "normal",
+      "game_note": "Basic Parachute is real gear and helicopter exits are a normal insertion method.",
+      "menu_paths": [
+        "air.4",
+        "move.4"
+      ]
+    },
+    {
+      "id": "extraction",
+      "display": "Extraction",
+      "overlay_label": "EXTRACT",
+      "target_roles": [
+        "air_transport",
+        "ground_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "pickup"
+      ],
+      "ttl_s": 900,
+      "spoken_aliases": [
+        "extract",
+        "extraction",
+        "evac",
+        "get us out"
+      ],
+      "modifiers": [
+        "urgent",
+        "hot"
+      ],
+      "takes_quantity": "passengers",
+      "default_priority": "urgent",
+      "menu_paths": [
+        "air.5",
+        "move.3",
+        "medical.2"
+      ]
+    },
+    {
+      "id": "resupply",
+      "display": "Resupply",
+      "overlay_label": "SUPPLY",
+      "target_roles": [
+        "logistics"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 1800,
+      "spoken_aliases": [
+        "resupply",
+        "supplies",
+        "supply"
+      ],
+      "requires_supply_kind": true,
+      "default_supply_kind": "ammo",
+      "modifiers": [
+        "urgent"
+      ],
+      "takes_quantity": "pallets",
+      "default_priority": "normal",
+      "game_note": "Four supply kinds: ammo, build, fuel, mechanical. Saying a kind alias alone ('ammo', 'fuel') resolves to this type with that kind set.",
+      "kind_shortcut_aliases": true,
+      "menu_paths": [
+        "supply.1",
+        "supply.2",
+        "supply.3",
+        "supply.4"
+      ]
+    },
+    {
+      "id": "refuel",
+      "display": "Refuel",
+      "overlay_label": "REFUEL",
+      "target_roles": [
+        "logistics"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "vehicle"
+      ],
+      "ttl_s": 1200,
+      "spoken_aliases": [
+        "refuel",
+        "fuel up",
+        "dry"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "game_note": "Fuel Can, or Fuel Supplies at a FOB. Distinct from resupply because it is one stranded vehicle, not a position.",
+      "alias_note": "Bare 'fuel' belongs to the resupply supply kind, not here.",
+      "menu_paths": [
+        "supply.5"
+      ]
+    },
+    {
+      "id": "vehicle_repair",
+      "display": "Repair",
+      "overlay_label": "REPAIR",
+      "target_roles": [
+        "engineer",
+        "logistics"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "vehicle"
+      ],
+      "ttl_s": 1200,
+      "spoken_aliases": [
+        "repair",
+        "wrench",
+        "mechanic",
+        "busted"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "game_note": "Repair Tool plus Mechanical Supplies.",
+      "menu_paths": [
+        "build.4"
+      ]
+    },
+    {
+      "id": "fob_build",
+      "display": "Build FOB",
+      "overlay_label": "FOB",
+      "target_roles": [
+        "engineer",
+        "logistics"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "site"
+      ],
+      "ttl_s": 1800,
+      "spoken_aliases": [
+        "fob",
+        "forward base",
+        "build a base"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "game_note": "Forward Operating Base costs $2,500 and defines the build radius. A real, expensive team decision.",
+      "menu_paths": [
+        "build.1"
+      ]
+    },
+    {
+      "id": "fortify",
+      "display": "Fortify",
+      "overlay_label": "BUILD",
+      "target_roles": [
+        "engineer"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "site"
+      ],
+      "ttl_s": 1800,
+      "spoken_aliases": [
+        "fortify",
+        "build here",
+        "dig in here"
+      ],
+      "requires_structure_kind": false,
+      "default_structure_kind": null,
+      "kind_shortcut_aliases": true,
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "low",
+      "game_note": "One type covering every buildable. Saying a structure alias alone ('wall', 'tower', 'anti air gun') resolves here with that kind set. Same pattern as resupply and its four supply kinds, and for the same reason: eleven request types for one field would bloat the grammar without telling a builder anything the qualifier does not.",
+      "menu_paths": [
+        "build.2",
+        "build.3"
+      ]
+    },
+    {
+      "id": "demolition",
+      "display": "Demolition",
+      "overlay_label": "DEMO",
+      "target_roles": [
+        "engineer",
+        "infantry"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 900,
+      "spoken_aliases": [
+        "demo",
+        "charges",
+        "blow it"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "game_note": "C4, IED, AT mines, Remote Detonator.",
+      "menu_paths": [
+        "build.5"
+      ]
+    },
+    {
+      "id": "medic_request",
+      "display": "Medic",
+      "overlay_label": "MEDIC",
+      "target_roles": [
+        "medic"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "casualty"
+      ],
+      "ttl_s": 600,
+      "spoken_aliases": [
+        "medic",
+        "corpsman",
+        "casualty",
+        "man down"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "urgent",
+      "menu_paths": [
+        "medical.1"
+      ]
+    },
+    {
+      "id": "flank",
+      "display": "Flank",
+      "overlay_label": "FLANK",
+      "target_roles": [
+        "infantry"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "axis"
+      ],
+      "ttl_s": 600,
+      "spoken_aliases": [
+        "push",
+        "push here",
+        "assault here"
+      ],
+      "ambiguous_aliases": [
+        "flank"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "alias_note": "Primary was 'flank' and it failed the phonetic floor against 'tank': one syllable each, same stressed vowel AE1, same NG-K coda, differing only in onset. 'tank' is the incumbent so it kept the short form. 'flank' is retained as an ambiguous alias, which means it is recognised but always disambiguated through the menu instead of guessed.",
+      "menu_paths": [
+        "infantry.2"
+      ]
+    },
+    {
+      "id": "hold_position",
+      "display": "Hold",
+      "overlay_label": "HOLD",
+      "target_roles": [
+        "infantry"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "position"
+      ],
+      "ttl_s": 1200,
+      "spoken_aliases": [
+        "hold",
+        "hold here",
+        "defend"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "infantry.3"
+      ]
+    },
+    {
+      "id": "breach",
+      "display": "Breach",
+      "overlay_label": "BREACH",
+      "target_roles": [
+        "infantry",
+        "engineer"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "entry"
+      ],
+      "ttl_s": 600,
+      "spoken_aliases": [
+        "breach",
+        "open it"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "game_note": "Halligan Bar, or C4 on a door.",
+      "menu_paths": [
+        "infantry.5"
+      ]
+    },
+    {
+      "id": "fire_team",
+      "display": "Fire Team",
+      "overlay_label": "FIRETEAM",
+      "target_roles": [
+        "infantry"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "position"
+      ],
+      "ttl_s": 900,
+      "spoken_aliases": [
+        "fire team",
+        "need bodies",
+        "send infantry"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "takes_quantity": "bodies",
+      "default_priority": "normal",
+      "game_note": "Bodies on a position. The most common thing anybody actually shouts for and the one the catalog was missing.",
+      "menu_paths": [
+        "infantry.1"
+      ]
+    },
+    {
+      "id": "clear_building",
+      "display": "Clear Building",
+      "overlay_label": "CLEAR",
+      "target_roles": [
+        "infantry"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "structure"
+      ],
+      "ttl_s": 600,
+      "spoken_aliases": [
+        "clear building",
+        "clear it",
+        "room clear"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "alias_note": "Bare 'clear' is FORBIDDEN. It is already the command verb that dismisses overlay messages.",
+      "menu_paths": [
+        "infantry.4"
+      ]
+    },
+    {
+      "id": "suppress",
+      "display": "Suppress",
+      "overlay_label": "SUPPRESS",
+      "target_roles": [
+        "infantry",
+        "armor"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "suppress",
+        "suppressing fire",
+        "pin them"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "urgent",
+      "game_note": "Short TTL on purpose. Suppression is worthless ten minutes later.",
+      "menu_paths": [
+        "fire.7",
+        "infantry.6"
+      ]
+    },
+    {
+      "id": "sniper_support",
+      "display": "Sniper",
+      "overlay_label": "SNIPER",
+      "target_roles": [
+        "recon"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 900,
+      "spoken_aliases": [
+        "sniper",
+        "marksman",
+        "long shot"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "game_note": "SVD marksman rifle and the AMR 50 anti-materiel rifle sit on the Recon track, and sniper towers are a large-hammer buildable.",
+      "menu_paths": [
+        "fire.8",
+        "recon.4"
+      ]
+    },
+    {
+      "id": "escort",
+      "display": "Escort",
+      "overlay_label": "ESCORT",
+      "target_roles": [
+        "infantry",
+        "armor",
+        "ground_transport",
+        "air_support"
+      ],
+      "arity": 2,
+      "point_labels": [
+        "from",
+        "to"
+      ],
+      "ttl_s": 1200,
+      "spoken_aliases": [
+        "convoy",
+        "cover us"
+      ],
+      "ambiguous_aliases": [
+        "escort"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "game_note": "A logistics run that needs protection. Arity 2 because the route is the request, not a point on it.",
+      "alias_note": "Primary was 'escort' and it scored near the floor against 'extract': two syllables each, both stressed on EH1. 'extract' is the incumbent. 'convoy' has a different stressed vowel and a different onset.",
+      "menu_paths": [
+        "move.5"
+      ]
+    },
+    {
+      "id": "spawn_point",
+      "display": "Spawn Point",
+      "overlay_label": "SPAWN",
+      "target_roles": [
+        "logistics",
+        "ground_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "site"
+      ],
+      "ttl_s": 1800,
+      "spoken_aliases": [
+        "spawn point",
+        "bring the spawn",
+        "rally"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "game_note": "Spawn support is vehicle-based and has to be driven somewhere, which makes it a transport ask rather than a build ask.",
+      "menu_paths": [
+        "move.6"
+      ]
+    },
+    {
+      "id": "recon_request",
+      "display": "Recon",
+      "overlay_label": "RECON",
+      "target_roles": [
+        "recon"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "area"
+      ],
+      "ttl_s": 1200,
+      "spoken_aliases": [
+        "recon",
+        "scout",
+        "eyes on",
+        "sweep"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "low",
+      "menu_paths": [
+        "recon.1"
+      ]
+    },
+    {
+      "id": "uav_recon",
+      "display": "UAV Recon",
+      "overlay_label": "UAV",
+      "target_roles": [
+        "uav",
+        "recon"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "area"
+      ],
+      "ttl_s": 900,
+      "spoken_aliases": [
+        "drone",
+        "uav recon",
+        "eye in the sky",
+        "overwatch"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "game_note": "Recon UAV. Eyes on an area from something nobody has to walk into.",
+      "alias_note": "Never alias to the letters 'u a v'. Letter names are the recognizer's worst case. 'drone' is the primary.",
+      "menu_paths": [
+        "recon.3"
+      ]
+    },
+    {
+      "id": "uav_strike",
+      "display": "Drone Strike",
+      "overlay_label": "FPV",
+      "target_roles": [
+        "uav"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 600,
+      "spoken_aliases": [
+        "drone strike",
+        "fpv",
+        "fpv drone"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "game_note": "FPV strike drone. Separate from uav_recon because one asks somebody to look and the other asks them to spend the drone.",
+      "alias_note": "Bare 'drone' belongs to uav_recon. The strike form always needs the second word.",
+      "menu_paths": [
+        "air.6",
+        "recon.5"
+      ]
+    },
+    {
+      "id": "spotter_request",
+      "display": "Spotter",
+      "overlay_label": "SPOTTER",
+      "target_roles": [
+        "recon",
+        "infantry"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 900,
+      "spoken_aliases": [
+        "spotter",
+        "spot for me",
+        "mark it"
+      ],
+      "modifiers": [
+        "urgent"
+      ],
+      "default_priority": "normal",
+      "game_note": "Wardogs mortars work as a two-part team with a protected crew and a separate spotter who can see the target. This request is that pairing.",
+      "menu_paths": [
+        "recon.2"
+      ]
+    },
+    {
+      "id": "intel_marker",
+      "display": "Intel",
+      "overlay_label": "CONTACT",
+      "target_roles": [
+        "command"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "contact"
+      ],
+      "ttl_s": 600,
+      "spoken_aliases": [
+        "contact",
+        "enemy",
+        "intel"
+      ],
+      "alias_note": "Bare 'spotted' is FORBIDDEN here. S P AA1 T IH0 D against spotter_request's primary 'spotter' S P AA1 T ER0: same syllable count, same stressed vowel, same onset, differing only in coda. One feature of four, and the phonetic floor refuses it. The two route to opposite work, an FYI to command against pairing a spotter with a fire mission, and 'spotter' is the incumbent because it is the type's own name. intel_marker keeps 'contact' as its primary plus 'enemy' and 'intel', so nothing is lost.",
+      "modifiers": [
+        "armor_contact",
+        "infantry_contact",
+        "air_contact"
+      ],
+      "default_priority": "normal",
+      "auto_complete_on_claim": true,
+      "note": "An FYI to command, not work to be done. Claiming it acknowledges and closes it.",
+      "menu_paths": [
+        "intel.1"
+      ]
+    }
+  ],
+  "quantity_note": "takes_quantity names the thing the count counts. It is NOT a modifier. Count used to be stuffed into modifiers text[], which made a partially delivered request unrepresentable: a driver asked for four runs who delivered two could only lie with 'done' or leave the row open, and two drivers could not split one request. It is now quantity_requested and quantity_delivered on Request, and the done verb carries a delivered count. A short completion re-opens the remainder under the SAME ticket rather than creating a second one. The numeral is still spoken in the modifier position class ('lift 6', 'mortar 6 rounds'); only its storage moved. A type with no takes_quantity has no quantity, and quantity is never inferred from a modifier.",
+  "command_verbs": [
+    {
+      "id": "accept",
+      "aliases": [
+        "accept",
+        "take",
+        "taking",
+        "got it",
+        "mine",
+        "wilco"
+      ]
+    },
+    {
+      "id": "pass",
+      "aliases": [
+        "pass",
+        "reject",
+        "negative",
+        "unable",
+        "cannot"
+      ],
+      "client_only": true
+    },
+    {
+      "id": "start",
+      "aliases": [
+        "start",
+        "working",
+        "on it",
+        "moving",
+        "en route"
+      ]
+    },
+    {
+      "id": "done",
+      "aliases": [
+        "done",
+        "complete",
+        "delivered"
+      ],
+      "terminal": true,
+      "takes_quantity": true,
+      "note": "The only terminal completion verb. Carries an outcome (serviced, no_longer_required, unable) on the completed event and an optional delivered count on a type with takes_quantity.",
+      "alias_note": "'splash' and 'rounds out' were aliases here and were WRONG. Both mean the rounds are in the air, which is exactly when the adjust loop should begin, so the most natural word in a gunner's vocabulary closed the mission before the spotter could speak and the requester's strip read ROUNDS OUT as completion. They now belong to rounds_away."
+    },
+    {
+      "id": "rounds_away",
+      "aliases": [
+        "splash",
+        "rounds out",
+        "shot",
+        "on the way"
+      ],
+      "terminal": false,
+      "note": "NON-TERMINAL. Writes the rounds_away RequestEvent and leaves state at in_progress so the spotter can still adjust. Also supplies the requester's ETA for free, because time of flight is already computed locally.",
+      "alias_note": "'shot' sits one feature above the floor against the adjust direction 'short' (AA1 versus AO1, S versus SH, T versus R-T: three of four). They are in DIFFERENT position classes, which is what makes the pair safe, and the cost of a swap is bounded because neither verb is terminal. Re-run the floor before either word moves class. 'on the way' shares its onset with the start alias 'on it'; longest_match_wins resolves it, and both readings are non-terminal. 'rounds out' as a first token does not collide with the 'rounds' quantity unit or the ammo supply alias, because those live in the modifier and kind classes."
+    },
+    {
+      "id": "adjust",
+      "aliases": [
+        "over",
+        "short",
+        "left",
+        "right"
+      ],
+      "terminal": false,
+      "position_class": "adjust_direction",
+      "entry_aliases": [
+        "adjust",
+        "correction"
+      ],
+      "takes_metres": true,
+      "note": "NON-TERMINAL, spotter side. Spoken by whoever holds the paired spotter request, or by the requester. The matched alias IS the direction on the adjusted event payload; a trailing numeral supplies optional metres. 'adjust 3 over 50'.",
+      "alias_note": "These four words are NOT initial-class tokens, and that is load-bearing rather than tidy. Bare 'left' is L EH1 F T against the incumbent 'lift' L IH1 F T: same syllable count, same onset, same coda, differing only in stressed vowel. One feature of four, REFUSED. Bare 'right' is R AY1 T against the incumbent 'ride' R AY1 D: same syllable count, same stressed vowel, same onset, differing only in coda voicing. One feature of four, REFUSED. Both would have routed a fire correction into a transport request. Confining them to the adjust_direction class, reachable only after 'adjust' or 'correction' plus a slot ref, removes the collision outright instead of papering it, and the four directions clear the floor comfortably against each other."
+    },
+    {
+      "id": "release",
+      "aliases": [
+        "release",
+        "drop it",
+        "hand off"
+      ]
+    },
+    {
+      "id": "cancel",
+      "aliases": [
+        "cancel",
+        "scratch",
+        "abort"
+      ]
+    },
+    {
+      "id": "recall",
+      "aliases": [
+        "recall"
+      ],
+      "no_slot_ref": true
+    },
+    {
+      "id": "repeat",
+      "aliases": [
+        "repeat",
+        "read back"
+      ]
+    },
+    {
+      "id": "clear",
+      "aliases": [
+        "clear"
+      ],
+      "no_slot_ref": true
+    },
+    {
+      "id": "join",
+      "aliases": [
+        "join"
+      ],
+      "takes": "invite_code",
+      "note": "Six digits. Redeems a deployment invite. Valid with no memberships at all."
+    },
+    {
+      "id": "role",
+      "aliases": [
+        "role",
+        "roles"
+      ],
+      "takes": "role_toggle",
+      "note": "'role mortar' toggles that subscription on or off. 'roles' alone reads back the current set."
+    },
+    {
+      "id": "help",
+      "aliases": [
+        "help",
+        "what can i say"
+      ],
+      "no_slot_ref": true,
+      "note": "Shows the command card on the overlay. The only discovery path a visitor has."
+    },
+    {
+      "id": "mute",
+      "aliases": [
+        "mute"
+      ],
+      "takes": "slot_ref",
+      "client_only": true,
+      "note": "Hides every request from that requester on this viewer's board for the rest of the match."
+    },
+    {
+      "id": "copy",
+      "aliases": [
+        "copy",
+        "copy coords"
+      ],
+      "takes": "slot_ref",
+      "client_only": true,
+      "note": "Puts that row's coordinate on the clipboard for pasting into game chat. Writes only; never synthesises the paste keystroke."
+    },
+    {
+      "id": "gun",
+      "aliases": [
+        "gun here",
+        "gun position"
+      ],
+      "no_slot_ref": true,
+      "note": "Sets your gun position at the cursor for fire solutions."
+    },
+    {
+      "id": "solution",
+      "aliases": [
+        "solution",
+        "numbers"
+      ],
+      "takes": "slot_ref",
+      "note": "Reads back azimuth, elevation and time of flight for that row."
+    }
+  ],
+  "coordinate_handoff_moved": "Lives in contracts/game-profile.json. The chat text format is a fact about the game, not about our request vocabulary.",
+  "slot_refs": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "next",
+    "top",
+    "all"
+  ],
+  "position_classes": {
+    "note": "The recognizer only ever chooses among tokens legal at the current position. Collisions are computed PER CLASS, never across the whole vocabulary. This is why 'wall' and 'all' are perfect homophones and not a collision.",
+    "initial": "Request type aliases, command verbs, join, role, help. First token only. A verb declaring position_class puts its ALIASES elsewhere and enters through its entry_aliases, which are initial.",
+    "modifier": "Modifiers and counts. Only after a request type. A takes_quantity numeral is spoken here.",
+    "kind": "Supply kinds and structure kinds. Only after a type that takes one.",
+    "slot": "1-9, next, top, all. Only after a command verb.",
+    "adjust_direction": "over, short, left, right. Only after the adjust verb and its slot ref. Kept out of the initial class because 'left' and 'right' both fall below the floor there, against 'lift' and 'ride'.",
+    "digit": "0-9. Only after join, and exactly six of them."
+  },
+  "phonetic_floor": {
+    "enforced_by": "scripts/contracts.ps1",
+    "on_violation": "refuse_to_generate",
+    "note": "Not a warning and not a later test. Two aliases in the same position class that fall below the floor stop the contract building.",
+    "rule": "Two aliases in the same position class must differ in syllable count, OR in stressed vowel, OR in both onset and coda.",
+    "features": [
+      "syllable_count",
+      "stressed_vowel",
+      "onset",
+      "coda"
+    ],
+    "min_differing_features": 2,
+    "pronunciation_source": "cmudict",
+    "pronunciation_overrides": {
+      "wilco": "W IH1 L K OW0",
+      "arty": "AA1 R T IY0",
+      "willy pete": "W IH1 L IY0 P IY1 T",
+      "hesco": "HH EH1 S K OW0",
+      "fob": "F AA1 B",
+      "fpv": "EH2 F P IY2 V IY1",
+      "medevac": "M EH1 D IH0 V AE2 K",
+      "rounds out": "R AW1 N D Z AW1 T",
+      "on the way": "AA1 N DH AH0 W EY1"
+    },
+    "worked_example": "flank is F L AE1 NG K and tank is T AE1 NG K. Same syllable count, same stressed vowel AE1, same NG-K coda, differing only in onset. One feature of four. REFUSED.",
+    "worked_example_2": "left is L EH1 F T and lift is L IH1 F T. One syllable each, same L onset, same F-T coda, differing only in the stressed vowel. One feature of four. REFUSED in the initial class, which is why the adjust directions live in their own position class instead. right versus ride fails the same way on coda voicing alone.",
+    "cross_class_note": "The floor is computed PER POSITION CLASS. Moving a token to a class where its rival cannot appear is a legitimate fix and is not the same as suppressing the check: the recognizer genuinely never chooses between them. Moving a token to dodge a floor failure without checking it against its NEW class is the way to reintroduce the bug somewhere else."
+  },
+  "ambiguous_aliases_note": "An alias listed under a type's ambiguous_aliases is recognised but NEVER resolved by confidence. When it is the top hypothesis and a competing type is within the margin, the agent shows a two-item menu instead of guessing. It costs one keypress in the rare case and makes a confidently wrong request impossible. The generator also adds any pair it finds within 1.25x the floor.",
+  "grammar_rules": {
+    "max_slots": 9,
+    "longest_match_wins": true,
+    "ambiguity_margin": 0.15,
+    "slot_allocation": "least_recently_released",
+    "accept_all_cap": 3,
+    "accept_all_requires": [
+      "command_role",
+      "admin_permission"
+    ],
+    "min_intent_confidence": 0.6,
+    "preview_hold_ms": 1200,
+    "recall_window_s": 5,
+    "awaiting_point_timeout_s": 20,
+    "tap_max_ms": 180,
+    "invite_code_digits": 6,
+    "low_priority_slot_residency_s": 120,
+    "coalesce_radius_units": 0.5,
+    "coalesce_window_s": 60
+  },
+  "grammar_rules_note": "slot_quarantine_s was DELETED, not retuned. Nine slots with a 20 s quarantine admitted at most nine rows per 20 s no matter how fast providers cleared them, capping the board at 0.45 rows per second while overflow grew. Allocation is now least-recently-released: a digit is never reissued until all eight others have been, which is strictly better collision protection than a 20 s hold at zero dead time. low_priority_slot_residency_s demotes a low-priority row to overflow after 120 s while leaving it OPEN, because a slot was previously held for the whole TTL and fortify at 1800 s outlives mortar_fire at 600 s: nine build rows submitted in the first minute otherwise hold every digit for half an hour. Request lifetime is untouched; only its claim on a digit expires. coalesce_radius_units and coalesce_window_s are the submit-time dedup window: same type, same deployment, a point inside 0.50 units, created inside 60 s, attaches the new participant as a co-requester and returns the existing request. The quantity qualifier renders it as MORTAR x5. Same participant supersedes instead of coalescing.",
+  "forbidden_aliases": {
+    "armor": "Near-homophone of 'mortar'. Use 'tank'.",
+    "air support": "Shares an unstressed distinguishing syllable with 'air transport'. Use 'close air'.",
+    "air transport": "See above. Use 'lift'.",
+    "smoke": "Already a modifier on mortar_fire. For a screening mission use 'screen'.",
+    "fuel": "Already a supply kind on resupply. For one stranded vehicle use 'refuel'.",
+    "a t": "Letter names are the worst case for the recognizer and it collides with 'eight'. Use 'anti tank'.",
+    "support": "Ambiguous across air_support, logistics and the Wardogs Support track. Name the effect instead.",
+    "left": "FORBIDDEN in the initial class. One feature from 'lift' (same syllables, same L onset, same F-T coda). It is legal in adjust_direction, where 'lift' cannot appear.",
+    "right": "FORBIDDEN in the initial class. One feature from 'ride' (same syllables, same AY1, same R onset, coda differing only in voicing). It is legal in adjust_direction, where 'ride' cannot appear.",
+    "rover": "Never add it. One feature from the adjust direction 'over': same syllable count, same OW1, same coda, differing only in a null versus R onset. If a ground-vehicle type ever wants this word it must take a two-word form."
+  }
+}

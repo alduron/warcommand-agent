@@ -1,0 +1,21 @@
+{
+  "note": "The recorded-buffer corpus for the recognizer digit-accuracy harness. Each row names a committed 16 kHz mono 16-bit PCM wav, what was said, the grid it must parse to, and the floor its minimum per-token digit confidence must clear. The harness reads this file; adding a recording is one row here and one wav beside it, never a code change.",
+  "format": {
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "bits_per_sample": 16,
+    "encoding": "pcm"
+  },
+  "default_min_digit_confidence": null,
+  "default_min_digit_confidence_note": "Null means point_confidence.warn from contracts/game-profile.json, which is 0.75. A recording that only clears point_confidence.floor would render LOW CONF on every provider's overlay, so clearing the floor is not the bar a clean corpus recording has to meet.",
+  "corpus_requirements": [
+    "Accented speakers. The floor approximates a recognizer's confusion behaviour and does not replace real utterances; a corpus of one native speaker measures that speaker.",
+    "Background gunfire at the level the game actually produces, mixed under the utterance rather than recorded in a quiet room.",
+    "A headset mic held badly: off-axis, too close and clipping, and too far and quiet. That is the condition the product ships into.",
+    "Both number readings of every axis, digit-by-digit and cardinal, because the parser tries digit-by-digit first and falls back.",
+    "The known-confusable digit pairs as whole grids, not isolated words: 3/8, 5/6, 0/8, 1/7, and five versus nine.",
+    "At least one recording per supported sample chain: the raw device rate resampled by PcmResampler, not only material that was already 16 kHz.",
+    "Negative rows: an utterance with no grid in it, and a grid spoken over a cough, both of which must fail rather than produce a well-formed wrong point."
+  ],
+  "utterances": []
+}

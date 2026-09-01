@@ -1,0 +1,230 @@
+<UserControl x:Class="WarCommand.Agent.Overlay.BoardView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:WarCommand.Agent.Overlay"
+        Background="{DynamicResource Ground}"
+        TextOptions.TextFormattingMode="Ideal"
+        UseLayoutRounding="True">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/WarCommand.Agent.Overlay;component/Theme/OverlayTokens.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <local:NullToVisibilityConverter x:Key="NullToVisibility" />
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+            <!-- One row, the anatomy from docs/design/mocks/OverlayRows.dc.html. Every colour comes
+                 from the accent, so an urgent edge can never sit beside a green digit. -->
+            <DataTemplate x:Key="RowTemplate" DataType="{x:Type local:BoardRowViewModel}">
+                <Border x:Name="RowRoot" BorderThickness="0,0,0,1" BorderBrush="{StaticResource RowDivider}"
+                        Padding="0,5,9,5" Opacity="{Binding RowOpacity}" Background="{StaticResource Transparent}">
+                    <DockPanel LastChildFill="True">
+                        <Rectangle x:Name="EdgeBar" DockPanel.Dock="Left" Width="2" Margin="0,0,8,0"
+                                   Fill="{StaticResource Transparent}" />
+                        <TextBlock x:Name="Slot" DockPanel.Dock="Left" Width="22" TextAlignment="Center"
+                                   Text="{Binding SlotDisplay}" FontFamily="{StaticResource CondensedFont}"
+                                   FontWeight="Bold" FontSize="{StaticResource SlotSize}"
+                                   Foreground="{StaticResource Ink}" Margin="0,0,8,0" />
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Style="{StaticResource Up}"
+                                           FontSize="{StaticResource LabelSize}"
+                                           Text="{Binding TypeAndQualifier}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource Mono}"
+                                           Text="{Binding CoordinatesDisplay}" />
+                                <TextBlock x:Name="StateWord" Grid.Column="2" Style="{StaticResource Up}"
+                                           HorizontalAlignment="Right" Text="{Binding StateWord}"
+                                           Foreground="{StaticResource Ink}" Margin="8,0,0,0" />
+                            </Grid>
+
+                            <Grid Visibility="{Binding SecondPointDisplay, Converter={StaticResource NullToVisibility}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="1" Style="{StaticResource DimMono}"
+                                           Text="{Binding SecondPointDisplay}" />
+                            </Grid>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="80" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Style="{StaticResource DimMono}"
+                                           Text="{Binding Requester}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource DimMono}"
+                                           Text="{Binding AgeDisplay}" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource Up}"
+                                           Foreground="{StaticResource Dim}" Margin="16,0,0,0"
+                                           Text="{Binding MetaExtra}" />
+                                <TextBlock Grid.Column="3" Style="{StaticResource DimMono}" Margin="16,0,0,0"
+                                           Text="{Binding LegDisplay}" />
+                                <TextBlock Grid.Column="4" Style="{StaticResource DimMono}"
+                                           HorizontalAlignment="Right" Text="{Binding TicketCode}" />
+                            </Grid>
+
+                            <!-- The sub-15s bar. Absent above the window, which is what makes it mean
+                                 something when it appears. -->
+                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0" VerticalAlignment="Center"
+                                        Visibility="{Binding HasCountdown, Converter={StaticResource BoolToVisibility}}">
+                                <Border Width="120" Height="4" Background="{StaticResource TrackEmpty}"
+                                        VerticalAlignment="Center">
+                                    <Rectangle x:Name="CountdownFill" HorizontalAlignment="Left" Height="4"
+                                               Width="{Binding CountdownWidth}" Fill="{StaticResource Dim}" />
+                                </Border>
+                                <TextBlock Style="{StaticResource DimMono}" Margin="8,0,0,0"
+                                           Text="{Binding CountdownText}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding Accent}" Value="Urgent">
+                        <Setter TargetName="EdgeBar" Property="Fill" Value="{StaticResource Urgent}" />
+                        <Setter TargetName="StateWord" Property="Foreground" Value="{StaticResource Urgent}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Accent}" Value="Mine">
+                        <Setter TargetName="EdgeBar" Property="Fill" Value="{StaticResource Yours}" />
+                        <Setter TargetName="Slot" Property="Foreground" Value="{StaticResource Yours}" />
+                        <Setter TargetName="StateWord" Property="Foreground" Value="{StaticResource Yours}" />
+                        <Setter TargetName="CountdownFill" Property="Fill" Value="{StaticResource Ink}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Accent}" Value="Warned">
+                        <Setter TargetName="EdgeBar" Property="Fill" Value="{StaticResource Warn}" />
+                        <Setter TargetName="Slot" Property="Foreground" Value="{StaticResource Warn}" />
+                        <Setter TargetName="StateWord" Property="Foreground" Value="{StaticResource Warn}" />
+                        <Setter TargetName="RowRoot" Property="Background" Value="{StaticResource TakenWash}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Accent}" Value="Muted">
+                        <Setter TargetName="Slot" Property="Foreground" Value="{StaticResource Dim}" />
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+
+            <!-- The requester's own strip: ticket, type, point, then who has it. -->
+            <DataTemplate x:Key="StripRowTemplate" DataType="{x:Type local:BoardRowViewModel}">
+                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}"
+                        BorderThickness="1,0,1,1" Padding="9,4">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Style="{StaticResource DimMono}" Text="{Binding TicketCode}" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource Up}" Foreground="{StaticResource Dim}"
+                                   Margin="10,0,0,0" Text="{Binding TypeAndQualifier}" />
+                        <TextBlock Grid.Column="2" Style="{StaticResource DimMono}" Margin="10,0,0,0"
+                                   Text="{Binding CoordinatesDisplay}" />
+                        <TextBlock Grid.Column="3" Style="{StaticResource Up}" Foreground="{StaticResource Squad}"
+                                   HorizontalAlignment="Right" Margin="10,0,0,0" Text="{Binding StateWord}" />
+                    </Grid>
+                </Border>
+            </DataTemplate>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      Padding="0" Margin="0,14,0,0">
+            <StackPanel Width="{StaticResource PanelWidth}" HorizontalAlignment="Center">
+
+                <!-- Panel. Header, rows, overflow. -->
+                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1">
+                    <StackPanel>
+                        <Border Padding="9,5" BorderBrush="{StaticResource Edge}" BorderThickness="0,0,0,1">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="FaultDot" Grid.Column="0" Style="{StaticResource Mono}"
+                                               Foreground="{StaticResource Warn}" Text="&#9679;" Margin="0,0,8,0"
+                                               Visibility="Collapsed" />
+                                    <TextBlock x:Name="HeaderTitle" Grid.Column="1" Style="{StaticResource Up}"
+                                               FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}"
+                                               Text="WARCOMMAND" />
+                                    <TextBlock x:Name="HeaderCount" Grid.Column="2" Style="{StaticResource Up}"
+                                               FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}"
+                                               Margin="8,0,0,0" />
+                                    <TextBlock x:Name="HeaderMap" Grid.Column="3" Style="{StaticResource Up}"
+                                               FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}"
+                                               Margin="8,0,0,0" />
+                                    <TextBlock x:Name="HeaderRight" Grid.Column="4" Style="{StaticResource Up}"
+                                               FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Squad}"
+                                               HorizontalAlignment="Right" Margin="8,0,0,0" />
+                                </Grid>
+                                <Grid Margin="0,1,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="HeaderRoles" Grid.Column="0" Style="{StaticResource Up}"
+                                               FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}" />
+                                    <TextBlock x:Name="HeaderHint" Grid.Column="1" Style="{StaticResource Up}"
+                                               FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}"
+                                               HorizontalAlignment="Right" Margin="8,0,0,0" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <ItemsControl x:Name="RowsList" ItemTemplate="{StaticResource RowTemplate}" />
+
+                        <Border x:Name="OverflowRow" Padding="9,5" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="OverflowText" Style="{StaticResource Up}"
+                                           Foreground="{StaticResource Dim}" />
+                                <TextBlock x:Name="OverflowUrgentText" Style="{StaticResource Up}"
+                                           Foreground="{StaticResource Urgent}" Margin="16,0,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- No deployment, or an unreachable API. One line, never a paragraph. -->
+                        <Border x:Name="EmptyState" Padding="9,14" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="EmptyStateTitle" Style="{StaticResource Up}"
+                                           FontSize="{StaticResource LabelSize}" />
+                                <TextBlock x:Name="EmptyStateHint" Style="{StaticResource DimMono}"
+                                           Margin="0,4,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <ItemsControl x:Name="SecondaryList" ItemTemplate="{StaticResource StripRowTemplate}" />
+
+                <Border x:Name="DevPanel" Margin="0,10,0,0" Padding="9,6" Background="{StaticResource Surface}"
+                        BorderBrush="{StaticResource Edge}" BorderThickness="1" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="SimulatePttButton" Content="SIMULATE PTT" Padding="8,2"
+                                Background="{StaticResource Transparent}" Foreground="{StaticResource Ink}"
+                                BorderBrush="{StaticResource BoxEdge}" FontFamily="{StaticResource CondensedFont}"
+                                FontWeight="SemiBold" Click="OnSimulatePttClick" />
+                        <TextBlock x:Name="SimulatedPointText" Style="{StaticResource Mono}"
+                                   Foreground="{StaticResource Yours}" Margin="10,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock x:Name="StatusText" Style="{StaticResource Mono}" FontSize="9"
+                           Foreground="{StaticResource Dim}" Opacity="0.6" Margin="0,10,0,14"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

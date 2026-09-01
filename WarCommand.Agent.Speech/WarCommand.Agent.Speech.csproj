@@ -4,10 +4,27 @@
     <ProjectReference Include="..\WarCommand.Agent.Core\WarCommand.Agent.Core.csproj" />
   </ItemGroup>
 
+  <!-- Windows-targeted because WASAPI capture and the readback synthesizer are platform code.
+       Core stays platform-free, which is why none of this lives there. -->
   <PropertyGroup>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RootNamespace>WarCommand.Agent.Speech</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- NAudio is the WASAPI shared-mode capture client and the device enumerator. Nothing from
+         NAudio that writes a file is referenced, and WarCommand.Agent.Tests asserts that. -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- Output only. Readback is text to speech, never recognition. -->
+    <PackageReference Include="System.Speech" Version="8.0.0" />
+    <PackageReference Include="Vosk" Version="0.3.38" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WarCommand.Agent.Tests" />
+  </ItemGroup>
 
 </Project>

@@ -16,10 +16,28 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <PackageReference Include="YamlDotNet" Version="16.2.1" />
+    <!-- Vosk's build targets are private assets and do not flow through the project reference, so
+         libvosk.dll never reaches this output without naming the package here. Without it the
+         recorded-buffer harness cannot run even when a model is installed. -->
+    <PackageReference Include="Vosk" Version="0.3.38" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- The tray loads its icons from the output directory, so the menu test needs them. -->
+  <ItemGroup>
+    <None Include="..\WarCommand.Agent\Resources\Icons\*.ico"
+          Link="Resources\Icons\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- The recorded-buffer corpus and its manifest. The harness reads them from the output
+       directory, so adding a recording is one wav plus one manifest row and no code change. -->
+  <ItemGroup>
+    <None Update="Speech\buffers\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,6 +47,7 @@
     <ProjectReference Include="..\WarCommand.Agent.Speech\WarCommand.Agent.Speech.csproj" />
     <ProjectReference Include="..\WarCommand.Agent.Capture\WarCommand.Agent.Capture.csproj" />
     <ProjectReference Include="..\WarCommand.Agent.Client\WarCommand.Agent.Client.csproj" />
+    <ProjectReference Include="..\WarCommand.Agent\WarCommand.Agent.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "generated_note": "SOURCE OF TRUTH for fire solutions. The agent computes locally from this; the API serves it at GET /v1/catalog/ballistics. Never hardcode a range or a mil value in code.",
+
+  "provenance": {
+    "measured_by": "community",
+    "official": false,
+    "note": "Bulkhead publishes no firing tables. Every row here is player-measured. Independent interpolation checks put the error under about 2 mil across most of both tables, but the two published L81 tables disagree on maximum range by a factor of 4.5 (684 m versus 3.1 km). Treat max_range_m as unconfirmed.",
+    "sources": [
+      "https://wardogshub.gg/artillery-calculator/",
+      "https://wardogs.zone/calculators/artillery",
+      "https://wardogs-artillery.com/",
+      "https://github.com/djzet/wardogs-calc"
+    ]
+  },
+
+  "map_geometry": {
+    "map_units_to_meters": 100.0,
+    "confidence": "inferred",
+    "note": "The map hover readout reads like x85.53 y69.42 at 1 m precision per Insight_WardogsMapReadoutMeasured. Two decimals at 1 m precision implies 1 unit = 100 m, which puts a 16 km map at 0-160 units and matches observed values. UNVERIFIED. Calibrate against one known-distance pair before trusting any range output.",
+    "azimuth_reference": "true_north",
+    "azimuth_unit": "degrees",
+    "elevation_unit": "mils"
+  },
+
+  "weapons": [
+    {
+      "id": "l81_mortar",
+      "display": "L81 Mortar",
+      "role": "mortar",
+      "platform": "fob_emplacement",
+      "platform_note": "Built at a FOB. Converts the FOB's ammo supply into shells. Static once placed.",
+      "min_range_m": 120,
+      "max_range_m": 684,
+      "max_range_confidence": "disputed",
+      "arcs": ["high"],
+      "grouping_moa": 50,
+      "grouping_note": "About +/-1.9 m at 132 m, +/-10.0 m at 684 m. Wide. This weapon brackets, it does not snipe.",
+      "elevation_mils": { "min": 150, "max": 850 },
+      "table": [
+        { "range_m": 132, "high_mil": 850, "tof_s": 12.1 },
+        { "range_m": 200, "high_mil": 780, "tof_s": 13.0 },
+        { "range_m": 275, "high_mil": 706, "tof_s": 13.9 },
+        { "range_m": 350, "high_mil": 630, "tof_s": 14.6 },
+        { "range_m": 425, "high_mil": 552, "tof_s": 15.2 },
+        { "range_m": 500, "high_mil": 470, "tof_s": 15.7 },
+        { "range_m": 575, "high_mil": 382, "tof_s": 16.1 },
+        { "range_m": 650, "high_mil": 268, "tof_s": 16.4 },
+        { "range_m": 684, "high_mil": 150, "tof_s": 16.6 }
+      ],
+      "table_confidence": "placeholder",
+      "table_note": "SHAPE IS RIGHT, VALUES ARE NOT VERIFIED. Monotonic decreasing mil over increasing range across the stated 150-850 mil envelope, endpoints anchored to the published min and max. Replace wholesale with measured rows before this ships. The agent must refuse to display a solution while table_confidence is 'placeholder'."
+    },
+    {
+      "id": "sph2",
+      "display": "SPH-2",
+      "role": "artillery",
+      "platform": "vehicle",
+      "platform_note": "155 mm self-propelled gun. Three seats, own fuel. Mobile, so its gun position goes stale the moment it drives.",
+      "min_range_m": 780,
+      "max_range_m": 2629,
+      "max_range_confidence": "measured",
+      "arcs": ["high", "low"],
+      "low_arc_min_range_m": 1181,
+      "grouping_moa": 10,
+      "grouping_note": "About +/-2.9 m at 1000 m, +/-7.6 m at 2629 m.",
+      "elevation_mils": { "min": 20, "max": 1390 },
+      "table": [
+        { "range_m": 780,  "high_mil": 1390, "tof_s": 18.0 },
+        { "range_m": 1000, "high_mil": 1290, "tof_s": 20.5, "low_mil": null },
+        { "range_m": 1181, "high_mil": 1205, "tof_s": 22.3, "low_mil": 300 },
+        { "range_m": 1400, "high_mil": 1100, "tof_s": 24.1, "low_mil": 355 },
+        { "range_m": 1700, "high_mil": 955,  "tof_s": 26.4, "low_mil": 430 },
+        { "range_m": 2000, "high_mil": 800,  "tof_s": 28.5, "low_mil": 510 },
+        { "range_m": 2300, "high_mil": 630,  "tof_s": 30.4, "low_mil": 600 },
+        { "range_m": 2629, "high_mil": 400,  "tof_s": 32.5, "low_mil": 700 }
+      ],
+      "table_confidence": "placeholder",
+      "table_note": "Same warning as the L81. Endpoints anchored to published min and max range and the 20-1390 mil envelope; interior rows are interpolated placeholders. Low arc only exists from 1181 m."
+    }
+  ],
+
+  "solution_rules": {
+    "two_halves": {
+      "note": "A solution is GEOMETRY plus ELEVATION and they have completely different dependencies. Conflating them led to the whole feature being described as unshippable when two thirds of it works today. Render what you have; withhold only what you do not.",
+      "geometry": {
+        "outputs": ["azimuth", "range"],
+        "depends_on": "two map coordinates, nothing else",
+        "azimuth_needs_no_units": "atan2 on two deltas. Unitless, exact, and correct the moment the readout is trusted.",
+        "range_needs_units": "hypot times map_units_to_meters. If that constant is uncalibrated, render range in MAP UNITS rather than refusing: a gunner comparing two targets is served by a relative number, and a wrong metre figure is worse than an honest unit figure.",
+        "always_render": true
+      },
+      "elevation": {
+        "outputs": ["elevation_mils", "tof_s", "arc"],
+        "depends_on": "a measured firing table for that weapon",
+        "why_not_computable": "Elevation for a given range is a function of the projectile's muzzle velocity and the game's drag model, not of the geometry. No amount of coordinate arithmetic produces it, which is why every community calculator ships a measured table rather than a formula.",
+        "render_only_if": "table_confidence != 'placeholder'"
+      }
+    },
+    "interpolation": "linear_between_adjacent_rows",
+    "round_mils_to": 1,
+    "round_azimuth_to": 1,
+    "below_min_range": "refuse",
+    "above_max_range": "refuse",
+    "refuse_message": "OUT OF RANGE",
+    "default_arc": "high",
+    "arc_choice_note": "High arc is the default because it clears terrain and because the L81 has no other option. Low arc is offered on the SPH-2 above 1181 m and is faster against something that is moving.",
+
+    "terrain": {
+      "applies_height_correction": false,
+      "why": "The Wardogs map hover readout gives x and y only. There is no altitude channel to read, so the solution is computed on flat terrain and will be wrong by a bracket wherever the gun and target differ in height.",
+      "parity_note": "The community calculators do not apply height correction to the solution either. They display height difference as context and treat the firing table as authoritative. Shipping without it is parity, not a deficit.",
+      "future": "Three routes to height, in increasing order of how much it is worth: a third-party extracted heightmap (licensing), our own extraction from the game paks (asset extraction, version-fragile, and beyond what 12-security.md currently permits), or measuring it from our own fire missions. See fire_observations."
+    },
+
+    "presentation": {
+      "call_it": "opening bracket",
+      "never_call_it": "firing solution",
+      "why": "Flat-terrain, off a player-measured table, from a weapon with 50 MOA grouping. It gets the first round close enough for a spotter to correct from. Naming it a solution promises an accuracy that none of the three inputs support.",
+      "always_show_alongside": ["spotter_hint"],
+      "spotter_hint": "ADJUST FROM SPOTTER"
+    }
+  },
+
+  "calibrating_a_table_cheaply": {
+    "note": "Measuring a full table is tedious. If Wardogs uses ordinary projectile motion, a SINGLE observed range and elevation pair recovers the muzzle velocity, and the whole table follows.",
+    "vacuum_model": "R = v^2 * sin(2*theta) / g, so v = sqrt(R*g / sin(2*theta)) from one shot, and thereafter theta = 0.5 * asin(R*g / v^2).",
+    "how_to_use_it": "Fire once at a measured range with a known dial setting. Solve for v. Generate a candidate table. Then check it at two more ranges, one near minimum and one near maximum, where drag diverges most from vacuum.",
+    "when_it_fails": "If the two check shots miss badly the game models drag, and there is no shortcut: the table has to be measured row by row. But the check costs three shots and tells you which world you are in.",
+    "status": "untested. Nobody has fired an L81."
+  },
+
+  "fire_observations": {
+    "enabled": false,
+    "note": "Off at M1. This is the mechanism that eventually beats a static heightmap, and the schema is defined now so that turning it on later needs no migration.",
+    "what_is_recorded": [
+      "gun position x and y",
+      "target position x and y",
+      "weapon id and arc",
+      "the elevation the gunner actually fired",
+      "the outcome the spotter called: over, short, left, right, or on target"
+    ],
+    "why_it_wins": "Every mission is a labelled sample of the true solution at that gun-target pair, which absorbs terrain height, vehicle tilt, and whatever the community table gets wrong. Nobody else can build this because nobody else is holding the request board while it happens.",
+    "privacy": "Coordinates and outcomes only. No audio, no frames, no player identity beyond the group-scoped participant id. Consistent with the three promises in 12-security.md.",
+    "consent": "Per group, off by default, and the group owner turns it on. It is telemetry about how somebody plays and it is not ours to take silently."
+  }
+}
