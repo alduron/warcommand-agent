@@ -29,7 +29,10 @@ jobs:
 
       # warcommand-api is private, so the default GITHUB_TOKEN cannot see it: this needs a PAT in
       # CONTRACTS_REPO_TOKEN with read access to it. Only the fixture directory is fetched.
+      # Non-fatal: without the token this 404s after two slow retries, and the guard below says
+      # what to do about it far more usefully than "Not Found" does.
       - name: Check out the shared parse spec
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: alduron/warcommand-api
