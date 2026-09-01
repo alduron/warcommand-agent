@@ -36,6 +36,8 @@ public enum TrayCommand
     TestPushToTalk,
     ToggleScreenCapture,
     ToggleSounds,
+    ToggleStartWithWindows,
+    InstallUpdate,
     SelectSoundOutput,
     ToggleSecondScreen,
     CopyPairingCode,
@@ -170,6 +172,18 @@ public sealed record TrayMenuState
 
     /// <summary>False until the settings window exists. The row is absent, never greyed.</summary>
     public bool SettingsAvailable { get; init; }
+
+    /// <summary>Read from the HKCU Run key, never from settings.json. Null hides the row.</summary>
+    public bool? StartWithWindows { get; init; }
+
+    /// <summary>The version on offer, e.g. "1.4.0". Null when the agent is current.</summary>
+    public string? UpdateVersion { get; init; }
+
+    /// <summary>True while the game is up, which defers the install rather than cancelling it.</summary>
+    public bool UpdateWaitingForGameToClose { get; init; }
+
+    /// <summary>True from the click until the process exits, so the row cannot be clicked twice.</summary>
+    public bool UpdateInProgress { get; init; }
 
     /// <summary>Dev profile. Adds the force-state section and nothing else.</summary>
     public bool IsDev { get; init; }
@@ -348,6 +362,19 @@ public static class TrayMenu
             items.Add(new TrayMenuItem { Text = $"Sound output: {output}", Command = TrayCommand.SelectSoundOutput });
         }
 
+        // What every tray app has, in the place users look for it. Absent in a dev launch: a
+        // developer's machine must not start an agent they did not ask for.
+        if (state.StartWithWindows is { } startup)
+        {
+            items.Add(new TrayMenuItem
+            {
+                Text = "Start with Windows",
+                Value = OnOff(startup),
+                Command = TrayCommand.ToggleStartWithWindows,
+                IsChecked = startup,
+            });
+        }
+
         items.Add(new TrayMenuItem
         {
             Text = "Second-screen mode",
@@ -361,6 +388,8 @@ public static class TrayMenu
 
     private static void AppendControlSection(List<TrayMenuItem> items, TrayMenuState state)
     {
+        AppendUpdateRow(items, state);
+
         // The account is always on screen. A user who cannot see which one the agent holds cannot
         // notice it drifting from the one their browser is signed into.
         if (state.Callsign is { } callsign)
@@ -394,6 +423,45 @@ public static class TrayMenu
                 Value = state.PanicEngaged ? "engaged" : "active",
                 Command = TrayCommand.TogglePanic,
                 IsChecked = state.PanicEngaged,
+            });
+        }
+
+        items.Add(TrayMenuItem.Separator);
+    }
+
+    /// <summary>
+    /// One row, above the account, because an out-of-date agent is the thing most likely to be
+    /// wrong and the user has to be able to see it without opening anything.
+    /// </summary>
+    private static void AppendUpdateRow(List<TrayMenuItem> items, TrayMenuState state)
+    {
+        if (state.UpdateVersion is not { } version)
+        {
+            return;
+        }
+
+        if (state.UpdateInProgress)
+        {
+            items.Add(new TrayMenuItem { Text = $"Updating to {version}...", IsEnabled = false });
+        }
+        else if (state.UpdateWaitingForGameToClose)
+        {
+            // Not greyed with no reason given: the row says why, because "why can I not click this"
+            // is the support ticket a disabled row without an explanation generates.
+            items.Add(new TrayMenuItem
+            {
+                Text = $"Update to {version}",
+                Value = "on next launch",
+                IsEnabled = false,
+            });
+        }
+        else
+        {
+            items.Add(new TrayMenuItem
+            {
+                Text = $"Update to {version}",
+                Value = "restarts",
+                Command = TrayCommand.InstallUpdate,
             });
         }
 

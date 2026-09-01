@@ -18,6 +18,10 @@ five minutes `warcommand.app/download` shows the new version and checksum.
 | `WarCommand-Setup-<version>.exe` | The installer. Per-user, no elevation, ~75 MB. |
 | `agent-release.json` | The manifest the API reads. Version, notes, installer URL, SHA-256. |
 
+The installer produces `WarCommand.exe`, so Task Manager shows `WarCommand`, not
+`WarCommand.Agent.exe`. It registers `warcommand://`, and its startup checkbox writes the same
+HKCU Run value the tray's `Start with Windows` row reads, so the two can never disagree.
+
 The version comes from the tag and from nowhere else, so a build cannot disagree with the tag it
 was cut from. `v1.4.0` must be `MAJOR.MINOR.PATCH`; the workflow refuses anything else.
 
@@ -39,6 +43,24 @@ and is not safe to make public here.
 
 A prerelease is excluded from GitHub's `latest`, so tagging one moves nobody's download page. That
 is the way to stage a build.
+
+## How an installed agent updates itself
+
+On startup and every six hours it calls `GET /v1/agent/latest`. If the published version is
+strictly newer and carries an https URL and a 64-hex digest, the tray grows one row.
+
+The install replaces the running exe, so it needs the agent to exit. That is why the row says
+`restarts`, and why a running game blocks it: the row reads `on next launch` and refuses to click
+while Wardogs is up. The agent downloads to `%LOCALAPPDATA%\WarCommand\updates`, hashes the file against the
+published digest, and only then runs it with `/SILENT /NORESTART /UPDATE`. `/UPDATE` is ours, not
+Inno's: a silent install skips the normal post-install launch, so without it an update would
+replace the agent and leave nothing running.
+
+A file whose digest does not match is deleted and the offer withdrawn rather than retried.
+Nothing under `%LOCALAPPDATA%\WarCommand` is touched, so `install.id`, `tokens.dat` and the pairing survive.
+
+**Test an update without shipping one.** Tag a prerelease, which GitHub keeps out of `latest`,
+then point one machine's agent at it.
 
 ## Release notes
 

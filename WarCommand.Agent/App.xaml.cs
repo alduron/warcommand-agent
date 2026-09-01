@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Reflection;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,13 +10,16 @@ using WarCommand.Agent.Client.Http;
 using WarCommand.Agent.Client.Link;
 using WarCommand.Agent.Client.Storage;
 using WarCommand.Agent.Client.Tokens;
+using WarCommand.Agent.Client.Updates;
 using WarCommand.Agent.Core;
 using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Dev;
 using WarCommand.Agent.Core.Model;
 using WarCommand.Agent.Core.Tray;
+using WarCommand.Agent.Core.Updates;
 using WarCommand.Agent.Dev;
+using WarCommand.Agent.Startup;
 using WarCommand.Agent.Core.Settings;
 using WarCommand.Agent.Overlay;
 using WarCommand.Agent.Tray;
@@ -42,7 +46,18 @@ public partial class App : Application, IDisposable
     /// </summary>
     private const string SingleInstanceMutexName = @"Local\WarCommand.Agent.SingleInstance";
 
-    private const string AgentVersion = "0.0.0-dev";
+    /// <summary>
+    /// The running build, read from the assembly the release workflow stamps from the git tag.
+    /// A constant here would have to be edited in lockstep with every tag, and the first time it
+    /// was not, the agent would either offer an update it already has or refuse the one it needs.
+    /// </summary>
+    private static string AgentVersion { get; } =
+        typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? typeof(App).Assembly.GetName().Version?.ToString(3)
+        ?? "0.0.0";
+
+    /// <summary>Startup, then every six hours. From 10-agent-spec.md "Updates".</summary>
+    private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(6);
 
     private readonly CancellationTokenSource _shutdown = new();
 
@@ -60,6 +75,10 @@ public partial class App : Application, IDisposable
     private AgentWindow? _window;
     private BoardView? _board;
     private TrayMenuState _menuState = new();
+    private WindowsStartup? _startup;
+    private UpdateDownloader? _updates;
+    private UpdateOffer? _offer;
+    private DispatcherTimer? _updateTimer;
 
     /// <summary>
     /// Starts the tray grey (unpaired/no session yet), then resolves the profile, ensures device
@@ -97,6 +116,16 @@ public partial class App : Application, IDisposable
             ScreenCaptureEnabled = _settings.Current.ScreenCaptureEnabled,
             SoundsEnabled = _settings.Current.Sounds.AllSound,
         };
+        // The registry is the source of truth for autostart, so it is read here rather than
+        // mirrored: a user who switched it off in Task Manager must see "off" in the tray.
+        // Absent in a dev launch, which must never register a developer's machine for startup.
+        if (!profile.IsDev)
+        {
+            _startup = new WindowsStartup(new FileClientLog(paths));
+            _startup.Reconcile();
+            _menuState = _menuState with { StartWithWindows = _startup.IsEnabled };
+        }
+
         _tray = new TrayIconController { StateProvider = () => _menuState };
         _tray.CommandInvoked += OnTrayCommand;
         _tray.SetTooltip(profile.IsTrayOnly ? "WarCommand (tray only)" : "WarCommand");
@@ -119,7 +148,7 @@ public partial class App : Application, IDisposable
         var board = window.BoardView;
         board.SetHeader(new BoardHeader { Title = "WarCommand", Hint = "RightAlt+H ?" });
         board.SetStatus(FormattableString.Invariant(
-            $"WARCOMMAND 0.0.0-dev  /  {(profile.IsDev ? "DEV" : "PROD")}  /  {profile.ApiBaseAddress.Host}"));
+            $"WARCOMMAND {AgentVersion}  /  {(profile.IsDev ? "DEV" : "PROD")}  /  {profile.ApiBaseAddress.Host}"));
         window.Show();
         _menuState = _menuState with { SecondScreenVisible = true };
 
@@ -175,6 +204,12 @@ public partial class App : Application, IDisposable
             case TrayCommand.ToggleSounds:
                 ToggleSetting(s => s with { Sounds = s.Sounds with { AllSound = !s.Sounds.AllSound } });
                 break;
+            case TrayCommand.ToggleStartWithWindows:
+                ToggleStartWithWindows();
+                break;
+            case TrayCommand.InstallUpdate:
+                InstallUpdate();
+                break;
             case TrayCommand.Quit:
                 Shutdown();
                 break;
@@ -229,6 +264,156 @@ public partial class App : Application, IDisposable
             ScreenCaptureEnabled = store.Current.ScreenCaptureEnabled,
             SoundsEnabled = store.Current.Sounds.AllSound,
         };
+    }
+
+    // --- updates --------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Checks now, then every six hours. A failed check is not an error the user sees: the tray
+    /// simply keeps showing no update, which is what it showed a moment ago.
+    /// </summary>
+    private void StartUpdateChecks(AgentPaths paths, FileClientLog log)
+    {
+        _updates = new UpdateDownloader(new HttpClient(), paths, log);
+
+        var timer = new DispatcherTimer { Interval = UpdateCheckInterval };
+        timer.Tick += async (_, _) => await CheckForUpdateAsync(log).ConfigureAwait(true);
+        timer.Start();
+        _updateTimer = timer;
+
+        _ = CheckForUpdateAsync(log);
+    }
+
+    /// <summary>
+    /// Asks the API what is published and lets <see cref="UpdateDecision"/> rule on it. Every
+    /// refusal lives there, so this method only maps the wire shape and stores the outcome.
+    /// </summary>
+    private async Task CheckForUpdateAsync(FileClientLog log)
+    {
+        if (_client is not { } client)
+        {
+            return;
+        }
+
+        PublishedRelease? published = null;
+        try
+        {
+            var latest = await client.GetLatestAgentAsync(_shutdown.Token).ConfigureAwait(true);
+            published = new PublishedRelease
+            {
+                Version = latest.Version,
+                Notes = latest.Notes,
+                Url = latest.Url?.ToString(),
+                Sha256 = latest.Sha256,
+            };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or WarCommandApiException)
+        {
+            // 404 until the first release is tagged, which is the normal state, not a fault.
+            log.Info($"Update check did not complete: {ex.GetType().Name}");
+            return;
+        }
+
+        _ = SemVersion.TryParse(AgentVersion, out var running);
+        var availability = UpdateDecision.Evaluate(running, published, GameIsRunning(), out var offer);
+        _offer = offer;
+
+        _menuState = _menuState with
+        {
+            UpdateVersion = offer?.Version.ToString(),
+            UpdateWaitingForGameToClose = availability == UpdateAvailability.WaitingForGameToClose,
+        };
+
+        if (offer is not null)
+        {
+            log.Info($"Update {offer.Version} is published; running {AgentVersion}.");
+        }
+    }
+
+    /// <summary>
+    /// True when any process named in <c>game.process_names</c> is up. Out of process and by name
+    /// only: this opens no handle into the game and reads nothing from it.
+    /// </summary>
+    private static bool GameIsRunning()
+    {
+        try
+        {
+            foreach (var name in BundledContracts.GameProfile().Current.Game.ProcessNames)
+            {
+                if (System.Diagnostics.Process.GetProcessesByName(name).Length > 0)
+                {
+                    return true;
+                }
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // Enumerating processes can race one exiting. Treat that as "cannot tell", and the
+            // safe answer to "cannot tell" is that the game is up, so nothing installs over it.
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Downloads the offer, verifies its digest, runs the installer and quits so it can replace
+    /// this exe. Refuses while the game is running, which the menu row already says.
+    /// </summary>
+    private async void InstallUpdate()
+    {
+        if (_offer is not { } offer || _updates is not { } downloader || _menuState.UpdateInProgress)
+        {
+            return;
+        }
+
+        if (GameIsRunning())
+        {
+            _menuState = _menuState with { UpdateWaitingForGameToClose = true };
+            return;
+        }
+
+        _menuState = _menuState with { UpdateInProgress = true };
+
+        try
+        {
+            var installer = await downloader.FetchAsync(offer, _shutdown.Token).ConfigureAwait(true);
+            downloader.Prune(installer);
+
+            if (downloader.Launch(installer))
+            {
+                Shutdown();
+                return;
+            }
+        }
+        catch (UpdateVerificationException)
+        {
+            // Deliberately not retried and deliberately not surfaced as an installable offer any
+            // more: bytes that do not match the published digest are not our build.
+            _offer = null;
+            _menuState = _menuState with { UpdateVersion = null };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        {
+            // The offer stands; the next click or the next six-hourly check tries again.
+        }
+
+        _menuState = _menuState with { UpdateInProgress = false };
+    }
+
+    /// <summary>
+    /// Flips the HKCU Run value and re-reads it. The menu shows what the registry says afterwards,
+    /// not what was asked for, so a write that silently failed cannot leave the row lying.
+    /// </summary>
+    private void ToggleStartWithWindows()
+    {
+        if (_startup is not { } startup)
+        {
+            return;
+        }
+
+        _ = startup.Set(!startup.IsEnabled);
+        _menuState = _menuState with { StartWithWindows = startup.IsEnabled };
     }
 
     /// <summary>Puts the agent's own pairing code on the clipboard, for the web to take.</summary>
@@ -317,6 +502,8 @@ public partial class App : Application, IDisposable
         _localLink = null;
         _pollTimer?.Stop();
         _pollTimer = null;
+        _updateTimer?.Stop();
+        _updateTimer = null;
         _tray?.Dispose();
         _tray = null;
         ReleaseSingleInstanceLock();
@@ -388,7 +575,7 @@ public partial class App : Application, IDisposable
         var apiOptions = new ApiClientOptions
         {
             BaseAddress = profile.ApiBaseAddress,
-            AgentVersion = "0.0.0-dev",
+            AgentVersion = AgentVersion,
         };
 
         // The token source needs the client to refresh through, and the client needs the token
@@ -401,6 +588,9 @@ public partial class App : Application, IDisposable
             (refreshToken, ct) => client!.RefreshTokensAsync(refreshToken, ct));
         client = WarCommandApiClient.Create(apiOptions, tokenSource, log);
         _client = client;
+
+        // Unauthenticated, so it runs before sign-in and keeps running whatever happens below.
+        StartUpdateChecks(paths, log);
 
         var me = await AuthenticateAsync(client, tokenStore, paths, profile, log).ConfigureAwait(true);
         AdoptAccount(me);
@@ -545,7 +735,7 @@ public partial class App : Application, IDisposable
                 {
                     InstallId = installId,
                     MachineLabel = Environment.MachineName,
-                    AgentVersion = "0.0.0-dev",
+                    AgentVersion = AgentVersion,
                     PttBinding = null,
                 },
                 CancellationToken.None).ConfigureAwait(true);

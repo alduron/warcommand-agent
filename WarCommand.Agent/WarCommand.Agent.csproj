@@ -17,8 +17,16 @@
     <UseWPF>true</UseWPF>
     <!-- NotifyIcon lives in WinForms; there is no WPF tray icon control. -->
     <UseWindowsForms>true</UseWindowsForms>
-    <!-- Grey (unpaired/no session), matching the tray's own default state on first launch. -->
-    <ApplicationIcon>Resources\Icons\tray-panicked.ico</ApplicationIcon>
+
+    <!-- The process users see in Task Manager, the name on the exe, and the name the installer
+         launches. The project and its namespaces stay WarCommand.Agent; only the artefact is
+         renamed, because "WarCommand.Agent.exe" reads like a service somebody else installed. -->
+    <AssemblyName>WarCommand</AssemblyName>
+    <RootNamespace>WarCommand.Agent</RootNamespace>
+
+    <!-- NOT one of the three tray icons. Field colour means connection state and the exe's icon is
+         stamped at build time, so a status colour there would be permanently wrong. -->
+    <ApplicationIcon>Resources\Icons\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

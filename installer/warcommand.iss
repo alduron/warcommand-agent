@@ -12,7 +12,7 @@
 #endif
 
 #define AppName      "WarCommand"
-#define AppExe       "WarCommand.Agent.exe"
+#define AppExe       "WarCommand.exe"
 #define AppPublisher "WarCommand"
 #define AppUrl       "https://warcommand.app"
 
@@ -50,7 +50,7 @@ OutputBaseFilename=WarCommand-Setup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-SetupIconFile=..\WarCommand.Agent\Resources\Icons\tray-panicked.ico
+SetupIconFile=..\WarCommand.Agent\Resources\Icons\app.ico
 UninstallDisplayIcon={app}\{#AppExe}
 CloseApplications=yes
 RestartApplications=no
@@ -69,7 +69,10 @@ Source: "..\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs cr
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
-Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: startup
+
+; NOT a {userstartup} shortcut. The tray's "Start with Windows" row reads and writes the HKCU Run
+; value below, and a shortcut would be a second, invisible mechanism the toggle could not see:
+; switching it off in the tray would leave the shortcut launching the agent anyway.
 
 [Registry]
 ; warcommand:// , the pairing link the web app opens. HKCU because this is a per-user install;
@@ -79,8 +82,18 @@ Root: HKCU; Subkey: "Software\Classes\warcommand"; ValueType: string; ValueName:
 Root: HKCU; Subkey: "Software\Classes\warcommand\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"
 Root: HKCU; Subkey: "Software\Classes\warcommand\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
 
+; Autostart. The same value WindowsStartup.cs reads and writes, so the installer checkbox and the
+; tray toggle are one setting rather than two that disagree. uninsdeletevalue so an uninstall does
+; not leave Windows trying to launch an exe that is gone.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "WarCommand"; ValueData: """{app}\{#AppExe}"""; Tasks: startup; Flags: uninsdeletevalue
+
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
+
+; The self-update path runs this installer with /SILENT /UPDATE. `skipifsilent` above means the
+; normal post-install launch does not fire then, so without this line an update would replace the
+; agent and leave the user with nothing running.
+Filename: "{app}\{#AppExe}"; Flags: nowait; Check: LaunchAfterSilentUpdate
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
@@ -92,6 +105,20 @@ Type: filesandordirs; Name: "{app}"
 [Code]
 var
   ModelPage: TOutputProgressWizardPage;
+
+{ True when the agent started this installer to update itself. See UpdateDownloader.Launch. }
+function LaunchAfterSilentUpdate(): Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  for i := 1 to ParamCount do
+    if CompareText(ParamStr(i), '/UPDATE') = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
 
 function ModelDirectory(): string;
 begin
