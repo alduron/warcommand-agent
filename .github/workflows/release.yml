@@ -170,7 +170,9 @@ jobs:
             New-Item -ItemType Directory -Force -Path installer/notes | Out-Null
             "WarCommand Agent $version." | Set-Content $notesFile -Encoding utf8
           }
-          $notes = (Get-Content $notesFile -Raw).Trim()
+          # Normalised to LF: the file is CRLF on a Windows runner, and the raw bytes would
+          # otherwise land in the JSON and in every client that renders `notes`.
+          $notes = ((Get-Content $notesFile -Raw) -replace "`r`n", "`n").Trim()
           [ordered]@{
             version      = $version
             notes        = $notes
