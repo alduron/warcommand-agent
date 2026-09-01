@@ -10,13 +10,42 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    working-directory: warcommand-agent
+
 jobs:
   build:
     # Windows only. Five of the eight assemblies target net8.0-windows and the test project
     # references the Vosk native package, so a linux runner cannot build this solution at all.
     runs-on: windows-latest
     steps:
+      # Checked out into warcommand-agent/ rather than the workspace root, because three tests
+      # read the shared parse spec out of the SIBLING repo by walking up from the solution. That
+      # is the umbrella layout, and CI has to reproduce it or those tests cannot run.
       - uses: actions/checkout@v4
+        with:
+          path: warcommand-agent
+
+      # warcommand-api is private, so the default GITHUB_TOKEN cannot see it: this needs a PAT in
+      # CONTRACTS_REPO_TOKEN with read access to it. Only the fixture directory is fetched.
+      - name: Check out the shared parse spec
+        uses: actions/checkout@v4
+        with:
+          repository: alduron/warcommand-api
+          path: warcommand-api
+          sparse-checkout: tests/unit/fixtures
+          sparse-checkout-cone-mode: false
+          token: ${{ secrets.CONTRACTS_REPO_TOKEN || github.token }}
+
+      # Fails here with the reason rather than 40 lines into a test stack trace.
+      - name: Confirm the parse spec is present
+        shell: bash
+        run: |
+          if [ ! -f ../warcommand-api/tests/unit/fixtures/utterances.yaml ]; then
+            echo "::error::utterances.yaml is missing. Add a CONTRACTS_REPO_TOKEN secret with read access to alduron/warcommand-api."
+            exit 1
+          fi
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -37,5 +66,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: '**/TestResults/*.trx'
+          path: warcommand-agent/**/TestResults/*.trx
           if-no-files-found: ignore

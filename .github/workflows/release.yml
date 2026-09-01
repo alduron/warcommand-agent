@@ -19,11 +19,28 @@ on:
 permissions:
   contents: write
 
+defaults:
+  run:
+    working-directory: warcommand-agent
+
 jobs:
   release:
     runs-on: windows-latest
     steps:
+      # The umbrella layout, for the same reason ci.yml uses it: three tests read the shared parse
+      # spec out of the sibling repo by walking up from the solution.
       - uses: actions/checkout@v4
+        with:
+          path: warcommand-agent
+
+      - name: Check out the shared parse spec
+        uses: actions/checkout@v4
+        with:
+          repository: alduron/warcommand-api
+          path: warcommand-api
+          sparse-checkout: tests/unit/fixtures
+          sparse-checkout-cone-mode: false
+          token: ${{ secrets.CONTRACTS_REPO_TOKEN || github.token }}
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -129,7 +146,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: installer-${{ steps.version.outputs.version }}
-          path: artifacts/*
+          path: warcommand-agent/artifacts/*
 
       # `releases/latest/download/agent-release.json` is the URL the API polls, and GitHub points
       # it at whichever release is newest. A prerelease is excluded from `latest`, which is exactly
@@ -139,8 +156,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: WarCommand Agent ${{ steps.version.outputs.version }}
-          body_path: installer/notes/${{ steps.version.outputs.version }}.txt
+          body_path: warcommand-agent/installer/notes/${{ steps.version.outputs.version }}.txt
           fail_on_unmatched_files: true
           files: |
-            artifacts/${{ steps.version.outputs.setup }}
-            artifacts/agent-release.json
+            warcommand-agent/artifacts/${{ steps.version.outputs.setup }}
+            warcommand-agent/artifacts/agent-release.json
