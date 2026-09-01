@@ -72,6 +72,22 @@ the download page renders. With no file the workflow writes a one-line placehold
 `workflow_dispatch` with a version builds and packages everything and publishes nothing. Use it to
 prove a packaging change before spending a tag.
 
+## The one CI secret, and what it is
+
+Three `IntentParser` tests read `utterances.yaml`, the parse spec shared with the API suite.
+`Convention_WarCommandUtteranceFixtureIsSharedByBothSuites` forbids copying it into this repo,
+because a second copy diverges on the first edit and the Python side never notices. So CI
+recreates the umbrella layout: this repo is checked out into `warcommand-agent/` and the API's
+fixture directory beside it.
+
+`warcommand-api` is private, so that needs a credential. `CONTRACTS_REPO_KEY` is a **read-only
+deploy key** for that one repository, not a personal access token. It cannot read any other
+repo, it cannot write, it is not tied to anyone's account, and revoking it is deleting one key
+under warcommand-api's Settings, Deploy keys. It is already set; nothing needs doing.
+
+If `warcommand-api` ever becomes public, delete the key and the `ssh-key:` line, and the
+checkout works on the built-in token.
+
 ## SmartScreen
 
 Releases are unsigned today. The first few hundred downloads of an unsigned binary get Windows

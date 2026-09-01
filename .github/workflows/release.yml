@@ -33,8 +33,10 @@ jobs:
         with:
           path: warcommand-agent
 
-      # Non-fatal: without the token this 404s after two slow retries, and the guard below says
-      # what to do about it far more usefully than "Not Found" does.
+      # warcommand-api is private, so the default GITHUB_TOKEN cannot see it. CONTRACTS_REPO_KEY
+      # is a read-only DEPLOY KEY for that one repo, not a personal token: it can read exactly
+      # this repository and nothing else, and revoking it is deleting one key.
+      # Only the fixture directory is fetched.
       - name: Check out the shared parse spec
         continue-on-error: true
         uses: actions/checkout@v4
@@ -43,13 +45,13 @@ jobs:
           path: warcommand-api
           sparse-checkout: tests/unit/fixtures
           sparse-checkout-cone-mode: false
-          token: ${{ secrets.CONTRACTS_REPO_TOKEN || github.token }}
+          ssh-key: ${{ secrets.CONTRACTS_REPO_KEY }}
 
       - name: Confirm the parse spec is present
         shell: bash
         run: |
           if [ ! -f ../warcommand-api/tests/unit/fixtures/utterances.yaml ]; then
-            echo "::error::utterances.yaml is missing. Add a CONTRACTS_REPO_TOKEN secret with read access to alduron/warcommand-api."
+            echo "::error::utterances.yaml is missing. CONTRACTS_REPO_KEY must be a read-only deploy key for alduron/warcommand-api."
             exit 1
           fi
 
