@@ -304,10 +304,19 @@ public sealed class TrayIconController : ISuspendable, IDisposable
         _ => TrayIndicator.Offline,
     };
 
+    /// <summary>
+    /// Loads the frame the notification area actually draws.
+    /// </summary>
+    /// <remarks>
+    /// new Icon(path) takes the system DEFAULT size, which is the 32x32 frame, and the shell then
+    /// scales it down to 16. Each .ico carries a hand-sized 16, 20 and 24 for exactly this, and
+    /// none of them were being used: the green read as muddy grey at tray size. SmallIconSize
+    /// follows the display's DPI, so a 200 percent display picks the 24 rather than blurring one.
+    /// </remarks>
     private static Icon LoadIcon(string fileName)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Resources", "Icons", fileName);
-        return new Icon(path);
+        return new Icon(path, SystemInformation.SmallIconSize);
     }
 
     public void Dispose()

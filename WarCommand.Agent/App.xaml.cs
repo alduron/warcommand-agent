@@ -138,6 +138,10 @@ public partial class App : Application, IDisposable
     private DispatcherTimer? _updateTimer;
     private FileClientLog? _updateLog;
     private WasapiAudioCapture? _audioDevices;
+    private DispatcherTimer? _configTimer;
+
+    /// <summary>The deployment the current render is for, or null when standing on none.</summary>
+    private Guid? _standingOn;
     private EventWaitHandle? _showRequest;
     private RegisteredWaitHandle? _showRegistration;
 
@@ -812,6 +816,8 @@ public partial class App : Application, IDisposable
         _localLink = null;
         _pollTimer?.Stop();
         _pollTimer = null;
+        _configTimer?.Stop();
+        _configTimer = null;
         _updateTimer?.Stop();
         _updateTimer = null;
         _ = _showRegistration?.Unregister(null);
@@ -959,6 +965,7 @@ public partial class App : Application, IDisposable
         var me = await AuthenticateAsync(client, tokenStore, paths, profile, log).ConfigureAwait(true);
         AdoptAccount(me);
         await RenderForAsync(client, me, presenter, log).ConfigureAwait(true);
+        StartConfigWatch(client, presenter, log);
     }
 
     /// <summary>
@@ -1006,6 +1013,14 @@ public partial class App : Application, IDisposable
                 group is null
                     ? $"signed in as {me.User.Callsign}, join from the web"
                     : $"signed in as {me.User.Callsign}, start one from the web");
+            _menuState = _menuState with
+            {
+                GroupName = group?.GroupName,
+                MatchName = null,
+                OpenRequestCount = null,
+                WebBoardUrl = null,
+            };
+            _standingOn = null;
             log.Info("No deployment: showing the cold-start empty state.");
             return;
         }
@@ -1018,8 +1033,13 @@ public partial class App : Application, IDisposable
         // Only the rows this build can honour are filled in. The group, match, map, microphone and
         // push-to-talk fields stay null until their subsystem lands, and TrayMenu.Build leaves the
         // rows out, so the menu can never offer a click that does nothing.
+        _standingOn = deploymentId;
         _menuState = _menuState with
         {
+            GroupName = membership.GroupName,
+            GroupMemberCount = membership.Deployment.MemberCount,
+            MatchName = membership.Deployment.Label,
+            MatchPeopleCount = membership.Deployment.MemberCount,
             OpenRequestCount = 0,
             MyRequestCount = 0,
             WebBoardUrl = WebBoardUrl(membership),
@@ -1061,6 +1081,53 @@ public partial class App : Application, IDisposable
         };
         timer.Start();
         _pollTimer = timer;
+    }
+
+    /// <summary>
+    /// Re-reads <c>/v1/me</c> and re-renders when the deployment underneath the agent changes.
+    /// </summary>
+    /// <remarks>
+    /// The realtime socket is what is supposed to deliver this, and it is not wired up. Until it
+    /// is, <c>/v1/me</c> was read exactly twice: at startup and when the linked account changed.
+    /// So joining a deployment from the web after the agent started reached it never: it kept
+    /// polling the board of wherever it happened to be at launch, kept the old deployment in the
+    /// tray, and offered a web board link to the wrong match. Standing on none at launch was worse,
+    /// because that branch starts no timer at all and the agent sat on the cold-start state for the
+    /// rest of the session.
+    /// <para>
+    /// Fifteen seconds rather than five: this is a whole config payload, and a deployment hop is
+    /// something a person does between rounds, not mid-fight.
+    /// </para>
+    /// </remarks>
+    private void StartConfigWatch(WarCommandApiClient client, BoardPresenter presenter, FileClientLog log)
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+        timer.Tick += async (_, _) =>
+        {
+            try
+            {
+                var me = await client.GetMeAsync(_shutdown.Token).ConfigureAwait(true);
+                var deployment = me.Memberships
+                    .FirstOrDefault(m => m.Deployment is not null)?.Deployment?.Id;
+
+                if (deployment == _standingOn)
+                {
+                    return;
+                }
+
+                log.Info($"Deployment changed to {deployment?.ToString() ?? "none"}. Re-rendering.");
+                _pollTimer?.Stop();
+                _pollTimer = null;
+                await RenderForAsync(client, me, presenter, log).ConfigureAwait(true);
+            }
+            catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+            {
+                _tray?.SetConnectionState(RealtimeConnectionState.Reconnecting);
+                log.Warn($"Config poll failed: {ex.GetType().Name}");
+            }
+        };
+        timer.Start();
+        _configTimer = timer;
     }
 
     /// <summary>
