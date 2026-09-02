@@ -316,18 +316,22 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
 
         var now = DateTimeOffset.UtcNow;
         var glyphs = new RoleGlyphSource(_catalog().Role);
+
+        // Served map scale, so a two-point row reads in metres. See RefreshBoardAsync.
+        var unitsToMeters = BundledContracts.GameProfile().Current.DefaultUnitsToMeters;
+
         var rows = board.Rows
-            .Select(r => BoardRowViewModel.FromPrimary(r, _viewerId, now).WithGlyph(glyphs))
+            .Select(r => BoardRowViewModel.FromPrimary(r, _viewerId, now, unitsToMeters).WithGlyph(glyphs))
             .ToList();
-        var secondary = board.SecondaryStrip
-            .Select(r => BoardRowViewModel.FromSecondary(r, now).WithGlyph(glyphs))
+        var yours = board.Yours
+            .Select(r => BoardRowViewModel.FromSecondary(r, now, unitsToMeters, _viewerId).WithGlyph(glyphs))
             .ToList();
         var overflow = board.Overflow;
         var urgent = overflow.Count(r => r.Priority == Priority.Urgent);
 
-        _presenter.RenderBoard(rows, secondary, overflow.Count, urgent);
+        _presenter.RenderBoard(rows, yours, overflow.Count, urgent, board.InProgressCount);
         _onRendered(new BoardSnapshot(
-            rows.Count + secondary.Count + overflow.Count,
+            rows.Count + yours.Count + overflow.Count,
             rows.Count(r => r.Accent == RowAccent.Mine)));
     }
 

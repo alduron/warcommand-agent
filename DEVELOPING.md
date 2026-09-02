@@ -187,8 +187,11 @@ their subsystem fills in the matching `TrayMenuState` field, so the menu never o
 does nothing. Panic in particular is absent rather than greyed until `PanicSwitch.Arm()` succeeds,
 which it cannot do until every `PanicSubsystem` is registered.
 
-Realtime (the WebSocket client) is not wired into the composition root yet: the dev loop polls
-`GET /v1/deployments/{id}/board` on a five-second timer instead. The proxy already forwards
-WebSocket upgrades, so wiring `WarCommand.Agent.Client.Realtime.RealtimeClient` in behind the same
-dev profile is the next step, not a redesign. The tray settings window, hotkeys, speech and capture
-are also not part of this loop; second-screen mode plus the dev profile is the whole agent today.
+Realtime is wired: the agent seeds the board once over HTTPS and everything after that arrives as a
+frame on the socket, with a two minute config read as the only fallback. Speech and capture are not
+part of this loop.
+
+**The overlay draws nothing while `overlayMode` is `Hidden`.** That is `2` in
+`%LOCALAPPDATA%\WarCommand\dev\settings.json`, and it is a setting, not a fault: the demo loop
+forces `AlwaysOn` so the surface looks fine there while a real launch shows nothing. Switch it from
+the tray's Overlay row, or set `overlayMode` to `0`.

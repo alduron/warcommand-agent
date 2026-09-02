@@ -73,11 +73,12 @@ public sealed class BoardPresenter
     /// <summary>One snapshot of the board, on every surface.</summary>
     public void RenderBoard(
         IReadOnlyList<BoardRowViewModel> rows,
-        IReadOnlyList<BoardRowViewModel> secondaryStrip,
+        IReadOnlyList<BoardRowViewModel> yours,
         int overflowCount,
-        int overflowUrgentCount)
+        int overflowUrgentCount,
+        int inProgressCount = 0)
     {
-        _last = v => v.RenderBoard(rows, secondaryStrip, overflowCount, overflowUrgentCount);
+        _last = v => v.RenderBoard(rows, yours, overflowCount, overflowUrgentCount, inProgressCount);
         Each(_last);
     }
 

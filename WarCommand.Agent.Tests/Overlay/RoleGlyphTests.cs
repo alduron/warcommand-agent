@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Linq;
+using System.Threading;
+using System.Windows.Media;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Overlay;
 
@@ -80,6 +84,87 @@ public class RoleGlyphTests
 
         Assert.Null(first);
         Assert.Null(second);
+    }
+
+    /// <summary>
+    /// The tokens are merged into BoardView, not into App.xaml, so an application-only lookup found
+    /// nothing and every role on the board drew the neutral grey. It reads as a board with no role
+    /// colour rather than as a missing resource, which is why nobody caught it by looking.
+    /// </summary>
+    [Fact]
+    public void The_brush_converter_resolves_the_role_hues_with_no_application_resources()
+    {
+        OnStaThread(() =>
+        {
+            var converter = new RoleBrushConverter();
+
+            var fire = Brush(converter, "RoleFire");
+            var medic = Brush(converter, "RoleMedic");
+            var move = Brush(converter, "RoleMove");
+
+            Assert.Equal(Color.FromRgb(0xE5, 0x6A, 0x5C), fire.Color);
+            Assert.Equal(Color.FromRgb(0x58, 0xB1, 0x5A), medic.Color);
+            Assert.Equal(Color.FromRgb(0x5A, 0x9F, 0xE6), move.Color);
+        });
+    }
+
+    /// <summary>Every group the catalog ships resolves, and no two of them collide.</summary>
+    [Fact]
+    public void Every_shipped_colour_group_draws_a_hue_of_its_own()
+    {
+        OnStaThread(() =>
+        {
+            var converter = new RoleBrushConverter();
+            var catalog = BundledContracts.Catalog().Current;
+
+            var byGroup = catalog.Roles
+                .Select(r => r.ColorGroup)
+                .Distinct(StringComparer.Ordinal)
+                .ToDictionary(g => g ?? "null", g => Brush(converter, RoleGlyph.BrushKey(g)).Color);
+
+            Assert.DoesNotContain("fire", byGroup.Keys.Where(k => byGroup[k] == Fallback));
+            Assert.Equal(byGroup.Count, byGroup.Values.Distinct().Count());
+        });
+    }
+
+    [Fact]
+    public void An_unknown_key_falls_back_to_the_neutral_hue_rather_than_throwing()
+    {
+        OnStaThread(() =>
+        {
+            Assert.Equal(Fallback, Brush(new RoleBrushConverter(), "NotAKey").Color);
+        });
+    }
+
+    private static readonly Color Fallback = Color.FromRgb(0xB4, 0xB6, 0xB8);
+
+    private static SolidColorBrush Brush(RoleBrushConverter converter, string key) =>
+        Assert.IsAssignableFrom<SolidColorBrush>(
+            converter.Convert(key, typeof(System.Windows.Media.Brush), null, CultureInfo.InvariantCulture));
+
+    private static void OnStaThread(Action body)
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                body();
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+            {
+                failure = ex;
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join(TimeSpan.FromSeconds(60));
+
+        if (failure is not null)
+        {
+            throw new InvalidOperationException("The STA body threw.", failure);
+        }
     }
 
     [Fact]

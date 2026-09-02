@@ -127,8 +127,10 @@ public class BoardStateTests
     }
 
     [Fact]
-    public void A_row_claimed_by_somebody_else_leaves_the_slot_board_and_renders_on_the_strip()
+    public void A_row_claimed_by_somebody_else_becomes_a_count_and_not_a_row()
     {
+        // The viewer neither asked for this nor took it, so it is work they cannot act on. It
+        // leaves the board entirely and survives only as one of the N in IN PROGRESS.
         var board = NewBoard();
         var row = Rows.A();
         board.Upsert(row, T0);
@@ -140,12 +142,15 @@ public class BoardStateTests
         Assert.Null(claimed.Slot);
         Assert.False(claimed.ClaimableByDigit);
         Assert.Empty(board.Rows);
-        Assert.Single(board.SecondaryStrip);
+        Assert.Empty(board.Yours);
+        Assert.Equal(1, board.InProgressCount);
     }
 
     [Fact]
-    public void A_row_claimed_by_the_viewer_keeps_its_digit()
+    public void A_row_the_viewer_claimed_moves_to_yours_and_keeps_its_digit()
     {
+        // The digit has to survive: done, start, splash, adjust, release, solution and copy all
+        // address a row by it.
         var board = NewBoard();
         var row = Rows.A();
         board.Upsert(row, T0);
@@ -155,7 +160,27 @@ public class BoardStateTests
             T0.AddSeconds(1))!;
 
         Assert.Equal(1, mine.Slot);
-        Assert.Empty(board.SecondaryStrip);
+        Assert.Single(board.Yours);
+        Assert.Empty(board.Rows);
+        Assert.Equal(0, board.InProgressCount);
+    }
+
+    [Fact]
+    public void A_row_the_viewer_asked_for_stays_in_yours_when_somebody_takes_it()
+    {
+        // The requester keeps sight of their own request. It is news, not a job, so it holds no
+        // digit, exactly as it held none before this section existed.
+        var board = NewBoard();
+        var row = Rows.A(requester: Rows.Viewer);
+        board.Upsert(row, T0);
+
+        board.Upsert(
+            row with { State = RequestState.Claimed, ClaimantParticipantId = Guid.NewGuid(), Version = 2 },
+            T0.AddSeconds(1));
+
+        Assert.Single(board.Yours);
+        Assert.Empty(board.Rows);
+        Assert.Equal(0, board.InProgressCount);
     }
 
     [Fact]

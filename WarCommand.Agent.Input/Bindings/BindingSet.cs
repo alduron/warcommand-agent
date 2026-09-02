@@ -30,7 +30,8 @@ public readonly record struct RebindResult(RebindStatus Status, BindingAction Co
 }
 
 /// <summary>
-/// Which chord each action holds. Every binding is rebindable, including PTT and Panic. A conflict
+/// Which chord each action holds. Four bindings, two of them chorded behind RightAlt. Every one is
+/// rebindable, including PTT and Panic. A conflict
 /// with another WarCommand binding is refused and names the other one; a conflict with the game
 /// cannot be detected, and <see cref="CanDetectGameConflicts"/> says so rather than pretending.
 /// </summary>
@@ -191,15 +192,7 @@ public sealed class BindingSet
         _chords[BindingAction.Ptt] = Chord.Unbound;
 
         _chords[BindingAction.Escape] = Chord.Bare("Escape");
-        _chords[BindingAction.ToggleBoard] = Chord.RightAlt("B");
-        _chords[BindingAction.CycleOpacity] = Chord.RightAlt("O");
-        _chords[BindingAction.DeploymentPicker] = Chord.RightAlt("D");
-        _chords[BindingAction.Roles] = Chord.RightAlt("R");
-        _chords[BindingAction.Participants] = Chord.RightAlt("M");
-        _chords[BindingAction.GunPosition] = Chord.RightAlt("G");
-        _chords[BindingAction.LinkAccount] = Chord.RightAlt("L");
-        _chords[BindingAction.CopyCoordinate] = Chord.RightAlt("C");
-        _chords[BindingAction.Help] = Chord.RightAlt("H");
+        _chords[BindingAction.Board] = Chord.RightAlt("B");
         _chords[BindingAction.Panic] = Chord.RightAlt("P");
     }
 }

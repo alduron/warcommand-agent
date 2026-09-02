@@ -17,12 +17,14 @@ using WarCommand.Agent.Core.Abstractions;
 using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Dev;
+using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 using WarCommand.Agent.Core.Tray;
 using WarCommand.Agent.Core.Updates;
 using WarCommand.Agent.Dev;
 using WarCommand.Agent.Game;
 using WarCommand.Agent.Input;
+using WarCommand.Agent.Input.Bindings;
 using WarCommand.Agent.Speech.Capture;
 using WarCommand.Agent.Realtime;
 using WarCommand.Agent.Startup;
@@ -133,7 +135,14 @@ public partial class App : Application, IDisposable
     private BoardPresenter? _presenter;
     private OverlayController? _overlay;
     private GameWindowWatcher? _gameWatcher;
+    private Composition.InputComposition? _input;
     private TrayMenuState _menuState = new();
+
+    /// <summary>
+    /// The four bindings. Held here so the header hint can name the user's own push-to-talk key;
+    /// the input bridge that consumes them is not wired up yet.
+    /// </summary>
+    private readonly BindingSet _bindings = BindingSet.Defaults();
     private WindowsStartup? _startup;
     private UpdateDownloader? _updates;
     private UpdateOffer? _offer;
@@ -144,6 +153,7 @@ public partial class App : Application, IDisposable
     private FileClientLog? _log;
     private WasapiAudioCapture? _audioDevices;
     private DispatcherTimer? _configTimer;
+    private DispatcherTimer? _tickTimer;
     private RealtimeClient? _realtime;
     private BoardRealtimeObserver? _observer;
     private readonly SystemClockOffset _clockOffset = new();
@@ -159,6 +169,13 @@ public partial class App : Application, IDisposable
     /// the mechanism now and this only catches a frame that never arrived.
     /// </summary>
     private static readonly TimeSpan ConfigFallbackInterval = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// How often the board is re-rendered against the clock. The countdown wash and the slot
+    /// budget are both functions of `now`, and nothing else moves the clock: without this the
+    /// wash is stamped once at seed time and never drains.
+    /// </summary>
+    private static readonly TimeSpan BoardTickInterval = TimeSpan.FromSeconds(1);
 
     /// <summary>The deployment the current render is for, or null when standing on none.</summary>
     private Guid? _standingOn;
@@ -198,6 +215,17 @@ public partial class App : Application, IDisposable
         ListenForShowRequests();
 
         _webOrigins = profile.WebOrigins;
+        // The row is hidden when an environment variable pinned this launch: the switch writes a
+        // file the variable overrides, so it would restart into the same backend and read as broken.
+        var backendPinned = Environment.GetEnvironmentVariable(AgentProfile.ProfileVariable) is not null
+            || Environment.GetEnvironmentVariable(AgentProfile.ApiBaseUrlVariable) is not null;
+        _menuState = _menuState with
+        {
+            ApiHost = profile.ApiBaseAddress.Host,
+            Backend = backendPinned
+                ? null
+                : (profile.IsDev ? AgentBackend.Local : AgentBackend.Production).ToString(),
+        };
         _settings = new SettingsStore(paths);
         _menuState = _menuState with
         {
@@ -246,7 +274,7 @@ public partial class App : Application, IDisposable
         var presenter = new BoardPresenter();
         _presenter = presenter;
 
-        presenter.SetHeader(new BoardHeader { Title = "WarCommand", Hint = "RightAlt+H ?" });
+        presenter.SetHeader(new BoardHeader { Title = "WarCommand", Hint = HeaderHint() });
         presenter.SetStatus(FormattableString.Invariant(
             $"WARCOMMAND {AgentVersion}  /  {(profile.IsDev ? "DEV" : "PROD")}  /  {profile.ApiBaseAddress.Host}"));
 
@@ -304,7 +332,8 @@ public partial class App : Application, IDisposable
             OverlayDemo.Rows,
             OverlayDemo.SecondaryStrip,
             OverlayDemo.OverflowCount,
-            OverlayDemo.OverflowUrgentCount);
+            OverlayDemo.OverflowUrgentCount,
+            OverlayDemo.InProgressCount);
 
         _menuState = _menuState with
         {
@@ -314,7 +343,33 @@ public partial class App : Application, IDisposable
             Displays = OverlayController.Displays(),
         };
 
-        log.Info("Overlay demo: the surface is on the primary monitor. Nothing else is running.");
+        // PTT ships unbound on purpose: it is a suggestion the user confirms in the first-run
+        // picker, never applied on their behalf. The demo has no picker and an unbound PTT cannot
+        // be pressed, so it takes the product's OWN suggestion here and nowhere else.
+        if (!_bindings.PttChosen)
+        {
+            _bindings.Rebind(BindingAction.Ptt, BindingSet.SuggestedPtt);
+        }
+
+        // The demo is the only way anybody sees this surface, so it is the only place the hotkeys
+        // can be exercised at all. The gate is satisfied with a fixed probe rather than by relaxing
+        // the foreground rule: the rule stays exactly as written and the probe is the dev seam.
+        _input = Composition.InputComposition.Start(
+            _bindings,
+            new FixedForegroundProbe(gameForeground: true, gameRunning: true),
+            controller,
+            _tray,
+            onPtt: held => presenter.SetHeader(OverlayDemo.Header with { Hint = DemoHint(held) }),
+            log);
+
+        // The same subscription the real path takes. Without it the demo reads the display, the
+        // anchor and the width once at launch and never again, so changing any of them in the
+        // agent window saves to disk and moves nothing. The demo is the only surface anybody sees
+        // before Wardogs ships, so a setting that does not work here does not work at all.
+        settings.Changed += (_, saved) => controller.ApplySettings(saved);
+
+        log.Info(FormattableString.Invariant(
+            $"Overlay demo: drawing on {settings.Current.DisplayDeviceName ?? "the primary monitor"}."));
     }
 
     /// <summary>
@@ -367,11 +422,46 @@ public partial class App : Application, IDisposable
         watcher.Start();
         _gameWatcher = watcher;
 
+        _input = Composition.InputComposition.Start(
+            _bindings,
+            watcher,
+            controller,
+            _tray,
+            onPtt: held => log.Info(held ? "PTT down." : "PTT up."),
+            log);
+
         // One subscription covers both ways settings move: the Overlay tab and the tray toggle
         // both go through Save, so neither can change the overlay without the other seeing it.
         settings.Changed += (_, saved) => controller.ApplySettings(saved);
 
+        StartBoardTick();
+
         log.Info("Overlay armed. Watching for a game window.");
+    }
+
+    /// <summary>
+    /// Re-renders the board once a second so the countdown actually counts down.
+    /// </summary>
+    /// <remarks>
+    /// Every time-dependent thing on the surface is computed from `now` at render: the countdown
+    /// wash, the pulsing slot digit and the slot budget's low-priority demotion. Renders were
+    /// driven only by socket frames, so on a quiet board none of them moved.
+    /// </remarks>
+    private void StartBoardTick()
+    {
+        var timer = new DispatcherTimer { Interval = BoardTickInterval };
+        timer.Tick += (_, _) =>
+        {
+            if (_observer?.Board is not { } board)
+            {
+                return;
+            }
+
+            _ = board.Tick(DateTimeOffset.UtcNow);
+            _observer.Render();
+        };
+        timer.Start();
+        _tickTimer = timer;
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -427,6 +517,15 @@ public partial class App : Application, IDisposable
                 break;
             case TrayCommand.InstallUpdate:
                 InstallUpdate();
+                break;
+            case TrayCommand.SelectDeployment:
+                SwitchDeployment(invoked.Argument);
+                break;
+            case TrayCommand.SignOut:
+                SignOutAndQuit();
+                break;
+            case TrayCommand.SelectBackend:
+                SelectBackend(invoked.Argument);
                 break;
             case TrayCommand.Quit:
                 Shutdown();
@@ -839,6 +938,8 @@ public partial class App : Application, IDisposable
         _pollTimer = null;
         _configTimer?.Stop();
         _configTimer = null;
+        _tickTimer?.Stop();
+        _tickTimer = null;
         _realtime?.Stop("the agent is shutting down");
         _realtime = null;
         _observer = null;
@@ -997,6 +1098,24 @@ public partial class App : Application, IDisposable
     /// Records which account the agent now holds. The loopback hello reports this id, which is how
     /// a page tells that its own account and the agent's have diverged.
     /// </summary>
+    /// <summary>
+    /// The header's hint cell. Contextual: the routes through the menu are not memorable, so the
+    /// header names the one that matters right now and the menu draws the rest.
+    /// </summary>
+    /// <summary>
+    /// The demo's PTT feedback. Nothing is listening yet, so holding the key says so on the header
+    /// rather than pretending to record: that is the one honest thing the surface can report.
+    /// </summary>
+    private string DemoHint(bool held) => held
+        ? "LISTENING"
+        : OverlayHint.Resolve(new HintState { PttLabel = _bindings[BindingAction.Ptt].Label });
+
+    private string HeaderHint(bool onNoDeployment = false) => OverlayHint.Resolve(new HintState
+    {
+        PttLabel = _bindings[BindingAction.Ptt].IsBound ? _bindings[BindingAction.Ptt].Label : null,
+        OnNoDeployment = onNoDeployment,
+    });
+
     private void AdoptAccount(MeResponse me)
     {
         _currentUserId = me.User.Id.ToString();
@@ -1013,10 +1132,25 @@ public partial class App : Application, IDisposable
     /// Renders everything that depends on which account this is: the header, the board and the
     /// tray's counts. Called at startup and again whenever the linked account changes.
     /// </summary>
+    /// <summary>
+    /// The membership whose deployment this agent stands on: the one the account most recently
+    /// entered, never the first in the array.
+    /// </summary>
+    /// <remarks>
+    /// An account in several groups holds a live deployment in each, and the array is in group
+    /// order. Taking the first put the agent on whichever group happened to sort first while the
+    /// browser was on the match just joined, and the two boards never agreed. Both the startup
+    /// render and the config fallback go through here, or the fallback undoes the choice.
+    /// </remarks>
+    private static ConfigMembership? StandingOn(MeResponse me) => me.Memberships
+        .Where(m => m.Deployment is not null)
+        .OrderByDescending(m => m.Deployment!.EnteredAt ?? DateTimeOffset.MinValue)
+        .FirstOrDefault();
+
     private async Task RenderForAsync(
         WarCommandApiClient client, MeResponse me, BoardPresenter presenter, FileClientLog log)
     {
-        var membership = me.Memberships.FirstOrDefault(m => m.Deployment is not null);
+        var membership = StandingOn(me);
 
         if (membership?.Deployment is null)
         {
@@ -1027,7 +1161,7 @@ public partial class App : Application, IDisposable
             {
                 Title = group is null ? "WarCommand" : $"WarCommand / {group.GroupName}",
                 Right = me.User.Callsign,
-                Hint = "RightAlt+H ?",
+                Hint = HeaderHint(onNoDeployment: true),
             });
             presenter.ShowEmptyState(
                 group is null ? "No group" : "No live deployment",
@@ -1044,11 +1178,17 @@ public partial class App : Application, IDisposable
             _standingOn = null;
             _observer?.Detach();
             log.Info("No deployment: showing the cold-start empty state.");
+            // Standing nowhere is exactly when the tray's switch list is most useful.
+            await LoadSwitchableDeploymentsAsync(client, me, Guid.Empty, log).ConfigureAwait(true);
             return;
         }
 
         var catalog = BundledContracts.Catalog().Current;
-        var board = new BoardState(membership.MembershipId, catalog.GrammarRules);
+        // The participant id, never the membership id: board rows carry participant ids, so the
+        // membership id matches nothing and every row of the viewer's own reads as somebody
+        // else's. Falls back to the membership id only against an API that does not serve it.
+        var viewerId = membership.Deployment.ParticipantId ?? membership.MembershipId;
+        var board = new BoardState(viewerId, catalog.GrammarRules);
         var deploymentId = membership.Deployment.Id;
         board.EnterDeployment(deploymentId, DateTimeOffset.UtcNow, draft: null);
 
@@ -1075,17 +1215,158 @@ public partial class App : Application, IDisposable
             Right = membership.Deployment.InviteCode is { } invite
                 ? $"invite {invite}"
                 : me.User.Callsign,
-            Roles = string.Join(' ', membership.SubscribedRoleIds),
-            Hint = "RightAlt+H ?",
-        };
+            RoleIds = membership.SubscribedRoleIds,
+            Hint = HeaderHint(),
+        }.WithGlyph(new RoleGlyphSource(catalog.Role));
         presenter.SetHeader(header);
 
         // The HTTPS seed, which is the only seed there is. Everything after this arrives as a
         // frame: the socket owns the board and there is no poll behind it.
-        await RefreshBoardAsync(client, catalog, board, deploymentId, membership.MembershipId, presenter, log)
+        await RefreshBoardAsync(client, catalog, board, deploymentId, viewerId, presenter, log)
             .ConfigureAwait(true);
 
-        _observer?.Attach(board, membership.MembershipId, header);
+        _observer?.Attach(board, viewerId, header);
+
+        // The switch submenu. Fetched after the board so a slow list never delays the surface, and
+        // failure only costs the submenu: the deployment row still names where the agent stands.
+        await LoadSwitchableDeploymentsAsync(client, me, deploymentId, log).ConfigureAwait(true);
+    }
+
+    /// <summary>How many groups the switch submenu will call for. A tray menu, not a directory.</summary>
+    private const int SwitchableGroupLimit = 8;
+
+    /// <summary>
+    /// Every live deployment this account could stand in, for the tray's Deployment submenu.
+    /// </summary>
+    /// <remarks>
+    /// Across all the account's groups, not just the current one. The list endpoint is
+    /// group-scoped and most groups run one deployment at a time, so a same-group-only submenu is
+    /// empty in the normal case and the row reads as a switch that cannot switch.
+    /// </remarks>
+    private async Task LoadSwitchableDeploymentsAsync(
+        WarCommandApiClient client, MeResponse me, Guid current, FileClientLog log)
+    {
+        var found = new List<TrayDeployment>();
+        foreach (var membership in me.Memberships.Take(SwitchableGroupLimit))
+        {
+            try
+            {
+                var page = await client
+                    .GetDeploymentsAsync(membership.GroupId, cursor: null, limit: null, _shutdown.Token)
+                    .ConfigureAwait(true);
+                found.AddRange(page.Data.Select(d => new TrayDeployment(
+                    d.Id.ToString(),
+                    $"{membership.GroupName} / {d.Label}",
+                    d.MemberCount,
+                    d.Id == current)));
+            }
+            catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+            {
+                log.Warn($"Deployment list failed for one group: {ex.GetType().Name}");
+            }
+        }
+
+        _menuState = _menuState with { Deployments = found };
+    }
+
+    /// <summary>
+    /// Points the agent at the other backend and restarts it. One build, one tray icon.
+    /// </summary>
+    /// <remarks>
+    /// A restart rather than a re-point: the API client, the token store, the socket, the paths and
+    /// the loopback allowlist are all built from the profile at startup, and swapping them live is
+    /// a second composition root that would drift from the first one.
+    /// </remarks>
+    private void SelectBackend(string? argument)
+    {
+        if (!Enum.TryParse<AgentBackend>(argument, out var backend))
+        {
+            return;
+        }
+
+        try
+        {
+            BackendFile.Write(backend);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"Could not store the backend choice: {ex.GetType().Name}");
+            _tray?.ShowNotice("Could not switch backend", "The choice could not be written to disk.");
+            return;
+        }
+
+        _log?.Info($"Backend set to {backend}. Restarting.");
+        Restart();
+    }
+
+    /// <summary>
+    /// Relaunches this exe and quits, releasing the single-instance mutex before the new one asks
+    /// for it.
+    /// </summary>
+    private void Restart()
+    {
+        if (Environment.ProcessPath is not { } exe)
+        {
+            _tray?.ShowNotice("Restart needed", "Start WarCommand again to finish the change.");
+            Shutdown();
+            return;
+        }
+
+        ReleaseSingleInstanceLock();
+
+        try
+        {
+            using var next = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = exe,
+                UseShellExecute = true,
+            });
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            _log?.Warn($"Relaunch failed: {ex.Message}");
+            _tray?.ShowNotice("Restart needed", "Start WarCommand again to finish the change.");
+        }
+
+        Shutdown();
+    }
+
+    /// <summary>
+    /// Drops this device's tokens and quits. The next launch is a cold start, so whichever account
+    /// the browser is signed into claims the agent.
+    /// </summary>
+    private void SignOutAndQuit()
+    {
+        _tokenStore?.Clear("signed out from the tray");
+        _log?.Info("Signed out from the tray. Quitting.");
+        Shutdown();
+    }
+
+    /// <summary>
+    /// The tray's Deployment submenu. Enters that deployment, then re-reads the config: the server
+    /// also publishes deployment.entered, and whichever arrives first wins with the same result.
+    /// </summary>
+    private async void SwitchDeployment(string? argument)
+    {
+        if (!Guid.TryParse(argument, out var target)
+            || _client is not { } client
+            || _presenter is not { } presenter
+            || _log is not { } log)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = await client.EnterDeploymentAsync(target, _shutdown.Token).ConfigureAwait(true);
+            log.Info("Deployment switched from the tray.");
+            await ReloadConfigAsync(client, presenter, log).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+        {
+            log.Warn($"Deployment switch failed: {ex.GetType().Name}");
+            _tray?.ShowNotice("Could not switch deployment", "The API refused or is unreachable.");
+        }
     }
 
     /// <summary>
@@ -1244,14 +1525,25 @@ public partial class App : Application, IDisposable
         var wire = await client.GetBoardAsync(deploymentId, query: null, cancellationToken)
             .ConfigureAwait(true);
 
+        var seeded = new HashSet<Guid>();
         foreach (var body in wire)
         {
             var label = catalog.RequestType(body.TypeId)?.OverlayLabel ?? body.TypeId.ToUpperInvariant();
             _ = board.Upsert(body.ToBoardRow(label), now);
+            _ = seeded.Add(body.Id);
+        }
+
+        // The seed is authoritative, so anything it does not carry is gone. Upserting alone left
+        // every row a role change stopped serving on the surface for the rest of the session: a
+        // re-seed after unsubscribing from mortar returned fewer rows and removed none of them.
+        var stale = board.All.Where(r => !seeded.Contains(r.Id)).Select(r => r.Id).ToList();
+        foreach (var requestId in stale)
+        {
+            _ = board.Remove(requestId, now);
         }
 
         _observer.Render();
-        log.Info($"Board re-seeded over HTTPS: {wire.Count} rows.");
+        log.Info($"Board re-seeded over HTTPS: {wire.Count} rows, {stale.Count} dropped.");
     }
 
     /// <summary>
@@ -1287,8 +1579,7 @@ public partial class App : Application, IDisposable
                 }
 
                 var me = await client.GetMeAsync(_shutdown.Token).ConfigureAwait(true);
-                var deployment = me.Memberships
-                    .FirstOrDefault(m => m.Deployment is not null)?.Deployment?.Id;
+                var deployment = StandingOn(me)?.Deployment?.Id;
 
                 if (deployment == _standingOn)
                 {
@@ -1573,22 +1864,28 @@ public partial class App : Application, IDisposable
         }
 
         var glyphs = new RoleGlyphSource(catalog.Role);
+
+        // The served map scale, so a two-point row can say 470m rather than 4.7u. No deployment
+        // carries a map id yet, so this is the profile's own default rather than the per-map value;
+        // both are served facts, neither is a constant here.
+        var unitsToMeters = BundledContracts.GameProfile().Current.DefaultUnitsToMeters;
+
         var rows = board.Rows
-            .Select(r => BoardRowViewModel.FromPrimary(r, viewerId, now).WithGlyph(glyphs))
+            .Select(r => BoardRowViewModel.FromPrimary(r, viewerId, now, unitsToMeters).WithGlyph(glyphs))
             .ToList();
-        var secondary = board.SecondaryStrip
-            .Select(r => BoardRowViewModel.FromSecondary(r, now).WithGlyph(glyphs))
+        var yours = board.Yours
+            .Select(r => BoardRowViewModel.FromSecondary(r, now, unitsToMeters, viewerId).WithGlyph(glyphs))
             .ToList();
         var overflow = board.Overflow;
         var overflowUrgent = overflow.Count(r => r.Priority == Priority.Urgent);
 
-        presenter.RenderBoard(rows, secondary, overflow.Count, overflowUrgent);
+        presenter.RenderBoard(rows, yours, overflow.Count, overflowUrgent, board.InProgressCount);
 
         _menuState = _menuState with
         {
-            OpenRequestCount = rows.Count + secondary.Count + overflow.Count,
+            OpenRequestCount = rows.Count + yours.Count + overflow.Count,
             MyRequestCount = rows.Count(r => r.Accent == RowAccent.Mine),
         };
-        log.Info($"Board refreshed: {rows.Count} on the board, {secondary.Count} on the secondary strip.");
+        log.Info($"Board refreshed: {rows.Count} on the board, {yours.Count} in YOURS, {board.InProgressCount} in progress elsewhere.");
     }
 }

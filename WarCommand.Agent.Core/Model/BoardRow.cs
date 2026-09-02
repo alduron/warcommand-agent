@@ -126,8 +126,22 @@ public sealed record BoardRow
 
     public bool IsClaimedBy(Guid participantId) => ClaimantParticipantId == participantId;
 
-    /// <summary>A row held by anybody else renders dim on the secondary strip and holds no slot.</summary>
-    public bool RendersOnSecondaryStrip(Guid viewerParticipantId) => IsHeld && !IsClaimedBy(viewerParticipantId);
+    /// <summary>True when this viewer asked for the row.</summary>
+    public bool IsRequestedBy(Guid participantId) => RequestedByParticipantId == participantId;
+
+    /// <summary>
+    /// A held row the viewer is one half of: they took it, or they asked for it. Renders in YOURS
+    /// at the foot of the board, holding no slot.
+    /// </summary>
+    public bool RendersInYours(Guid viewerParticipantId) =>
+        IsHeld && (IsClaimedBy(viewerParticipantId) || IsRequestedBy(viewerParticipantId));
+
+    /// <summary>
+    /// A held row the viewer has no part in. Renders as no row at all, only as one of the
+    /// N in IN PROGRESS, so a busy board is not mostly work its reader cannot take.
+    /// </summary>
+    public bool CountsAsInProgress(Guid viewerParticipantId) =>
+        IsHeld && !IsClaimedBy(viewerParticipantId) && !IsRequestedBy(viewerParticipantId);
 
     /// <summary>
     /// LOW CONF treatment. Never renders for a source that reports no confidence.

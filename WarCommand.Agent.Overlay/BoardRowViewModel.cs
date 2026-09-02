@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using WarCommand.Agent.Core.Fire;
 using WarCommand.Agent.Core.Model;
 
 namespace WarCommand.Agent.Overlay;
@@ -83,7 +84,19 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
     private string _coordinatesDisplay = string.Empty;
 
-    /// <summary>The second point of an arity-2 row, prefixed. Null on a one-point row.</summary>
+    /// <summary>
+    /// The catalog's own name for point 1, PICKUP or FROM. Empty on a type whose single point
+    /// needs no naming, which is every arity-1 type.
+    /// </summary>
+    public string FirstPointLabel
+    {
+        get => _firstPointLabel;
+        set => Set(ref _firstPointLabel, value);
+    }
+
+    private string _firstPointLabel = string.Empty;
+
+    /// <summary>The second point of an arity-2 row. Null on a one-point row.</summary>
     public string? SecondPointDisplay
     {
         get => _secondPointDisplay;
@@ -91,6 +104,15 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     }
 
     private string? _secondPointDisplay;
+
+    /// <summary>The catalog's own name for point 2, DROPOFF or TO. Null on a one-point row.</summary>
+    public string? SecondPointLabel
+    {
+        get => _secondPointLabel;
+        set => Set(ref _secondPointLabel, value);
+    }
+
+    private string? _secondPointLabel;
 
     /// <summary>Bearing and range between the two points, in map units. Null on a one-point row.</summary>
     public string? LegDisplay
@@ -170,22 +192,17 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
     private bool _hasCountdown;
 
-    /// <summary>Track width is 120 in the mock; this is the filled portion of it.</summary>
-    public double CountdownWidth
+    /// <summary>
+    /// How much of its 120 s the row has left, 1 down to 0. Drawn as a wash across the whole row
+    /// rather than a bar, so the countdown costs no height on a board that has to show many rows.
+    /// </summary>
+    public double CountdownFraction
     {
-        get => _countdownWidth;
-        set => Set(ref _countdownWidth, value);
+        get => _countdownFraction;
+        set => Set(ref _countdownFraction, value);
     }
 
-    private double _countdownWidth;
-
-    public string? CountdownText
-    {
-        get => _countdownText;
-        set => Set(ref _countdownText, value);
-    }
-
-    private string? _countdownText;
+    private double _countdownFraction;
 
     /// <summary>
     /// The one pulsing slot digit. Never set by the row itself: it is a board-wide budget, and
@@ -236,8 +253,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         Accent = other.Accent;
         RowOpacity = other.RowOpacity;
         HasCountdown = other.HasCountdown;
-        CountdownWidth = other.CountdownWidth;
-        CountdownText = other.CountdownText;
+        CountdownFraction = other.CountdownFraction;
 
         // Pulses is deliberately not copied. It is the board's budget, applied after the reconcile.
     }
@@ -293,43 +309,79 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         return $"{(int)age.TotalHours}h{age.Minutes:00}";
     }
 
-    /// <summary>Bearing and distance between the two points of an arity-2 row, in map units, never
-    /// meters: converting to meters needs game-profile.json's units_to_meters, a served fact this
-    /// dev viewer never fetches. Rendering meters here would be exactly the hardcoded game fact
-    /// binding rule 5 forbids.</summary>
-    private static string? Leg(BoardRow row)
+    /// <summary>
+    /// How far the load has to travel, between the two points of an arity-2 row.
+    /// </summary>
+    /// <remarks>
+    /// Distance only, and deliberately no bearing. A bearing here would be measured from the
+    /// pickup to the dropoff, because those are the only two coordinates anybody has: nothing in
+    /// the system knows where a player is standing, so it could never orient a driver. What it
+    /// answers instead is whose job this is, since transport_move reaches ground and air transport
+    /// at the same time and a 200 m move is a truck while a 3 km move is a lift.
+    ///
+    /// Metres when the caller hands in the map's units_to_meters, which is a served fact per
+    /// binding rule 5 and never a constant here. Map units when it does not, because a wrong
+    /// distance is worse than an honest unitless one.
+    /// </remarks>
+    private static string? Leg(BoardRow row, decimal? unitsToMeters)
     {
         if (row.Points.Count != 2)
         {
             return null;
         }
 
-        var a = row.Points[0].Point;
-        var b = row.Points[1].Point;
-        var dx = (double)(b.X - a.X);
-        var dy = (double)(b.Y - a.Y);
-        var bearing = (Math.Atan2(dx, dy) * 180.0 / Math.PI + 360.0) % 360.0;
-        var distance = a.DistanceUnitsTo(b);
-        return FormattableString.Invariant($"{bearing:000}deg {distance:0.0}u");
+        var leg = FireSolutionCalculator.Leg(row.Points[0].Point, row.Points[1].Point, unitsToMeters);
+
+        if (leg.DistanceMeters is not { } metres)
+        {
+            return FormattableString.Invariant($"{leg.DistanceUnits:0.0}u");
+        }
+
+        return metres >= 1000m
+            ? FormattableString.Invariant($"{metres / 1000m:0.0}km")
+            : FormattableString.Invariant($"{metres:0}m");
     }
 
     /// <summary>
-    /// The sub-15s countdown from 06-overlay-ux.md. A row with minutes left carries no bar, which
-    /// is what makes the bar mean something when it appears.
+    /// The catalog's label for one point, uppercased for the row. PICKUP and DROPOFF come from
+    /// request-types.json point_labels and are never written down here: binding rule 5.
     /// </summary>
-    private static (bool Show, double Width, string? Text) Countdown(BoardRow row, DateTimeOffset now)
-    {
-        const double track = 120;
-        const double window = 15;
+    /// <remarks>
+    /// Only an arity-2 row names its points. On a one-point row the coordinate is the whole
+    /// request and a label beside it is noise.
+    /// </remarks>
+    private static string PointLabel(BoardRow row, int ordinal) =>
+        row.Points.Count > 1 && ordinal < row.Points.Count
+            ? row.Points[ordinal].Label.ToUpperInvariant()
+            : string.Empty;
 
-        var left = row.ExpiresAt - now;
-        if (left <= TimeSpan.Zero || left.TotalSeconds > window)
+    /// <summary>
+    /// The auto-cancel bar: how much of its 120 s an OPEN row has left before it drops off the
+    /// queue on its own. Every open row carries one, draining over its whole life.
+    /// </summary>
+    /// <remarks>
+    /// It was a sub-15s bar on at most two rows, because a bar that appears late means something
+    /// when it appears. With a flat 120 s the whole life IS the urgent window, and the bar is the
+    /// only thing on the surface saying the row will cancel itself, so it earns being on every row.
+    ///
+    /// A claimed row has no bar at all: it does not expire, and drawing a draining bar on work
+    /// somebody is doing would say the opposite. No text either; the bar is the whole message.
+    /// </remarks>
+    private static (bool Show, double Fraction) Countdown(BoardRow row, DateTimeOffset now)
+    {
+        if (!row.IsOpen)
         {
-            return (false, 0, null);
+            return (false, 0);
         }
 
-        var fraction = Math.Clamp(left.TotalSeconds / window, 0, 1);
-        return (true, track * fraction, $"{FormatAge(left)} left");
+        var left = row.ExpiresAt - now;
+        var life = row.ExpiresAt - row.CreatedAt;
+        if (left <= TimeSpan.Zero || life <= TimeSpan.Zero)
+        {
+            return (false, 0);
+        }
+
+        return (true, Math.Clamp(left.TotalSeconds / life.TotalSeconds, 0, 1));
     }
 
     /// <summary>Fills the glyph from the current catalog. A row with no glyph renders its text.</summary>
@@ -344,20 +396,28 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         return this;
     }
 
-    public static BoardRowViewModel FromPrimary(BoardRow row, Guid viewerParticipantId, DateTimeOffset now)
+    public static BoardRowViewModel FromPrimary(
+        BoardRow row,
+        Guid viewerParticipantId,
+        DateTimeOffset now,
+        decimal? unitsToMeters = null)
     {
         ArgumentNullException.ThrowIfNull(row);
 
         var qualifier = Qualifier(row);
         var typeAndQualifier = qualifier.Length == 0 ? row.OverlayLabel : $"{row.OverlayLabel} {qualifier}";
         var primary = row.Points.Count > 0 ? FormatCoordinate(row.Points[0].Point) : string.Empty;
-        var second = row.Points.Count > 1 ? $"-> {FormatCoordinate(row.Points[1].Point)}" : null;
+        var second = row.Points.Count > 1 ? FormatCoordinate(row.Points[1].Point) : null;
         var mine = row.IsClaimedBy(viewerParticipantId);
-        var heldByOther = row.RendersOnSecondaryStrip(viewerParticipantId);
+
+        // Somebody took a row this viewer asked for. Amber and the claimant's callsign: news, not
+        // a job. A row held by somebody with no connection to this viewer never reaches here at
+        // all, it is counted in IN PROGRESS instead.
+        var takenFromMe = row.IsHeld && !mine && row.IsRequestedBy(viewerParticipantId);
         var urgent = row.Priority == Priority.Urgent && row.IsOpen;
 
-        var (accent, word) = Accented(row, mine, urgent);
-        var (showBar, barWidth, barText) = Countdown(row, now);
+        var (accent, word) = Accented(row, mine, takenFromMe, urgent);
+        var (showBar, barFraction) = Countdown(row, now);
 
         return new BoardRowViewModel
         {
@@ -365,8 +425,10 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
             RoleId = row.TargetRoleIds.Count > 0 ? row.TargetRoleIds[0] : string.Empty,
             TypeAndQualifier = typeAndQualifier.ToUpperInvariant(),
             CoordinatesDisplay = primary,
+            FirstPointLabel = PointLabel(row, 0),
             SecondPointDisplay = second,
-            LegDisplay = Leg(row),
+            SecondPointLabel = PointLabel(row, 1),
+            LegDisplay = Leg(row, unitsToMeters),
             Requester = row.RequestedByCallsign,
             AgeDisplay = FormatAge(now - row.CreatedAt),
             MetaExtra = row.ReleaseCount > 0
@@ -375,10 +437,9 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
             TicketCode = row.TicketCode,
             StateWord = word,
             Accent = accent,
-            RowOpacity = heldByOther ? 0.4 : 1.0,
+            RowOpacity = 1.0,
             HasCountdown = showBar,
-            CountdownWidth = barWidth,
-            CountdownText = barText,
+            CountdownFraction = barFraction,
         };
     }
 
@@ -386,11 +447,20 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     /// One accent per row, in the precedence the row gallery draws: the viewer's own claim wins,
     /// then a warning about the point, then urgency.
     /// </summary>
-    private static (RowAccent Accent, string? Word) Accented(BoardRow row, bool mine, bool urgent)
+    private static (RowAccent Accent, string? Word) Accented(
+        BoardRow row,
+        bool mine,
+        bool takenFromMe,
+        bool urgent)
     {
         if (mine)
         {
-            return (RowAccent.Mine, row.State == RequestState.InProgress ? "[YOU]" : "[YOU]");
+            return (RowAccent.Mine, "[YOU]");
+        }
+
+        if (takenFromMe)
+        {
+            return (RowAccent.Warned, row.ClaimantCallsign?.ToUpperInvariant() ?? "TAKEN");
         }
 
         if (row.RequesterMoved)
@@ -406,23 +476,57 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         return row.HoldsSlot ? (RowAccent.None, null) : (RowAccent.Muted, null);
     }
 
-    public static BoardRowViewModel FromSecondary(BoardRow row, DateTimeOffset now)
+    /// <summary>
+    /// A row for the YOURS section: one the viewer claimed, or one of theirs somebody took.
+    /// </summary>
+    /// <remarks>
+    /// The right-hand word is always the OTHER person, because that is who you would talk to. If
+    /// you took the job it names who wants it; if somebody took your request it names who has it.
+    /// Which side you are on is carried by the colour, green for yours to do and amber for news.
+    /// </remarks>
+    public static BoardRowViewModel FromSecondary(
+        BoardRow row,
+        DateTimeOffset now,
+        decimal? unitsToMeters = null,
+        Guid viewerParticipantId = default)
     {
         ArgumentNullException.ThrowIfNull(row);
         var primary = row.Points.Count > 0 ? FormatCoordinate(row.Points[0].Point) : string.Empty;
 
+        var mine = row.IsClaimedBy(viewerParticipantId);
+        var takenFromMe = row.IsHeld && !mine && row.IsRequestedBy(viewerParticipantId);
+
+        var (accent, counterparty) = mine
+            ? (RowAccent.Mine, Fragment("FOR", row.RequestedByCallsign))
+            : takenFromMe
+                ? (RowAccent.Warned, Fragment(null, row.ClaimantCallsign))
+                : (RowAccent.None, StripState(row, now));
+
         return new BoardRowViewModel
         {
-            SlotDisplay = string.Empty,
+            SlotDisplay = row.Slot?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
             RoleId = row.TargetRoleIds.Count > 0 ? row.TargetRoleIds[0] : string.Empty,
             TypeAndQualifier = row.OverlayLabel.ToUpperInvariant(),
             CoordinatesDisplay = primary,
-            Requester = row.ClaimantCallsign ?? string.Empty,
+            Requester = row.RequestedByCallsign,
             AgeDisplay = FormatAge(now - row.CreatedAt),
             TicketCode = row.TicketCode,
-            Accent = RowAccent.None,
-            StateWord = StripState(row, now),
+            LegDisplay = Leg(row, unitsToMeters),
+            Accent = accent,
+            StateWord = counterparty,
         };
+    }
+
+    /// <summary>A callsign, uppercased, optionally with a one-word lead. Never a sentence.</summary>
+    private static string? Fragment(string? lead, string? callsign)
+    {
+        if (string.IsNullOrWhiteSpace(callsign))
+        {
+            return null;
+        }
+
+        var name = callsign.ToUpperInvariant();
+        return lead is null ? name : $"{lead} {name}";
     }
 
     /// <summary>

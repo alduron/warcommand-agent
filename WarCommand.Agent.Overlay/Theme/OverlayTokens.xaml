@@ -40,6 +40,10 @@
     <SolidColorBrush x:Key="Transparent" Color="#00000000" />
     <SolidColorBrush x:Key="TakenWash" Color="#24F0A020" />
 
+    <!-- The auto-cancel countdown, washed across the whole row. Faint on purpose: it is ambient
+         state on every open row at once, and anything stronger competes with the slot digit. -->
+    <SolidColorBrush x:Key="TimeWash" Color="#0EFFFFFF" />
+
     <!-- Chrome for the settings tabs. The same family as the scrim, opaque because these sit on
          the window rather than over terrain. -->
     <SolidColorBrush x:Key="Surface" Color="#22262A" />
@@ -65,6 +69,14 @@
     <sys:Double x:Key="SmallSize">12</sys:Double>
     <sys:Double x:Key="LabelSize">14</sys:Double>
     <sys:Double x:Key="SlotSize">24</sys:Double>
+
+    <!--
+        How far a glyph rides UP beside an ALL CAPS label. Caps fill only the cap band, so the text
+        ink sits high in its line box and box-centring alone leaves the icon visibly low. In device
+        pixels at LabelSize, in the condensed face. Re-measure if LabelSize or CondensedFont moves:
+        WarCommand.Agent.Tests/Overlay/GlyphCapNudgeTests.cs pins it to the font's own metrics.
+    -->
+    <sys:Double x:Key="GlyphCapNudge">-1.5</sys:Double>
 
     <!-- Every panel is 380 wide, on every screen in the mocks. -->
     <sys:Double x:Key="PanelWidth">380</sys:Double>
@@ -101,6 +113,23 @@
 
     <Style x:Key="DimMono" TargetType="TextBlock" BasedOn="{StaticResource Mono}">
         <Setter Property="Foreground" Value="{StaticResource Dim}" />
+    </Style>
+
+    <!--
+        The PICKUP / DROPOFF gutter on an arity-2 row. Right aligned in a fixed column so the two
+        coordinates line up under each other, and collapsed to zero on an arity-1 row: a fixed
+        width there steals 58px from the state word and clips URGENT to ENT.
+    -->
+    <Style x:Key="PointLabel" TargetType="TextBlock" BasedOn="{StaticResource DimMono}">
+        <Setter Property="Width" Value="58" />
+        <Setter Property="TextAlignment" Value="Right" />
+        <Setter Property="Margin" Value="0,0,6,0" />
+        <Style.Triggers>
+            <Trigger Property="Text" Value="">
+                <Setter Property="Width" Value="0" />
+                <Setter Property="Margin" Value="0" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
 </ResourceDictionary>

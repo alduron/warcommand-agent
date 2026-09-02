@@ -371,7 +371,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 600,
+      "ttl_s": 120,
       "spoken_aliases": [
         "mortar",
         "mortars",
@@ -404,7 +404,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 600,
+      "ttl_s": 120,
       "spoken_aliases": [
         "artillery",
         "arty",
@@ -434,7 +434,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 600,
+      "ttl_s": 120,
       "spoken_aliases": [
         "close air",
         "gun run",
@@ -463,7 +463,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 600,
+      "ttl_s": 120,
       "spoken_aliases": [
         "rockets",
         "rocket run",
@@ -490,7 +490,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 900,
+      "ttl_s": 120,
       "spoken_aliases": [
         "tank",
         "tanks",
@@ -519,7 +519,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 600,
+      "ttl_s": 120,
       "spoken_aliases": [
         "anti tank",
         "enemy armor",
@@ -546,7 +546,7 @@
       "point_labels": [
         "area"
       ],
-      "ttl_s": 900,
+      "ttl_s": 120,
       "spoken_aliases": [
         "anti air",
         "air cover",
@@ -573,7 +573,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "screen",
         "smoke screen"
@@ -600,7 +600,7 @@
         "pickup",
         "dropoff"
       ],
-      "ttl_s": 1200,
+      "ttl_s": 120,
       "spoken_aliases": [
         "transport",
         "ride",
@@ -628,7 +628,7 @@
         "pickup",
         "dropoff"
       ],
-      "ttl_s": 1200,
+      "ttl_s": 120,
       "spoken_aliases": [
         "lift",
         "air lift",
@@ -656,7 +656,7 @@
       "point_labels": [
         "drop zone"
       ],
-      "ttl_s": 900,
+      "ttl_s": 120,
       "spoken_aliases": [
         "paradrop",
         "para",
@@ -686,7 +686,7 @@
       "point_labels": [
         "pickup"
       ],
-      "ttl_s": 900,
+      "ttl_s": 120,
       "spoken_aliases": [
         "extract",
         "extraction",
@@ -716,7 +716,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 1800,
+      "ttl_s": 120,
       "spoken_aliases": [
         "resupply",
         "supplies",
@@ -749,7 +749,7 @@
       "point_labels": [
         "vehicle"
       ],
-      "ttl_s": 1200,
+      "ttl_s": 120,
       "spoken_aliases": [
         "refuel",
         "fuel up",
@@ -777,7 +777,7 @@
       "point_labels": [
         "vehicle"
       ],
-      "ttl_s": 1200,
+      "ttl_s": 120,
       "spoken_aliases": [
         "repair",
         "wrench",
@@ -805,7 +805,7 @@
       "point_labels": [
         "site"
       ],
-      "ttl_s": 1800,
+      "ttl_s": 120,
       "spoken_aliases": [
         "fob",
         "forward base",
@@ -831,7 +831,7 @@
       "point_labels": [
         "site"
       ],
-      "ttl_s": 1800,
+      "ttl_s": 120,
       "spoken_aliases": [
         "fortify",
         "build here",
@@ -862,7 +862,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 900,
+      "ttl_s": 120,
       "spoken_aliases": [
         "demo",
         "charges",
@@ -888,7 +888,7 @@
       "point_labels": [
         "casualty"
       ],
-      "ttl_s": 600,
+      "ttl_s": 120,
       "spoken_aliases": [
         "medic",
         "corpsman",
@@ -914,7 +914,7 @@
       "point_labels": [
         "axis"
       ],
-      "ttl_s": 600,
+      "ttl_s": 120,
       "spoken_aliases": [
         "push",
         "push here",
@@ -943,7 +943,7 @@
       "point_labels": [
         "position"
       ],
-      "ttl_s": 1200,
+      "ttl_s": 120,
       "spoken_aliases": [
         "hold",
         "hold here",
@@ -969,7 +969,7 @@
       "point_labels": [
         "entry"
       ],
-      "ttl_s": 600,
+      "ttl_s": 120,
       "spoken_aliases": [
         "breach",
         "open it"
@@ -994,7 +994,7 @@
       "point_labels": [
         "position"
       ],
-      "ttl_s": 900,
+      "ttl_s": 120,
       "spoken_aliases": [
         "fire team",
         "need bodies",
@@ -1021,7 +1021,7 @@
       "point_labels": [
         "structure"
       ],
-      "ttl_s": 600,
+      "ttl_s": 120,
       "spoken_aliases": [
         "clear building",
         "clear it",
@@ -1048,7 +1048,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "suppress",
         "suppressing fire",
@@ -1058,7 +1058,7 @@
         "urgent"
       ],
       "default_priority": "urgent",
-      "game_note": "Short TTL on purpose. Suppression is worthless ten minutes later.",
+      "game_note": "Suppression is worthless minutes later, which is why nothing waits longer than the flat 120 s.",
       "menu_paths": [
         "fire.7",
         "infantry.6"
@@ -1075,7 +1075,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 900,
+      "ttl_s": 120,
       "spoken_aliases": [
         "sniper",
         "marksman",
@@ -1106,7 +1106,7 @@
         "from",
         "to"
       ],
-      "ttl_s": 1200,
+      "ttl_s": 120,
       "spoken_aliases": [
         "convoy",
         "cover us"
@@ -1136,7 +1136,7 @@
       "point_labels": [
         "site"
       ],
-      "ttl_s": 1800,
+      "ttl_s": 120,
       "spoken_aliases": [
         "spawn point",
         "bring the spawn",
@@ -1162,7 +1162,7 @@
       "point_labels": [
         "area"
       ],
-      "ttl_s": 1200,
+      "ttl_s": 120,
       "spoken_aliases": [
         "recon",
         "scout",
@@ -1189,7 +1189,7 @@
       "point_labels": [
         "area"
       ],
-      "ttl_s": 900,
+      "ttl_s": 120,
       "spoken_aliases": [
         "drone",
         "uav recon",
@@ -1217,7 +1217,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 600,
+      "ttl_s": 120,
       "spoken_aliases": [
         "drone strike",
         "fpv",
@@ -1247,7 +1247,7 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 900,
+      "ttl_s": 120,
       "spoken_aliases": [
         "spotter",
         "spot for me",
@@ -1273,7 +1273,7 @@
       "point_labels": [
         "contact"
       ],
-      "ttl_s": 600,
+      "ttl_s": 120,
       "spoken_aliases": [
         "contact",
         "enemy",
@@ -1539,11 +1539,11 @@
     "awaiting_point_timeout_s": 20,
     "tap_max_ms": 180,
     "invite_code_digits": 6,
-    "low_priority_slot_residency_s": 120,
+    "low_priority_slot_residency_s": 60,
     "coalesce_radius_units": 0.5,
     "coalesce_window_s": 60
   },
-  "grammar_rules_note": "slot_quarantine_s was DELETED, not retuned. Nine slots with a 20 s quarantine admitted at most nine rows per 20 s no matter how fast providers cleared them, capping the board at 0.45 rows per second while overflow grew. Allocation is now least-recently-released: a digit is never reissued until all eight others have been, which is strictly better collision protection than a 20 s hold at zero dead time. low_priority_slot_residency_s demotes a low-priority row to overflow after 120 s while leaving it OPEN, because a slot was previously held for the whole TTL and fortify at 1800 s outlives mortar_fire at 600 s: nine build rows submitted in the first minute otherwise hold every digit for half an hour. Request lifetime is untouched; only its claim on a digit expires. coalesce_radius_units and coalesce_window_s are the submit-time dedup window: same type, same deployment, a point inside 0.50 units, created inside 60 s, attaches the new participant as a co-requester and returns the existing request. The quantity qualifier renders it as MORTAR x5. Same participant supersedes instead of coalescing.",
+  "grammar_rules_note": "slot_quarantine_s was DELETED, not retuned. Nine slots with a 20 s quarantine admitted at most nine rows per 20 s no matter how fast providers cleared them, capping the board at 0.45 rows per second while overflow grew. Allocation is now least-recently-released: a digit is never reissued until all eight others have been, which is strictly better collision protection than a 20 s hold at zero dead time. ttl_s is a flat 120 s on every type: it is how long a request waits for a taker, not how long the job stays useful, and an unclaimed row that nobody wanted in two minutes is re-requested rather than left to rot. A claimed row does not expire at all. low_priority_slot_residency_s demotes a low-priority row to overflow after 60 s while leaving it OPEN, so it yields its digit at the halfway mark rather than holding one for its whole life; it must stay strictly below ttl_s or demotion never fires. coalesce_radius_units and coalesce_window_s are the submit-time dedup window: same type, same deployment, a point inside 0.50 units, created inside 60 s, attaches the new participant as a co-requester and returns the existing request. The quantity qualifier renders it as MORTAR x5. Same participant supersedes instead of coalescing.",
   "forbidden_aliases": {
     "armor": "Near-homophone of 'mortar'. Use 'tank'.",
     "air support": "Shares an unstressed distinguishing syllable with 'air transport'. Use 'close air'.",

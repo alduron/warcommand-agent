@@ -16,7 +16,7 @@ namespace WarCommand.Agent.Tests.Overlay;
 /// </remarks>
 public class OverlayBudgetTests
 {
-    /// <summary>CountdownWidth is the fill of a 15 s track, so a narrower bar is sooner.</summary>
+    /// <summary>CountdownFraction is life remaining, so a smaller value is sooner to expire.</summary>
     private static BoardRowViewModel Expiring(string ticket, double width) => new()
     {
         SlotDisplay = "1",
@@ -26,8 +26,7 @@ public class OverlayBudgetTests
         AgeDisplay = "12s",
         TicketCode = ticket,
         HasCountdown = true,
-        CountdownWidth = width,
-        CountdownText = "12s left",
+        CountdownFraction = width,
     };
 
     private static BoardRowViewModel Calm(string ticket) => new()
@@ -63,8 +62,11 @@ public class OverlayBudgetTests
     }
 
     [Fact]
-    public void At_most_two_countdown_bars_render_and_they_are_the_two_soonest()
+    public void Every_open_row_keeps_its_auto_cancel_bar()
     {
+        // Bars are no longer rationed. Each open row cancels itself after its 120 s and the bar is
+        // the only thing that says so, so a row without one would read as staying put. The bar is a
+        // slow fill rather than motion; the PULSE is the thing still budgeted to exactly one.
         OnStaThread(() =>
         {
             var view = new BoardView();
@@ -76,9 +78,9 @@ public class OverlayBudgetTests
 
             var showing = Live(view).Where(r => r.HasCountdown).Select(r => r.TicketCode).ToList();
 
-            Assert.Equal(2, showing.Count);
-            Assert.Contains("B", showing);
-            Assert.Contains("C", showing);
+            Assert.Equal(4, showing.Count);
+            Assert.Single(Live(view).Where(r => r.Pulses));
+            Assert.Equal("B", Live(view).Single(r => r.Pulses).TicketCode);
         });
     }
 

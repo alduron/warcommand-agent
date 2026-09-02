@@ -26,13 +26,27 @@ if (-not (Test-Endpoint 'http://localhost:8000/health/ready')) {
     throw "The API is not answering on 8000. Run: docker compose -f ../infra/docker-compose.yml up -d"
 }
 
+# The proxy is the piece that is down most often: it is a second terminal nobody remembers, and it
+# used to die whenever the API container restarted. Start it rather than reporting it, and only
+# report the part a script cannot fix, which is the certificate.
+if ($ApiBaseUrl -eq 'https://localhost:8443' -and -not (Test-Endpoint "$ApiBaseUrl/health/ready")) {
+    Start-Process -FilePath 'node' -ArgumentList (Join-Path $PSScriptRoot 'local-tls-proxy.js') `
+        -WorkingDirectory $PSScriptRoot -WindowStyle Minimized
+    $deadline = (Get-Date).AddSeconds(15)
+    while ((Get-Date) -lt $deadline -and -not (Test-Endpoint "$ApiBaseUrl/health/ready")) {
+        Start-Sleep -Milliseconds 500
+    }
+}
+
 if (-not (Test-Endpoint "$ApiBaseUrl/health/ready")) {
     throw "$ApiBaseUrl is not answering, or its certificate is not trusted. Run 'node dev/local-tls-proxy.js' in its own terminal; if that is already up, redo the one-time certificate setup in DEVELOPING.md."
 }
 
 # Only one agent runs at a time, enforced by a mutex in App.OnStartup. Take the slot rather than
 # launching a second instance that would exit on its own and look like a failed build.
-Get-Process WarCommand.Agent -ErrorAction SilentlyContinue | Stop-Process -Force
+# Both names: the published artefact is WarCommand.exe, a dotnet run is WarCommand.Agent.
+# Missing the first one left it holding the overlay DLL and the build failed on a file lock.
+Get-Process WarCommand, WarCommand.Agent -ErrorAction SilentlyContinue | Stop-Process -Force
 
 $env:WARCOMMAND_PROFILE = 'dev'
 $env:WARCOMMAND_API_BASE_URL = $ApiBaseUrl

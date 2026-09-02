@@ -31,6 +31,15 @@ public enum TrayCommand
 
     OpenWebBoard,
     SwitchMatch,
+
+    /// <summary>Clears this device's tokens and quits, so the next sign-in links it afresh.</summary>
+    SignOut,
+
+    /// <summary>Argument is an <c>AgentBackend</c> name: Production or Local. Restarts the agent.</summary>
+    SelectBackend,
+
+    /// <summary>Argument is a deployment id. Enters that deployment through the API.</summary>
+    SelectDeployment,
     RestartMatch,
     EndMatch,
     SelectMap,
@@ -71,6 +80,9 @@ public enum TrayCommand
 /// knows which panel is \.\DISPLAY2, and every monitor reports itself as Generic PnP Monitor.
 /// </remarks>
 public sealed record TrayDisplay(string DeviceName, string Label, bool IsPrimary);
+
+/// <summary>One live deployment the agent can be switched to, for the tray submenu.</summary>
+public sealed record TrayDeployment(string Id, string Label, int PeopleCount, bool IsCurrent);
 
 /// <summary>One row. A separator, a label, a command, or a parent holding children.</summary>
 public sealed record TrayMenuItem
@@ -154,6 +166,13 @@ public sealed record TrayMenuState
     /// <summary>Admin and owner only. Absent rather than greyed for a member; see 10-agent-spec.md.</summary>
     public bool CanRestartMatch { get; init; }
 
+    /// <summary>
+    /// The group's live deployments, in order, as the switch submenu. Empty renders the deployment
+    /// row as a plain heading: a submenu whose only entry is the one you are already on is a click
+    /// that does nothing.
+    /// </summary>
+    public IReadOnlyList<TrayDeployment> Deployments { get; init; } = [];
+
     /// <summary>Open rows on the board. Null hides the board line.</summary>
     public int? OpenRequestCount { get; init; }
 
@@ -229,6 +248,19 @@ public sealed record TrayMenuState
 
     /// <summary>The account the agent holds. Null until it holds one.</summary>
     public string? Callsign { get; init; }
+
+    /// <summary>
+    /// The API host this agent talks to, e.g. "localhost" or "api.warcommand.app". Rendered beside
+    /// the account, because an agent on one backend and a browser on another hold different
+    /// accounts with the same name and nothing on screen said which was which.
+    /// </summary>
+    public string? ApiHost { get; init; }
+
+    /// <summary>
+    /// Which backend is selected, as an <c>AgentBackend</c> name. Null hides the row, which is what
+    /// a launch pinned by an environment variable gets: the switch would not survive the restart.
+    /// </summary>
+    public string? Backend { get; init; }
 
     /// <summary>False until the settings window exists. The row is absent, never greyed.</summary>
     public bool SettingsAvailable { get; init; }
@@ -368,18 +400,51 @@ public static class TrayMenu
             });
         }
 
+        // Standing nowhere, but there is somewhere to stand. The same submenu, so entering a
+        // deployment and switching between them are one row rather than two features.
+        if (state.MatchName is null && state.Deployments.Count > 0)
+        {
+            items.Add(new TrayMenuItem
+            {
+                Text = "Deployment: none",
+                Children =
+                [
+                    .. state.Deployments.Select(d => new TrayMenuItem
+                    {
+                        Text = d.Label,
+                        Value = $"{d.PeopleCount} people",
+                        Command = TrayCommand.SelectDeployment,
+                        Argument = d.Id,
+                    }),
+                ],
+            });
+        }
+
         // Deployment, never Match: the entity is a Deployment everywhere else in the product.
         if (state.MatchName is { } deployment)
         {
+            // The switch list is the submenu, not a "Switch deployment..." row leading nowhere.
+            // The agent has no window to open a picker in, and a row whose click has nowhere to go
+            // is what Convention_WarCommandTrayMenuRendersOnlyHonourableRows forbids. End and
+            // restart stay out until the client can perform them.
+            var switchable = state.Deployments
+                .Where(d => !d.IsCurrent)
+                .Select(d => new TrayMenuItem
+                {
+                    Text = d.Label,
+                    Value = $"{d.PeopleCount} people",
+                    Command = TrayCommand.SelectDeployment,
+                    Argument = d.Id,
+                })
+                .ToList();
+
             items.Add(new TrayMenuItem
             {
                 Text = $"Deployment: {deployment}",
                 Value = $"{state.MatchPeopleCount} people",
-                Children =
-                [
-                    new TrayMenuItem { Text = "Switch deployment...", Command = TrayCommand.SwitchMatch },
-                    new TrayMenuItem { Text = "End deployment", Command = TrayCommand.EndMatch },
-                ],
+                IsHeading = switchable.Count == 0,
+                IsEnabled = switchable.Count > 0,
+                Children = switchable,
             });
 
             // Top level because it happens every round, and absent rather than greyed for a member.
@@ -564,7 +629,49 @@ public static class TrayMenu
         // notice it drifting from the one their browser is signed into.
         if (state.Callsign is { } callsign)
         {
-            items.Add(new TrayMenuItem { Text = $"Signed in as {callsign}", IsHeading = true, IsEnabled = false });
+            items.Add(new TrayMenuItem
+            {
+                Text = $"Signed in as {callsign}",
+                Value = state.ApiHost,
+                IsHeading = true,
+                IsEnabled = false,
+            });
+        }
+
+        // One build, one tray icon. The backend is a row here rather than a second exe, a second
+        // shortcut and a second tray icon that hold different accounts and look identical.
+        if (state.Backend is { } backend)
+        {
+            items.Add(new TrayMenuItem
+            {
+                Text = "Backend",
+                Value = backend == "Local" ? "local" : "production",
+                Children =
+                [
+                    new TrayMenuItem
+                    {
+                        Text = "Production",
+                        Value = backend == "Local" ? null : "on",
+                        Command = TrayCommand.SelectBackend,
+                        Argument = "Production",
+                    },
+                    new TrayMenuItem
+                    {
+                        Text = "Local (dev)",
+                        Value = backend == "Local" ? "on" : null,
+                        Command = TrayCommand.SelectBackend,
+                        Argument = "Local",
+                    },
+                ],
+            });
+        }
+
+        // The only way out of a wrong account. The web relinks an agent whenever the browser is on
+        // the same API; it cannot reach one pointed at a different backend, and before this the
+        // remedy was deleting tokens.dat by hand.
+        if (state.IsPaired)
+        {
+            items.Add(new TrayMenuItem { Text = "Sign out and quit", Command = TrayCommand.SignOut });
         }
 
         if (!state.IsPaired)

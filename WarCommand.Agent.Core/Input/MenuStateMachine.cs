@@ -43,11 +43,14 @@ public enum MenuLevel
     /// <summary>Modifiers, and the only level a release commits from.</summary>
     Confirm,
 
-    /// <summary>0 BOARD. Hand authored: its entries are verbs, not request types.</summary>
+    /// <summary>0 BOARD. Hand authored: its entries are slots, and 0 for everything else.</summary>
     Board,
 
     /// <summary>The verbs available against one selected row.</summary>
     BoardAction,
+
+    /// <summary>0 BOARD > 0. Every panel, plus join and gun position. Hand authored.</summary>
+    More,
 
     /// <summary>Six digits, then commit. No confirm step.</summary>
     Join,
@@ -331,8 +334,30 @@ public sealed record MenuJoinReady(string InviteCode) : MenuOutcome;
 /// <summary>A verb against one slot, executed immediately. Board actions never preview.</summary>
 public sealed record MenuBoardAction(string VerbId, int Slot) : MenuOutcome;
 
-/// <summary>0 HELP. The visitor's entire manual, and it is not voice-only.</summary>
-public sealed record MenuHelpRequested : MenuOutcome;
+/// <summary>
+/// A panel off the MORE page: help, roles, match, people, restart, link. The panel owns the digits
+/// from here and outlives the held key, which is why the menu closes as it hands one over.
+/// </summary>
+public sealed record MenuPanelRequested(string PanelId) : MenuOutcome;
+
+/// <summary>MORE > GUN HERE. The key-down snapshot, committed with no confirm step.</summary>
+public sealed record MenuGunPositionSet(MapPoint Point) : MenuOutcome;
+
+/// <summary>
+/// What the MORE page is allowed to offer this person right now. Its digits are fixed: an entry
+/// nobody can use is absent, never renumbered, so a digit learned once stays learned.
+/// </summary>
+public sealed record MenuContext
+{
+    /// <summary>Slots holding a row. Only these are selectable at the board level.</summary>
+    public IReadOnlyCollection<int> OccupiedSlots { get; init; } = [];
+
+    /// <summary>Admin and owner only. Restart is board-wide and destructive.</summary>
+    public bool CanRestart { get; init; }
+
+    /// <summary>True only while the one-time link prompt is showing.</summary>
+    public bool LinkPromptPending { get; init; }
+}
 
 /// <summary>Timings and sizes for the menu. None of them is a fact about the game.</summary>
 public sealed record MenuOptions
@@ -358,9 +383,8 @@ public sealed record MenuOptions
 /// </remarks>
 public sealed class MenuStateMachine
 {
-    private const int BoardDigit = 0;
-    private const int JoinDigit = 7;
-    private const int HelpDigit = 0;
+    /// <summary>0 at the root opens the board, and 0 at the board opens MORE. Never a slot.</summary>
+    private const int ZeroDigit = 0;
 
     private static readonly (int Digit, string VerbId, string Label)[] BoardVerbs =
     [
@@ -370,6 +394,23 @@ public sealed class MenuStateMachine
         (4, "pass", "PASS"),
         (5, "release", "RELEASE"),
         (6, "mute", "MUTE"),
+        (7, "copy", "COPY"),
+    ];
+
+    /// <summary>
+    /// The MORE page. Fixed digits, hand authored, and the only route to every panel now that the
+    /// chords are gone. A gated entry is absent rather than shown-and-dead.
+    /// </summary>
+    private static readonly (int Digit, string Id, string Label)[] MoreEntries =
+    [
+        (1, "help", "HELP"),
+        (2, "roles", "ROLES"),
+        (3, "match", "MATCH"),
+        (4, "people", "PEOPLE"),
+        (5, "gun", "GUN HERE"),
+        (6, "join", "JOIN CODE"),
+        (7, "restart", "RESTART"),
+        (8, "link", "LINK ACCOUNT"),
     ];
 
     private readonly MenuTree _tree;
@@ -380,9 +421,10 @@ public sealed class MenuStateMachine
     private readonly List<int> _digits = [];
 
     private MapPoint? _snapshot;
-    private IReadOnlyCollection<int> _occupiedSlots = [];
+    private MenuContext _context = new();
     private DateTimeOffset _lastInput;
     private int _selectedSlot;
+    private bool _latched;
 
     public MenuStateMachine(MenuTree tree, Catalog catalog, MenuOptions? options = null)
     {
@@ -410,7 +452,20 @@ public sealed class MenuStateMachine
     /// <summary>The type the confirm level will create, or null.</summary>
     public string? SelectedTypeId => _path.LastOrDefault(e => e.TypeId is not null)?.TypeId;
 
+    /// <summary>
+    /// The digit each MORE entry holds, so a hint can name a route without a second hand-written
+    /// list of digits to drift out of step with this one.
+    /// </summary>
+    public static IReadOnlyDictionary<string, int> MoreDigits { get; } =
+        MoreEntries.ToDictionary(e => e.Id, e => e.Digit, StringComparer.Ordinal);
+
     public bool IsOpen => Level != MenuLevel.Closed;
+
+    /// <summary>
+    /// True once the menu has stopped following the held key. Typing a six digit code with a key
+    /// held down is not an interaction anybody completes, so JOIN detaches and Escape closes it.
+    /// </summary>
+    public bool IsLatched => _latched;
 
     /// <summary>
     /// Exactly four key classes are swallowed while a menu is open. This is a safety rule: a menu
@@ -422,14 +477,15 @@ public sealed class MenuStateMachine
     /// Opens at the root. <paramref name="snapshot"/> is the key-down coordinate; when it is
     /// present the coordinate level is pre-filled and skipped.
     /// </summary>
-    public MenuOutcome Open(DateTimeOffset now, MapPoint? snapshot = null, IReadOnlyCollection<int>? occupiedSlots = null)
+    public MenuOutcome Open(DateTimeOffset now, MapPoint? snapshot = null, MenuContext? context = null)
     {
         _path.Clear();
         _modifiers.Clear();
         _digits.Clear();
         _selectedSlot = 0;
+        _latched = false;
         _snapshot = snapshot;
-        _occupiedSlots = occupiedSlots ?? [];
+        _context = context ?? new MenuContext();
         _lastInput = now;
         Level = MenuLevel.Root;
         return new MenuNavigated(Level);
@@ -446,12 +502,13 @@ public sealed class MenuStateMachine
         _lastInput = now;
         return Level switch
         {
-            MenuLevel.Root => digit == BoardDigit ? EnterBoard() : Descend(_tree.Root, digit),
+            MenuLevel.Root => digit == ZeroDigit ? EnterBoard() : Descend(_tree.Root, digit),
             MenuLevel.Branch => Descend(Selection!.Children, digit),
             MenuLevel.Coordinate => TypeCoordinateDigit(digit),
             MenuLevel.Confirm => ToggleModifier(digit),
             MenuLevel.Board => SelectRow(digit),
             MenuLevel.BoardAction => RunBoardVerb(digit),
+            MenuLevel.More => RunMore(digit),
             MenuLevel.Join => TypeJoinDigit(digit),
             _ => MenuOutcome.None,
         };
@@ -474,7 +531,7 @@ public sealed class MenuStateMachine
                 return new MenuNavigated(Level);
 
             case MenuLevel.Join:
-                Level = MenuLevel.BoardAction;
+                Level = MenuLevel.More;
                 return new MenuNavigated(Level);
 
             case MenuLevel.Confirm:
@@ -492,6 +549,10 @@ public sealed class MenuStateMachine
 
             case MenuLevel.BoardAction:
                 _selectedSlot = 0;
+                Level = MenuLevel.Board;
+                return new MenuNavigated(Level);
+
+            case MenuLevel.More:
                 Level = MenuLevel.Board;
                 return new MenuNavigated(Level);
 
@@ -522,7 +583,7 @@ public sealed class MenuStateMachine
     public MenuOutcome KeyUp(DateTimeOffset now)
     {
         _ = now;
-        if (Level == MenuLevel.Closed)
+        if (Level == MenuLevel.Closed || _latched)
         {
             return MenuOutcome.None;
         }
@@ -571,6 +632,7 @@ public sealed class MenuStateMachine
         MenuLevel.Confirm => ModifierEntries(),
         MenuLevel.Board => BoardEntries(),
         MenuLevel.BoardAction => BoardActionEntries(),
+        MenuLevel.More => MoreOptions(),
         _ => [],
     };
 
@@ -592,7 +654,7 @@ public sealed class MenuStateMachine
 
     private List<MenuEntry> BoardEntries()
     {
-        var entries = _occupiedSlots
+        var entries = _context.OccupiedSlots
             .Where(s => s is >= 1 and <= 9)
             .OrderBy(s => s)
             .Select(s => new MenuEntry
@@ -603,18 +665,15 @@ public sealed class MenuStateMachine
             })
             .ToList();
 
-        if (!entries.Exists(e => e.Digit == JoinDigit))
-        {
-            entries.Add(new MenuEntry { Digit = JoinDigit, Path = "board.join", Label = "JOIN" });
-        }
-
-        entries.Add(new MenuEntry { Digit = HelpDigit, Path = "board.help", Label = "HELP" });
+        // 0 is never a slot, so it is free at every board level for the one thing that is not a
+        // row. This is where the eight chords went.
+        entries.Add(new MenuEntry { Digit = ZeroDigit, Path = "board.more", Label = "MORE" });
         return entries;
     }
 
-    private List<MenuEntry> BoardActionEntries()
-    {
-        var entries = BoardVerbs
+    private List<MenuEntry> BoardActionEntries() =>
+    [
+        .. BoardVerbs
             .Where(v => _catalog.CommandVerb(v.VerbId) is not null)
             .Select(v => new MenuEntry
             {
@@ -622,13 +681,29 @@ public sealed class MenuStateMachine
                 Path = $"board.action.{v.VerbId}",
                 Label = v.Label,
                 VerbId = v.VerbId,
-            })
-            .ToList();
+            }),
+    ];
 
-        entries.Add(new MenuEntry { Digit = JoinDigit, Path = "board.join", Label = "JOIN" });
-        entries.Add(new MenuEntry { Digit = HelpDigit, Path = "board.help", Label = "HELP" });
-        return entries;
-    }
+    private List<MenuEntry> MoreOptions() =>
+    [
+        .. MoreEntries
+            .Where(e => IsOffered(e.Id))
+            .Select(e => new MenuEntry
+            {
+                Digit = e.Digit,
+                Path = $"board.more.{e.Id}",
+                Label = e.Label,
+                VerbId = e.Id,
+            }),
+    ];
+
+    private bool IsOffered(string id) => id switch
+    {
+        "restart" => _context.CanRestart,
+        "link" => _context.LinkPromptPending,
+        "gun" => _snapshot is not null,
+        _ => true,
+    };
 
     private MenuOutcome Descend(IReadOnlyList<MenuEntry> level, int digit)
     {
@@ -711,45 +786,52 @@ public sealed class MenuStateMachine
 
     private MenuOutcome SelectRow(int digit)
     {
-        if (digit == HelpDigit)
+        if (digit == ZeroDigit)
         {
-            Reset();
-            return new MenuHelpRequested();
+            Level = MenuLevel.More;
+            return new MenuNavigated(Level);
         }
 
-        if (_occupiedSlots.Contains(digit))
+        if (_context.OccupiedSlots.Contains(digit))
         {
             _selectedSlot = digit;
             Level = MenuLevel.BoardAction;
             return new MenuNavigated(Level);
         }
 
-        if (digit == JoinDigit)
+        return MenuOutcome.None;
+    }
+
+    private MenuOutcome RunMore(int digit)
+    {
+        var entry = Array.Find(MoreEntries, e => e.Digit == digit);
+        if (entry.Id is null || !IsOffered(entry.Id))
         {
+            return MenuOutcome.None;
+        }
+
+        if (entry.Id == "join")
+        {
+            // The only level that outlives the held key: six digits is not a hold.
             _digits.Clear();
+            _latched = true;
             Level = MenuLevel.Join;
             return new MenuNavigated(Level);
         }
 
-        return MenuOutcome.None;
+        if (entry.Id == "gun")
+        {
+            var point = _snapshot!;
+            Reset();
+            return new MenuGunPositionSet(point);
+        }
+
+        Reset();
+        return new MenuPanelRequested(entry.Id);
     }
 
     private MenuOutcome RunBoardVerb(int digit)
     {
-        if (digit == HelpDigit)
-        {
-            Reset();
-            return new MenuHelpRequested();
-        }
-
-        if (digit == JoinDigit)
-        {
-            // 7 is free at the action level, so 0 BOARD, 7, 7 always reaches JOIN.
-            _digits.Clear();
-            Level = MenuLevel.Join;
-            return new MenuNavigated(Level);
-        }
-
         var verb = Array.Find(BoardVerbs, v => v.Digit == digit);
         if (verb.VerbId is null || _catalog.CommandVerb(verb.VerbId) is null || _selectedSlot == 0)
         {
@@ -817,8 +899,9 @@ public sealed class MenuStateMachine
         _modifiers.Clear();
         _digits.Clear();
         _selectedSlot = 0;
+        _latched = false;
         _snapshot = null;
-        _occupiedSlots = [];
+        _context = new MenuContext();
         Level = MenuLevel.Closed;
     }
 }

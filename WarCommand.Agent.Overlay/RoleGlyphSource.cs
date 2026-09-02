@@ -39,6 +39,9 @@ public sealed class RoleGlyphSource
 
     public string BrushKey(string roleId) => RoleGlyph.BrushKey(_lookup(roleId)?.ColorGroup);
 
+    /// <summary>The role's served display name. Falls back to the id so a row is never blank.</summary>
+    public string Display(string roleId) => _lookup(roleId)?.Display ?? roleId;
+
     /// <summary>Drops what it parsed. Called when a new catalog lands.</summary>
     public void Invalidate() => _cache.Clear();
 }

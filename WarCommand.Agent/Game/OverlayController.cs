@@ -1,4 +1,4 @@
-﻿
+
 using System.Windows.Threading;
 using System.Linq;
 using WarCommand.Agent.Core.Settings;
@@ -20,9 +20,9 @@ namespace WarCommand.Agent.Game;
 public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposable
 {
     /// <summary>
-    /// What Dim multiplies the chosen opacity by. Dim is still readable at a glance from a second
-    /// monitor; it is not "nearly gone", which would make the mode useless to the people who ask
-    /// for it.
+    /// What Dim multiplies the chosen opacity by, for the unfocused behaviour and for the board
+    /// key's middle step. Dim is still readable at a glance; it is not "nearly gone", which would
+    /// make the step useless to the people who ask for it.
     /// </summary>
     private const double DimFactor = 0.5;
 
@@ -34,6 +34,7 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
     private AgentSettings _settings;
     private ScreenRect _gameRect = ScreenRect.Empty;
     private OverlayVisibility _visibility = OverlayVisibility.Hide;
+    private BoardStep _boardStep = BoardStep.Full;
     private bool _gameRunning;
     private bool _warnedAboutFullscreen;
     private bool _suspended;
@@ -73,6 +74,25 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
 
     /// <summary>True while Panic is engaged. Nothing draws.</summary>
     public bool IsSuspended => _suspended;
+
+    /// <summary>Where the board key has left the surface: full, dim or off.</summary>
+    public BoardStep BoardStep => _boardStep;
+
+    /// <summary>
+    /// The board key. Full, then dim, then off, then round. It replaced a show/hide toggle and a
+    /// three-step opacity cycle, which were two keys and five states nobody could name.
+    /// </summary>
+    public void CycleBoard()
+    {
+        _boardStep = _boardStep switch
+        {
+            BoardStep.Full => BoardStep.Dim,
+            BoardStep.Dim => BoardStep.Off,
+            _ => BoardStep.Full,
+        };
+
+        OnUi(Apply);
+    }
 
     /// <summary>The monitors the overlay can be put on, in order, for the tray submenu.</summary>
     public static IReadOnlyList<TrayDisplay> Displays() =>
@@ -249,7 +269,7 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
         //
         // Otherwise the mode decides, and it is the only thing that decides. Show from the tracker
         // means the game is up AND foreground, which is exactly what mirroring waits for.
-        var wanted = !_suspended && _settings.OverlayMode switch
+        var wanted = !_suspended && _boardStep != BoardStep.Off && _settings.OverlayMode switch
         {
             OverlayMode.Hidden => false,
             OverlayMode.MirrorGame => _visibility == OverlayVisibility.Show,
@@ -279,8 +299,10 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
         }
 
         // Mirroring only ever draws while the game is focused, and Always on is a mode the user
-        // asked for rather than a fallback, so neither is dimmed. There is nothing left to dim.
-        window.FadeTo(OverlayWindow.OpacityFor(_settings.Opacity));
+        // asked for rather than a fallback, so neither mode dims on its own. The board key is the
+        // only thing that dims, and it multiplies the chosen opacity rather than replacing it.
+        var opacity = OverlayWindow.OpacityFor(_settings.Opacity);
+        window.FadeTo(_boardStep == BoardStep.Dim ? opacity * DimFactor : opacity);
 
         // Re-asserted on every apply: a game that goes fullscreen-borderless re-creates its window
         // above ours, and Topmost alone does not win that race.

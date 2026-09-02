@@ -71,7 +71,7 @@ public static class GrammarRules
     // Slots are least-recently-released. There is no quarantine: it capped board
     // throughput at 9 rows per 20 s, below what providers clear.
     // See Decision_WarCommandSlotsAreLeastRecentlyReleased.
-    public const int LowPrioritySlotResidencySeconds = 120;
+    public const int LowPrioritySlotResidencySeconds = 60;
     public const double CoalesceRadiusUnits = 0.5;
     public const int CoalesceWindowSeconds = 60;
 }

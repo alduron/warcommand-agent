@@ -29,6 +29,8 @@ const options = {
 };
 
 const server = https.createServer(options, (req, res) => {
+  req.on('error', () => {});
+  res.on('error', () => {});
   const headers = Object.assign({}, req.headers, {
     host: `${TARGET_HOST}:${TARGET_PORT}`,
     'x-forwarded-proto': 'https',
@@ -50,6 +52,11 @@ const server = https.createServer(options, (req, res) => {
 });
 
 server.on('upgrade', (req, socket, head) => {
+  // A socket that errors with no listener throws, and node exits. Restarting the API resets every
+  // live WebSocket at once, so without these the proxy dies with the container and the next
+  // dev/run.ps1 fails on 8443 instead of on the thing that actually moved.
+  socket.on('error', () => socket.destroy());
+
   const proxySocket = net.connect(TARGET_PORT, TARGET_HOST, () => {
     let headerLines = `${req.method} ${req.url} HTTP/1.1\r\n`;
     for (let i = 0; i < req.rawHeaders.length; i += 2) {
@@ -63,6 +70,11 @@ server.on('upgrade', (req, socket, head) => {
   });
   proxySocket.on('error', () => socket.destroy());
 });
+
+// A TLS handshake the client abandons (a browser probing, an agent shutting down) arrives here.
+// It is not worth a line of output and it is certainly not worth exiting over.
+server.on('clientError', (_err, socket) => socket.destroy());
+server.on('tlsClientError', () => {});
 
 server.listen(LISTEN_PORT, () =>
   console.log(`local-tls-proxy: https://localhost:${LISTEN_PORT} -> http://${TARGET_HOST}:${TARGET_PORT}`)

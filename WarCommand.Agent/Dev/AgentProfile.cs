@@ -1,5 +1,6 @@
 ﻿using System.Linq;
 using WarCommand.Agent.Client.Storage;
+using WarCommand.Agent.Core.Settings;
 
 namespace WarCommand.Agent.Dev;
 
@@ -114,8 +115,12 @@ public sealed class AgentProfile
         var isTrayOnly = IsTruthy(Environment.GetEnvironmentVariable(TrayOnlyVariable));
         var isOverlayDemo = IsTruthy(Environment.GetEnvironmentVariable(OverlayDemoVariable));
 
+        // One build, one tray icon, one switch. The environment variable still wins so the dev
+        // scripts keep working, but a normal launch reads the choice the tray wrote.
         var isDev = isTrayOnly || isOverlayDemo || string.Equals(
-            Environment.GetEnvironmentVariable(ProfileVariable), "dev", StringComparison.OrdinalIgnoreCase);
+            Environment.GetEnvironmentVariable(ProfileVariable), "dev", StringComparison.OrdinalIgnoreCase)
+            || (Environment.GetEnvironmentVariable(ProfileVariable) is null
+                && BackendFile.Read() == AgentBackend.Local);
 
         var overrideUrl = Environment.GetEnvironmentVariable(ApiBaseUrlVariable);
         var apiBaseAddress = !string.IsNullOrWhiteSpace(overrideUrl)

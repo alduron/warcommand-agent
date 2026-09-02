@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -9,12 +9,32 @@ namespace WarCommand.Agent.Overlay;
 
 /// <summary>
 /// The panel header, as drawn in docs/design/mocks/OverlayHeader.dc.html. Two lines: who and where
-/// on the first, roles and the help chord on the second, with an amber dot when a fault is showing.
+/// on the first, roles and the contextual key hint on the second, with an amber dot on a fault.
 /// </summary>
 /// <remarks>
 /// The four faults are not the same amber word: each one names itself. A null field renders
 /// nothing rather than a placeholder.
 /// </remarks>
+/// <summary>
+/// One subscribed role on the header line: the served glyph, its hue, and the display name.
+/// </summary>
+/// <remarks>
+/// Role owns the glyph and nothing else, per Decision_WarCommandOverlayColorIsStateOnlyWebOwnsRoleHue,
+/// so the hue strokes the paths and the label stays the header's dim grey.
+/// </remarks>
+public sealed record HeaderRole
+{
+    public required string RoleId { get; init; }
+
+    public string Display { get; init; } = string.Empty;
+
+    public System.Windows.Media.Geometry? RoleGlyphFirst { get; init; }
+
+    public System.Windows.Media.Geometry? RoleGlyphSecond { get; init; }
+
+    public string RoleBrushKey { get; init; } = "RoleCommand";
+}
+
 public sealed record BoardHeader
 {
     /// <summary>'61ST / ALPHA'. Group first, then the deployment.</summary>
@@ -29,10 +49,41 @@ public sealed record BoardHeader
     /// <summary>'INVITE 921585', or a gun position. Null hides it.</summary>
     public string? Right { get; init; }
 
-    /// <summary>The viewer's subscribed roles, lowercase, space separated.</summary>
-    public string? Roles { get; init; }
+    /// <summary>The viewer's subscribed role ids. Raw until WithGlyph resolves them.</summary>
+    public IReadOnlyList<string> RoleIds { get; init; } = [];
 
-    /// <summary>'RightAlt+H ?'. The one chord that is always true.</summary>
+    /// <summary>
+    /// The same roles carrying their glyph and hue. Empty until WithGlyph runs, which is what makes
+    /// a header that skipped it render nothing rather than a line of colourless ids.
+    /// </summary>
+    public IReadOnlyList<HeaderRole> Roles { get; init; } = [];
+
+    /// <summary>
+    /// Resolves every subscribed role against the served catalog. The header is a surface, so it is
+    /// bound by the same rule the rows are: nothing reaches it without its glyph.
+    /// </summary>
+    public BoardHeader WithGlyph(RoleGlyphSource glyphs)
+    {
+        ArgumentNullException.ThrowIfNull(glyphs);
+
+        return this with
+        {
+            Roles = RoleIds.Select(id =>
+            {
+                var (first, second) = glyphs.Geometry(id);
+                return new HeaderRole
+                {
+                    RoleId = id,
+                    Display = glyphs.Display(id),
+                    RoleGlyphFirst = first,
+                    RoleGlyphSecond = second,
+                    RoleBrushKey = glyphs.BrushKey(id),
+                };
+            }).ToList(),
+        };
+    }
+
+    /// <summary>The contextual key hint, from OverlayHint.Resolve. Null draws nothing.</summary>
     public string? Hint { get; init; }
 
     /// <summary>Names itself: REQUESTS MAY BE STALE, NO MICROPHONE, and so on. Null when healthy.</summary>
@@ -143,7 +194,7 @@ public partial class BoardView : UserControl
         HeaderTitle.Text = header.Title.ToUpperInvariant();
         HeaderCount.Text = header.PeopleCount?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
         HeaderMap.Text = header.Where?.ToUpperInvariant() ?? string.Empty;
-        HeaderRoles.Text = header.Roles ?? string.Empty;
+        HeaderRoles.ItemsSource = header.Roles;
         HeaderHint.Text = header.Hint ?? string.Empty;
 
         // A fault takes the right-hand slot and turns it amber: it outranks the invite code, which
@@ -188,17 +239,22 @@ public partial class BoardView : UserControl
     /// </remarks>
     public void RenderBoard(
         IReadOnlyList<BoardRowViewModel> rows,
-        IReadOnlyList<BoardRowViewModel> secondaryStrip,
+        IReadOnlyList<BoardRowViewModel> yours,
         int overflowCount,
-        int overflowUrgentCount)
+        int overflowUrgentCount,
+        int inProgressCount = 0)
     {
         ArgumentNullException.ThrowIfNull(rows);
-        ArgumentNullException.ThrowIfNull(secondaryStrip);
+        ArgumentNullException.ThrowIfNull(yours);
 
         EmptyState.Visibility = Visibility.Collapsed;
         SpendAnimationBudget(rows);
         Reconcile(_rows, rows, RowsList);
-        Reconcile(_secondary, secondaryStrip, SecondaryList);
+        Reconcile(_secondary, yours, SecondaryList);
+        YoursSection.Visibility = yours.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        InProgressText.Text = inProgressCount > 0
+            ? $"{inProgressCount.ToString(CultureInfo.InvariantCulture)} IN PROGRESS"
+            : string.Empty;
 
         OverflowRow.Visibility = overflowCount > 0 ? Visibility.Visible : Visibility.Collapsed;
         OverflowText.Text = overflowCount > 0
@@ -216,16 +272,14 @@ public partial class BoardView : UserControl
     /// <remarks>
     /// 06-overlay-ux.md: "Animation is a budget, not a per-row property." Three or four digits
     /// pulsing turns the digit column into the moving thing, which destroys the one property that
-    /// makes a slot findable inside the 400 ms glance. CountdownWidth is the fill of a 15 s track,
+    /// makes a slot findable inside the 400 ms glance. CountdownFraction is how much life is left,
     /// so the narrowest bar is the soonest to expire and no extra field is needed to rank them.
     /// </remarks>
     private static void SpendAnimationBudget(IReadOnlyList<BoardRowViewModel> rows)
     {
-        const int barBudget = 2;
-
         var expiring = rows
             .Where(r => r.HasCountdown)
-            .OrderBy(r => r.CountdownWidth)
+            .OrderBy(r => r.CountdownFraction)
             .ToList();
 
         foreach (var row in rows)
@@ -233,11 +287,14 @@ public partial class BoardView : UserControl
             row.Pulses = false;
         }
 
-        for (var i = barBudget; i < expiring.Count; i++)
-        {
-            expiring[i].HasCountdown = false;
-        }
-
+        // Bars are no longer rationed. Every open row drains one over its 120 s, because the bar is
+        // the only thing telling its reader the row will cancel itself, and a row without one would
+        // read as staying put. The bar is a slow fill, not motion: nothing about it competes for
+        // the eye the way a pulse does.
+        //
+        // The PULSE is still a budget of exactly one, on the soonest to expire. That is what the
+        // rule was protecting: three or four digits pulsing turns the digit column into the moving
+        // thing and destroys the one property that makes a slot findable inside the 400 ms glance.
         if (expiring.Count > 0)
         {
             expiring[0].Pulses = true;

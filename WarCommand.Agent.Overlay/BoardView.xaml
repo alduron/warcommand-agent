@@ -26,7 +26,28 @@
                         <TranslateTransform x:Name="EntranceSlide" X="10" />
                     </Border.RenderTransform>
                 <Border x:Name="RowRoot" BorderThickness="0,0,0,1" BorderBrush="{StaticResource RowDivider}"
-                        Padding="0,5,9,5" Opacity="{Binding RowOpacity}" Background="{StaticResource Transparent}">
+                        Padding="0,4,9,4" Opacity="{Binding RowOpacity}" Background="{StaticResource Transparent}">
+                  <Grid>
+                    <!--
+                        The auto-cancel countdown, as a wash across the whole row rather than a bar
+                        on a line of its own. A bar cost every row a line of height on a surface
+                        that has to show nine of them, and the row is the thing expiring, so the row
+                        is what should drain. Deliberately faint: it is ambient state, not a thing
+                        to look at, and the eye is hunting the slot digit.
+                    -->
+                    <ProgressBar x:Name="TimeWashFill" Minimum="0" Maximum="1"
+                                 Value="{Binding CountdownFraction}" IsHitTestVisible="False"
+                                 Visibility="{Binding HasCountdown, Converter={StaticResource BoolToVisibility}}">
+                        <ProgressBar.Template>
+                            <ControlTemplate TargetType="ProgressBar">
+                                <Grid>
+                                    <Rectangle x:Name="PART_Track" Fill="{StaticResource Transparent}" />
+                                    <Rectangle x:Name="PART_Indicator" HorizontalAlignment="Left"
+                                               Fill="{StaticResource TimeWash}" />
+                                </Grid>
+                            </ControlTemplate>
+                        </ProgressBar.Template>
+                    </ProgressBar>
                     <DockPanel LastChildFill="True">
                         <Rectangle x:Name="EdgeBar" DockPanel.Dock="Left" Width="2" Margin="0,0,8,0"
                                    Fill="{StaticResource Transparent}" />
@@ -41,12 +62,31 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                    <Canvas Width="18" Height="18" Margin="0,0,7,0" VerticalAlignment="Center"
+                                <!-- Every cell on this line is centred. A child with no
+                                     VerticalAlignment stretches and draws its text at the top of
+                                     the box, which is what put the glyph visibly below its label. -->
+                                <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <!-- 24x24, the glyph's own box: an 18x18 canvas reserved less
+                                         than the 24-unit paths actually ink, so the icon drew low
+                                         against the type beside it. -->
+                                    <Canvas Width="24" Height="24" Margin="0,0,7,0" VerticalAlignment="Center"
                                             SnapsToDevicePixels="True">
                                         <Canvas.LayoutTransform>
                                             <ScaleTransform ScaleX="0.75" ScaleY="0.75" />
                                         </Canvas.LayoutTransform>
+                                        <!--
+                                            The row label is ALL CAPS, so its ink fills only the cap
+                                            band and sits high in its line box. Centring the two
+                                            boxes therefore leaves the glyph low by half the unused
+                                            descent, measured at 1.5px for LabelSize 14 in
+                                            Bahnschrift Condensed (caps height 0.71 em). The header
+                                            needs no nudge: its label is mixed case, and it measures
+                                            dead level already.
+                                        -->
+                                        <Canvas.RenderTransform>
+                                            <TranslateTransform Y="{StaticResource GlyphCapNudge}" />
+                                        </Canvas.RenderTransform>
                                         <Path Data="{Binding RoleGlyphFirst}" StrokeThickness="1.7"
                                               StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                               StrokeLineJoin="Round"
@@ -58,13 +98,22 @@
                                     </Canvas>
                                     <TextBlock Style="{StaticResource Up}"
                                                FontSize="{StaticResource LabelSize}"
+                                               VerticalAlignment="Center"
                                                Text="{Binding TypeAndQualifier}"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                                <TextBlock Grid.Column="1" Style="{StaticResource Mono}"
-                                           Text="{Binding CoordinatesDisplay}" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource PointLabel}"
+                                               VerticalAlignment="Center"
+                                               Text="{Binding FirstPointLabel}" />
+                                    <TextBlock Style="{StaticResource Mono}"
+                                               VerticalAlignment="Center"
+                                               Text="{Binding CoordinatesDisplay}" />
+                                </StackPanel>
                                 <TextBlock x:Name="StateWord" Grid.Column="2" Style="{StaticResource Up}"
-                                           HorizontalAlignment="Right" Text="{Binding StateWord}"
+                                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                                           Text="{Binding StateWord}"
                                            Foreground="{StaticResource Ink}" Margin="8,0,0,0" />
                             </Grid>
 
@@ -73,8 +122,12 @@
                                     <ColumnDefinition Width="150" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="1" Style="{StaticResource DimMono}"
-                                           Text="{Binding SecondPointDisplay}" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource PointLabel}"
+                                               Text="{Binding SecondPointLabel}" />
+                                    <TextBlock Style="{StaticResource DimMono}"
+                                               Text="{Binding SecondPointDisplay}" />
+                                </StackPanel>
                             </Grid>
 
                             <Grid>
@@ -85,10 +138,15 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
+                                <!--
+                                    No age number. The overlay carries only what changes a decision
+                                    inside the glance, and how old a row is does not: the countdown
+                                    bar already says how long it has left. Age still reaches the
+                                    completion event, the after-action report and the web board,
+                                    which have room for it.
+                                -->
                                 <TextBlock Grid.Column="0" Style="{StaticResource DimMono}"
                                            Text="{Binding Requester}" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Grid.Column="1" Style="{StaticResource DimMono}"
-                                           Text="{Binding AgeDisplay}" />
                                 <TextBlock Grid.Column="2" Style="{StaticResource Up}"
                                            Foreground="{StaticResource Dim}" Margin="16,0,0,0"
                                            Text="{Binding MetaExtra}" />
@@ -98,20 +156,9 @@
                                            HorizontalAlignment="Right" Text="{Binding TicketCode}" />
                             </Grid>
 
-                            <!-- The sub-15s bar. Absent above the window, which is what makes it mean
-                                 something when it appears. -->
-                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0" VerticalAlignment="Center"
-                                        Visibility="{Binding HasCountdown, Converter={StaticResource BoolToVisibility}}">
-                                <Border Width="120" Height="4" Background="{StaticResource TrackEmpty}"
-                                        VerticalAlignment="Center">
-                                    <Rectangle x:Name="CountdownFill" HorizontalAlignment="Left" Height="4"
-                                               Width="{Binding CountdownWidth}" Fill="{StaticResource Dim}" />
-                                </Border>
-                                <TextBlock Style="{StaticResource DimMono}" Margin="8,0,0,0"
-                                           Text="{Binding CountdownText}" />
-                            </StackPanel>
                         </StackPanel>
                     </DockPanel>
+                  </Grid>
                 </Border>
                 </Border>
                 <DataTemplate.Triggers>
@@ -167,7 +214,6 @@
                         <Setter TargetName="EdgeBar" Property="Fill" Value="{StaticResource Yours}" />
                         <Setter TargetName="Slot" Property="Foreground" Value="{StaticResource Yours}" />
                         <Setter TargetName="StateWord" Property="Foreground" Value="{StaticResource Yours}" />
-                        <Setter TargetName="CountdownFill" Property="Fill" Value="{StaticResource Ink}" />
                     </DataTrigger>
                     <DataTrigger Binding="{Binding Accent}" Value="Warned">
                         <Setter TargetName="EdgeBar" Property="Fill" Value="{StaticResource Warn}" />
@@ -183,24 +229,72 @@
 
             <!-- The requester's own strip: ticket, type, point, then who has it. -->
             <DataTemplate x:Key="StripRowTemplate" DataType="{x:Type local:BoardRowViewModel}">
-                <Border Background="{DynamicResource PanelGround}" BorderBrush="{StaticResource Edge}"
-                        BorderThickness="1,0,1,1" Padding="9,4">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource DimMono}" Text="{Binding TicketCode}" />
-                        <TextBlock Grid.Column="1" Style="{StaticResource Up}" Foreground="{StaticResource Dim}"
-                                   Margin="10,0,0,0" Text="{Binding TypeAndQualifier}" />
-                        <TextBlock Grid.Column="2" Style="{StaticResource DimMono}" Margin="10,0,0,0"
-                                   Text="{Binding CoordinatesDisplay}" />
-                        <TextBlock Grid.Column="3" Style="{StaticResource Up}" Foreground="{StaticResource Squad}"
-                                   HorizontalAlignment="Right" Margin="10,0,0,0" Text="{Binding StateWord}" />
-                    </Grid>
+                <Border x:Name="StripRoot" Background="{DynamicResource PanelGround}"
+                        BorderBrush="{StaticResource Edge}" BorderThickness="1,0,1,1" Padding="0,4,9,4">
+                    <DockPanel LastChildFill="True">
+                        <!--
+                            06-overlay-ux.md: green left edge for the row you took, amber for the
+                            row taken off you. One coloured word at the far right was the whole
+                            signal, and at a glance across a dim strip it read as no signal at all.
+                        -->
+                        <Rectangle x:Name="StripEdge" DockPanel.Dock="Left" Width="2" Margin="0,0,7,0"
+                                   Fill="{StaticResource Transparent}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="StripTicket" Grid.Column="0" VerticalAlignment="Center"
+                                       Style="{StaticResource DimMono}" Text="{Binding TicketCode}" />
+                            <TextBlock x:Name="StripType" Grid.Column="1" VerticalAlignment="Center"
+                                       Style="{StaticResource Up}" Foreground="{StaticResource Dim}"
+                                       Margin="10,0,0,0" Text="{Binding TypeAndQualifier}" />
+                            <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                       Style="{StaticResource DimMono}" Margin="10,0,0,0"
+                                       Text="{Binding CoordinatesDisplay}" />
+                            <!--
+                                The two halves of a claim do not look alike. Green [YOU] is a job
+                                you took; amber is a request of yours somebody else took, which is
+                                news. One colour for both was the bug: they read as the same event.
+                            -->
+                            <TextBlock x:Name="StripState" Grid.Column="3" VerticalAlignment="Center"
+                                       HorizontalAlignment="Right" Margin="10,0,0,0" Text="{Binding StateWord}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Up}">
+                                        <Setter Property="Foreground" Value="{StaticResource Squad}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Accent}" Value="Mine">
+                                                <Setter Property="Foreground" Value="{StaticResource Yours}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Accent}" Value="Warned">
+                                                <Setter Property="Foreground" Value="{StaticResource Warn}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </DockPanel>
                 </Border>
+                <DataTemplate.Triggers>
+                    <!-- Green: a job you are expected to act on. The edge, the ticket and the type
+                         all carry it, so the row reads as yours before the eye reaches the word. -->
+                    <DataTrigger Binding="{Binding Accent}" Value="Mine">
+                        <Setter TargetName="StripEdge" Property="Fill" Value="{StaticResource Yours}" />
+                        <Setter TargetName="StripTicket" Property="Foreground" Value="{StaticResource Yours}" />
+                        <Setter TargetName="StripType" Property="Foreground" Value="{StaticResource Yours}" />
+                    </DataTrigger>
+                    <!-- Amber: somebody took your request, so you are waiting on them. Same wash
+                         the board row uses for a taken row, so the two agree. -->
+                    <DataTrigger Binding="{Binding Accent}" Value="Warned">
+                        <Setter TargetName="StripEdge" Property="Fill" Value="{StaticResource Warn}" />
+                        <Setter TargetName="StripTicket" Property="Foreground" Value="{StaticResource Warn}" />
+                        <Setter TargetName="StripType" Property="Foreground" Value="{StaticResource Warn}" />
+                        <Setter TargetName="StripRoot" Property="Background" Value="{StaticResource TakenWash}" />
+                    </DataTrigger>
+                </DataTemplate.Triggers>
             </DataTemplate>
         </ResourceDictionary>
     </UserControl.Resources>
@@ -245,8 +339,48 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock x:Name="HeaderRoles" Grid.Column="0" Style="{StaticResource Up}"
-                                               FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}" />
+                                    <ItemsControl x:Name="HeaderRoles" Grid.Column="0">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,7,0"
+                                                            ToolTip="{Binding Display}">
+                                                    <!-- 24x24 because that is the glyph's own box.
+                                                         A smaller canvas reserves less than the ink
+                                                         and the icon sits low beside its label. -->
+                                                    <Canvas Width="24" Height="24" Margin="0,0,4,0"
+                                                            VerticalAlignment="Center" SnapsToDevicePixels="True">
+                                                        <Canvas.LayoutTransform>
+                                                            <ScaleTransform ScaleX="0.55" ScaleY="0.55" />
+                                                        </Canvas.LayoutTransform>
+                                                        <Path Data="{Binding RoleGlyphFirst}" StrokeThickness="1.7"
+                                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                              StrokeLineJoin="Round"
+                                                              Stroke="{Binding RoleBrushKey, Converter={StaticResource RoleBrush}}" />
+                                                        <Path Data="{Binding RoleGlyphSecond}" StrokeThickness="1.7"
+                                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                              StrokeLineJoin="Round"
+                                                              Stroke="{Binding RoleBrushKey, Converter={StaticResource RoleBrush}}" />
+                                                    </Canvas>
+                                                    <!--
+                                                        Glyph only, no label. These are the
+                                                        viewer's OWN roles, which they chose and
+                                                        which change only when they change them,
+                                                        so the name is a word they already know.
+                                                        Safe here and only here: all 14 role icons
+                                                        are unique, checked by
+                                                        RoleGlyphCentringTests. A board ROW cannot
+                                                        do this, because its icon is the role's and
+                                                        eleven roles serve several types.
+                                                    -->
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                     <TextBlock x:Name="HeaderHint" Grid.Column="1" Style="{StaticResource Up}"
                                                FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}"
                                                HorizontalAlignment="Right" Margin="8,0,0,0" />
@@ -262,6 +396,10 @@
                                            Foreground="{StaticResource Dim}" />
                                 <TextBlock x:Name="OverflowUrgentText" Style="{StaticResource Up}"
                                            Foreground="{StaticResource Urgent}" Margin="16,0,0,0" />
+                                <!-- Everything somebody else is already on, as one line. Enough to
+                                     stop a second call on the same target, with nothing to read. -->
+                                <TextBlock x:Name="InProgressText" Style="{StaticResource Up}"
+                                           Foreground="{StaticResource Dim}" Margin="16,0,0,0" />
                             </StackPanel>
                         </Border>
 
@@ -277,7 +415,15 @@
                     </StackPanel>
                 </Border>
 
-                <ItemsControl x:Name="SecondaryList" ItemTemplate="{StaticResource StripRowTemplate}" />
+                <!-- YOURS: the rows this viewer is one half of. Foot of the board, because the top
+                     belongs to work that still needs a taker. -->
+                <StackPanel x:Name="YoursSection" Visibility="Collapsed">
+                    <Border Padding="9,5,9,2">
+                        <TextBlock x:Name="YoursLabel" Style="{StaticResource Up}"
+                                   Foreground="{StaticResource Dim}" Text="YOURS" />
+                    </Border>
+                    <ItemsControl x:Name="SecondaryList" ItemTemplate="{StaticResource StripRowTemplate}" />
+                </StackPanel>
 
                 <Border x:Name="DevPanel" Margin="0,10,0,0" Padding="9,6" Background="{StaticResource Surface}"
                         BorderBrush="{StaticResource Edge}" BorderThickness="1" Visibility="Collapsed">

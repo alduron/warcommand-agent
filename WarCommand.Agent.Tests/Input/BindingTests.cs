@@ -6,22 +6,21 @@ namespace WarCommand.Agent.Tests.Input;
 public class BindingTests
 {
     [Fact]
-    public void Defaults_are_the_right_alt_chord_set_with_no_ptt()
+    public void Defaults_are_two_chords_an_escape_and_no_ptt()
     {
         var bindings = BindingSet.Defaults();
 
         Assert.False(bindings.PttChosen);
-        Assert.Equal("RightAlt+B", bindings[BindingAction.ToggleBoard].Label);
-        Assert.Equal("RightAlt+O", bindings[BindingAction.CycleOpacity].Label);
-        Assert.Equal("RightAlt+D", bindings[BindingAction.DeploymentPicker].Label);
-        Assert.Equal("RightAlt+R", bindings[BindingAction.Roles].Label);
-        Assert.Equal("RightAlt+M", bindings[BindingAction.Participants].Label);
-        Assert.Equal("RightAlt+G", bindings[BindingAction.GunPosition].Label);
-        Assert.Equal("RightAlt+L", bindings[BindingAction.LinkAccount].Label);
-        Assert.Equal("RightAlt+C", bindings[BindingAction.CopyCoordinate].Label);
-        Assert.Equal("RightAlt+H", bindings[BindingAction.Help].Label);
+        Assert.Equal("RightAlt+B", bindings[BindingAction.Board].Label);
         Assert.Equal("RightAlt+P", bindings[BindingAction.Panic].Label);
         Assert.Equal("Escape", bindings[BindingAction.Escape].Label);
+    }
+
+    [Fact]
+    public void The_whole_hotkey_surface_is_four_bindings()
+    {
+        Assert.Equal(4, BindingActions.All.Count);
+        Assert.Equal(4, BindingSet.Defaults().All.Count());
     }
 
     [Fact]
@@ -29,12 +28,12 @@ public class BindingTests
     {
         var bindings = BindingSet.Defaults();
 
-        var result = bindings.Rebind(BindingAction.Roles, Chord.RightAlt("B"));
+        var result = bindings.Rebind(BindingAction.Panic, Chord.RightAlt("B"));
 
         Assert.Equal(RebindStatus.RefusedConflict, result.Status);
-        Assert.Equal(BindingAction.ToggleBoard, result.ConflictsWith);
-        Assert.Equal("Show or hide the board", BindingActions.Display(result.ConflictsWith));
-        Assert.Equal("RightAlt+R", bindings[BindingAction.Roles].Label);
+        Assert.Equal(BindingAction.Board, result.ConflictsWith);
+        Assert.Equal("Board: full, dim, off", BindingActions.Display(result.ConflictsWith));
+        Assert.Equal("RightAlt+P", bindings[BindingAction.Panic].Label);
     }
 
     [Fact]
@@ -43,7 +42,7 @@ public class BindingTests
         var bindings = BindingSet.Defaults();
         bindings.Rebind(BindingAction.Ptt, Chord.Bare("Mouse5"));
 
-        var result = bindings.Rebind(BindingAction.GunPosition, Chord.Bare("Mouse5"));
+        var result = bindings.Rebind(BindingAction.Board, Chord.Bare("Mouse5"));
 
         Assert.Equal(RebindStatus.RefusedConflict, result.Status);
         Assert.Equal(BindingAction.Ptt, result.ConflictsWith);
@@ -54,7 +53,7 @@ public class BindingTests
     {
         var bindings = BindingSet.Defaults();
 
-        Assert.True(bindings.Rebind(BindingAction.Roles, Chord.RightAlt("R")).Applied);
+        Assert.True(bindings.Rebind(BindingAction.Board, Chord.RightAlt("B")).Applied);
     }
 
     [Fact]

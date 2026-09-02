@@ -1,4 +1,4 @@
-﻿namespace WarCommand.Agent.Core.Settings;
+namespace WarCommand.Agent.Core.Settings;
 
 /// <summary>Where the overlay sits. From the Overlay tab of docs/design/mocks/TraySettings.dc.html.</summary>
 public enum OverlayAnchor
@@ -15,6 +15,17 @@ public enum OverlayOpacity
     Low = 0,
     Normal,
     High,
+}
+
+/// <summary>
+/// What the board key cycles through. One key, three states, in this order. Transient: it never
+/// rewrites <see cref="AgentSettings.Opacity"/>, which still says how bright Full is.
+/// </summary>
+public enum BoardStep
+{
+    Full = 0,
+    Dim,
+    Off,
 }
 
 /// <summary>What the overlay does while the game is not the foreground window.</summary>

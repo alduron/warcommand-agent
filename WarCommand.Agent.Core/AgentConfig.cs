@@ -43,8 +43,21 @@ public sealed record ConfigDeployment
 
     public int MemberCount { get; init; }
 
+    /// <summary>
+    /// This account's ops participant id in this deployment. Every board row is keyed on it, and it
+    /// is NOT the membership id: passing the membership id leaves no row ever reading as the
+    /// viewer's, so YOURS stays empty and the viewer's own claims count as in progress elsewhere.
+    /// </summary>
+    public Guid? ParticipantId { get; init; }
+
     /// <summary>Six digits, rendered in the overlay header. Re-emitted on deployment.roster when rotated.</summary>
     public string? InviteCode { get; init; }
+
+    /// <summary>
+    /// When this account last entered this deployment. The agent stands on the most recent one: an
+    /// account in several groups at once has a live deployment in each, and list order is not it.
+    /// </summary>
+    public DateTimeOffset? EnteredAt { get; init; }
 }
 
 /// <summary>One group the device is paired into.</summary>

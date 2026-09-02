@@ -64,7 +64,7 @@ public class InputBridgeTests
         }
 
         Assert.Equal(1, harness.Ptt.Downs);
-        Assert.Contains(BindingAction.ToggleBoard, harness.Chords.Invoked);
+        Assert.Contains(BindingAction.Board, harness.Chords.Invoked);
         Assert.Contains(BindingAction.Escape, harness.Chords.Invoked);
     }
 

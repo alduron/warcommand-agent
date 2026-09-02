@@ -1,3 +1,4 @@
+using System.Linq;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 
@@ -15,6 +16,8 @@ public class MenuStateMachineTests
     private static MenuTree Tree => MenuTree.Compile(ContractFixtures.Catalog);
 
     private static MenuStateMachine Machine() => new(Tree, ContractFixtures.Catalog);
+
+    private static MenuContext Slots(params int[] slots) => new() { OccupiedSlots = slots };
 
     [Theory]
     [InlineData(MenuKeyClass.Digit, true)]
@@ -227,7 +230,7 @@ public class MenuStateMachineTests
     public void Zero_board_then_a_slot_then_a_verb_runs_it_immediately()
     {
         var menu = Machine();
-        menu.Open(T0, Snapshot, occupiedSlots: [1, 4]);
+        menu.Open(T0, Snapshot, Slots(1, 4));
 
         menu.Digit(0, T0);
         Assert.Equal(MenuLevel.Board, menu.Level);
@@ -241,17 +244,70 @@ public class MenuStateMachineTests
     }
 
     [Fact]
-    public void Seven_twice_always_reaches_join_even_on_a_saturated_board()
+    public void Zero_reaches_more_even_on_a_saturated_board()
     {
         var menu = Machine();
-        menu.Open(T0, Snapshot, occupiedSlots: [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        menu.Open(T0, Snapshot, Slots(1, 2, 3, 4, 5, 6, 7, 8, 9));
 
         menu.Digit(0, T0);
-        menu.Digit(7, T0);
-        Assert.Equal(MenuLevel.BoardAction, menu.Level);
+        menu.Digit(0, T0);
 
-        menu.Digit(7, T0);
-        Assert.Equal(MenuLevel.Join, menu.Level);
+        Assert.Equal(MenuLevel.More, menu.Level);
+    }
+
+    [Fact]
+    public void More_offers_restart_and_link_only_when_the_context_allows_them()
+    {
+        var menu = Machine();
+        menu.Open(T0, Snapshot, new MenuContext { OccupiedSlots = [1] });
+        menu.Digit(0, T0);
+        menu.Digit(0, T0);
+
+        var offered = menu.Options.Select(o => o.VerbId).ToList();
+        Assert.Contains("help", offered);
+        Assert.Contains("gun", offered);
+        Assert.DoesNotContain("restart", offered);
+        Assert.DoesNotContain("link", offered);
+        Assert.Equal(MenuOutcome.None, menu.Digit(7, T0));
+
+        menu.Open(T0, Snapshot, new MenuContext { CanRestart = true, LinkPromptPending = true });
+        menu.Digit(0, T0);
+        menu.Digit(0, T0);
+
+        Assert.Equal("restart", Assert.IsType<MenuPanelRequested>(menu.Digit(7, T0)).PanelId);
+    }
+
+    [Fact]
+    public void A_panel_closes_the_menu_and_gun_here_commits_the_key_down_snapshot()
+    {
+        var menu = Machine();
+        menu.Open(T0, Snapshot);
+        menu.Digit(0, T0);
+        menu.Digit(0, T0);
+
+        Assert.Equal("roles", Assert.IsType<MenuPanelRequested>(menu.Digit(2, T0)).PanelId);
+        Assert.False(menu.IsOpen);
+
+        menu.Open(T0, Snapshot);
+        menu.Digit(0, T0);
+        menu.Digit(0, T0);
+
+        Assert.Equal(Snapshot, Assert.IsType<MenuGunPositionSet>(menu.Digit(5, T0)).Point);
+        Assert.False(menu.IsOpen);
+    }
+
+    [Fact]
+    public void Copy_is_a_row_verb_now_that_the_chord_is_gone()
+    {
+        var menu = Machine();
+        menu.Open(T0, Snapshot, Slots(3));
+        menu.Digit(0, T0);
+        menu.Digit(3, T0);
+
+        var action = Assert.IsType<MenuBoardAction>(menu.Digit(7, T0));
+
+        Assert.Equal("copy", action.VerbId);
+        Assert.Equal(3, action.Slot);
     }
 
     [Fact]
@@ -260,7 +316,12 @@ public class MenuStateMachineTests
         var menu = Machine();
         menu.Open(T0, Snapshot);
         menu.Digit(0, T0);
-        menu.Digit(7, T0);
+        menu.Digit(0, T0);
+        menu.Digit(6, T0);
+
+        // Six digits is not a hold, so the level detaches from the key and a release changes nothing.
+        Assert.True(menu.IsLatched);
+        Assert.Equal(MenuOutcome.None, menu.KeyUp(T0));
 
         foreach (var digit in new[] { 9, 2, 1, 5, 8 })
         {
@@ -273,17 +334,22 @@ public class MenuStateMachineTests
     }
 
     [Fact]
-    public void Zero_reaches_help_at_both_board_levels()
+    public void Zero_zero_one_reaches_help_and_backspace_walks_back_out()
     {
         var menu = Machine();
-        menu.Open(T0, Snapshot, occupiedSlots: [1]);
+        menu.Open(T0, Snapshot, Slots(1));
         menu.Digit(0, T0);
-        Assert.IsType<MenuHelpRequested>(menu.Digit(0, T0));
+        menu.Digit(0, T0);
+        Assert.Equal("help", Assert.IsType<MenuPanelRequested>(menu.Digit(1, T0)).PanelId);
 
-        menu.Open(T0, Snapshot, occupiedSlots: [1]);
+        menu.Open(T0, Snapshot, Slots(1));
         menu.Digit(0, T0);
-        menu.Digit(1, T0);
-        Assert.IsType<MenuHelpRequested>(menu.Digit(0, T0));
+        menu.Digit(0, T0);
+        menu.Backspace(T0);
+        Assert.Equal(MenuLevel.Board, menu.Level);
+
+        menu.Backspace(T0);
+        Assert.Equal(MenuLevel.Root, menu.Level);
     }
 
     [Fact]

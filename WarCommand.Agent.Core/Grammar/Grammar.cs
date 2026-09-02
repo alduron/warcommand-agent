@@ -106,7 +106,7 @@ public sealed record GrammarContext
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(enabledRoleIds);
 
-        var visible = board.Rows.Concat(board.Overflow).Concat(board.SecondaryStrip).ToList();
+        var visible = board.Rows.Concat(board.Overflow).Concat(board.Yours).ToList();
         var held = visible.Where(r => r.IsClaimedBy(board.ViewerParticipantId)).ToList();
 
         return new GrammarContext

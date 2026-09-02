@@ -55,9 +55,17 @@ public sealed class BoardState
 
     public SlotAllocator Allocator { get; }
 
-    /// <summary>Rows holding a digit, ascending by slot. Never re-sorted for priority or age.</summary>
+    /// <summary>
+    /// Rows holding a digit, ascending by slot. Never re-sorted for priority or age.
+    /// </summary>
+    /// <remarks>
+    /// Excludes anything drawn in <see cref="Yours"/>. A row the viewer claimed keeps its digit so
+    /// 'done 4' still reaches it, but it draws once, at the foot, not twice.
+    /// </remarks>
     public IReadOnlyList<BoardRow> Rows =>
-        [.. _rows.Values.Where(r => r.HoldsSlot && Visible(r)).OrderBy(r => r.Slot!.Value)];
+        [.. _rows.Values
+            .Where(r => r.HoldsSlot && Visible(r) && !r.RendersInYours(ViewerParticipantId))
+            .OrderBy(r => r.Slot!.Value)];
 
     /// <summary>
     /// Open rows with no digit, in admission order. Visible in the overflow line and not claimable
@@ -68,12 +76,22 @@ public sealed class BoardState
             .Where(r => Visible(r) && r.IsOpen && !r.HoldsSlot)
             .Order(AdmissionOrder.Instance)];
 
-    /// <summary>Rows held by somebody else. Dim, no digit, visible to same-role subscribers.</summary>
-    public IReadOnlyList<BoardRow> SecondaryStrip =>
+    /// <summary>
+    /// Held rows this viewer is one half of: they took it, or they asked for it. The YOURS section
+    /// at the foot of the board. No digit, and never re-sorted into the claimable queue.
+    /// </summary>
+    public IReadOnlyList<BoardRow> Yours =>
         [.. _rows.Values
-            .Where(r => Visible(r) && r.RendersOnSecondaryStrip(ViewerParticipantId))
+            .Where(r => Visible(r) && r.RendersInYours(ViewerParticipantId))
             .OrderBy(r => r.CreatedAt)
             .ThenBy(r => r.Id)];
+
+    /// <summary>
+    /// How many held rows this viewer has no part in. Rendered as the single IN PROGRESS count and
+    /// never as rows: enough to know work is already running before calling the same target again.
+    /// </summary>
+    public int InProgressCount =>
+        _rows.Values.Count(r => Visible(r) && r.CountsAsInProgress(ViewerParticipantId));
 
     /// <summary>Every row the board is tracking, hidden ones included.</summary>
     public IReadOnlyCollection<BoardRow> All => _rows.Values;
