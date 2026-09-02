@@ -176,6 +176,23 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
     private string? _countdownText;
 
+    /// <summary>
+    /// The one pulsing slot digit. Never set by the row itself: it is a board-wide budget, and
+    /// BoardView is the only thing that can see the whole board to spend it.
+    /// </summary>
+    /// <remarks>
+    /// 06-overlay-ux.md: "Only one slot digit pulses at a time, the soonest to expire... With 300 s
+    /// TTL types at saturation three or four would pulse at once, which turns the digit column into
+    /// the moving thing and destroys the one property that makes it findable."
+    /// </remarks>
+    public bool Pulses
+    {
+        get => _pulses;
+        set => Set(ref _pulses, value);
+    }
+
+    private bool _pulses;
+
     /// <inheritdoc />
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -206,6 +223,8 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         HasCountdown = other.HasCountdown;
         CountdownWidth = other.CountdownWidth;
         CountdownText = other.CountdownText;
+
+        // Pulses is deliberately not copied. It is the board's budget, applied after the reconcile.
     }
 
     private void Set<T>(ref T field, T value, [CallerMemberName] string? property = null)

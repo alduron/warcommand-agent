@@ -25,6 +25,24 @@ HKCU Run value the tray's `Start with Windows` row reads, so the two can never d
 The version comes from the tag and from nowhere else, so a build cannot disagree with the tag it
 was cut from. `v1.4.0` must be `MAJOR.MINOR.PATCH`; the workflow refuses anything else.
 
+## How a user launches it
+
+The agent lives in the tray and has no window of its own, so "it is not running and I cannot find
+it" is the first support question this product will get. Three answers, and they are one setting:
+
+- The installer puts **one shortcut straight into Programs**, not into a program group folder, so
+  typing `WarCommand` into the Windows search bar finds it. A desktop shortcut is an unchecked
+  option on the same page.
+- Clicking that shortcut **while the agent is already running raises its window** instead of doing
+  nothing. The second launch loses the single-instance mutex, signals the running one through a
+  session-scoped named event, and exits.
+- `Start WarCommand when I sign in` is checked by default and writes the same HKCU Run value the
+  tray's `Start with Windows` row reads, so the two can never disagree.
+
+The tray icon itself lands in Windows 11's `^` overflow flyout on a first run, which looks like
+nothing started. The agent shows a balloon saying where it is. Pinning it is Settings >
+Personalization > Taskbar > Other system tray icons.
+
 ## How it reaches users
 
 ```

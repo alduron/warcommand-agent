@@ -1,11 +1,14 @@
-# The tray's own iteration loop: no docker, no TLS proxy, no API, no window.
+# The overlay's own iteration loop: no docker, no TLS proxy, no API, no game.
 #
-# Launches the tray icon and nothing else, and rebuilds and relaunches on every save. Right-click
-# the icon for the menu; "Dev: force icon state" switches green/amber/grey with no socket, which is
-# the whole point of this loop. See DEVELOPING.md.
+# Draws the in-game surface on the primary monitor with the board from docs/design/06-overlay-ux.md,
+# and rebuilds and relaunches on every save. Wardogs is not out, so this is the only way to look at
+# the overlay at all. See DEVELOPING.md.
 #
-#   .\dev\tray.ps1            # watch loop, rebuilds on save
-#   .\dev\tray.ps1 -Once      # single launch, no watcher
+#   .\dev\overlay.ps1            # watch loop, rebuilds on save
+#   .\dev\overlay.ps1 -Once      # single launch, no watcher
+#
+# The surface is click-through and cannot be focused or closed by clicking it. Quit from the tray
+# icon, or stop this script.
 
 [CmdletBinding()]
 param(
@@ -20,7 +23,7 @@ $repo = Split-Path -Parent $PSScriptRoot
 # the published artefact is WarCommand.exe, a dotnet run is WarCommand.Agent.
 Get-Process WarCommand, WarCommand.Agent -ErrorAction SilentlyContinue | Stop-Process -Force
 
-$env:WARCOMMAND_TRAY_ONLY = '1'
+$env:WARCOMMAND_OVERLAY_DEMO = '1'
 
 if ($Once) {
     dotnet run --project (Join-Path $repo 'WarCommand.Agent')

@@ -1,4 +1,4 @@
-
+﻿
 using System.Windows.Threading;
 using WarCommand.Agent.Core.Settings;
 using WarCommand.Agent.Input;
@@ -15,8 +15,15 @@ namespace WarCommand.Agent.Game;
 /// the watcher's timer thread and is marshalled onto the UI dispatcher here rather than at each
 /// call site.
 /// </remarks>
-public sealed class OverlayController : IGameWindowSink, IDisposable
+public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposable
 {
+    /// <summary>
+    /// What Dim multiplies the chosen opacity by. Dim is still readable at a glance from a second
+    /// monitor; it is not "nearly gone", which would make the mode useless to the people who ask
+    /// for it.
+    /// </summary>
+    private const double DimFactor = 0.5;
+
     private readonly Dispatcher _dispatcher;
     private readonly Func<OverlayWindow> _factory;
     private readonly Action<string, string>? _notify;
@@ -27,6 +34,7 @@ public sealed class OverlayController : IGameWindowSink, IDisposable
     private OverlayVisibility _visibility = OverlayVisibility.Hide;
     private bool _gameRunning;
     private bool _warnedAboutFullscreen;
+    private bool _suspended;
     private bool _disposed;
 
     /// <summary>Creates the controller. The window is not built until it first has to draw.</summary>
@@ -61,6 +69,9 @@ public sealed class OverlayController : IGameWindowSink, IDisposable
     /// <summary>True while the surface is actually on screen.</summary>
     public bool IsDrawing => _window is { IsVisible: true };
 
+    /// <summary>True while Panic is engaged. Nothing draws.</summary>
+    public bool IsSuspended => _suspended;
+
     /// <summary>
     /// What the tray row says beside "Overlay". Null when it is drawing and the row reads a plain
     /// on; otherwise the reason it is not, which is nearly always that the game is not up.
@@ -69,6 +80,11 @@ public sealed class OverlayController : IGameWindowSink, IDisposable
     {
         get
         {
+            if (_suspended)
+            {
+                return "panic";
+            }
+
             if (!_settings.OverlayEnabled)
             {
                 return null;
@@ -143,6 +159,30 @@ public sealed class OverlayController : IGameWindowSink, IDisposable
             "Wardogs > Settings > Display. Until then, the board is in second-screen mode.");
     }
 
+    /// <summary>
+    /// Panic. The surface stops drawing on the same press as every other subsystem, and it goes
+    /// straight to hidden rather than fading: a kill switch that takes 180 ms to finish is not one.
+    /// </summary>
+    /// <remarks>
+    /// Binding rule 7. <see cref="WarCommand.Agent.Input.PanicSubsystem.OverlayDrawing"/> is what
+    /// this registers as, and <c>PanicSwitch.Arm</c> refuses to arm until it does.
+    /// </remarks>
+    public void Suspend()
+    {
+        _suspended = true;
+        OnUi(() => _window?.HideNow());
+    }
+
+    /// <summary>
+    /// Panic released. The visibility is re-derived from the tracker rather than restored from
+    /// whatever was held before, so a game that closed while suspended does not come back drawing.
+    /// </summary>
+    public void Resume()
+    {
+        _suspended = false;
+        OnUi(Apply);
+    }
+
     /// <summary>Not this subsystem's concern. Hotkeys are gated in the input bridge.</summary>
     public void HotkeysEnabled(bool enabled)
     {
@@ -180,11 +220,16 @@ public sealed class OverlayController : IGameWindowSink, IDisposable
             return;
         }
 
-        var wanted = _settings.OverlayEnabled && _visibility != OverlayVisibility.Hide;
+        // Panic outranks every other input. Suspended means nothing draws, whatever the game,
+        // the settings or the tracker say.
+        var wanted = !_suspended
+            && _settings.OverlayEnabled
+            && _visibility != OverlayVisibility.Hide;
 
         if (!wanted)
         {
-            _window?.Hide();
+            // Faded out, not switched off. An alt-tab to Discord should not read as a crash.
+            _window?.FadeOutAndHide();
             StateChanged?.Invoke(this, EventArgs.Empty);
             return;
         }
@@ -204,12 +249,7 @@ public sealed class OverlayController : IGameWindowSink, IDisposable
         }
 
         var opacity = OverlayWindow.OpacityFor(_settings.Opacity);
-        window.Opacity = _visibility == OverlayVisibility.Dim ? opacity * 0.5 : opacity;
-
-        if (!window.IsVisible)
-        {
-            window.Show();
-        }
+        window.FadeTo(_visibility == OverlayVisibility.Dim ? opacity * DimFactor : opacity);
 
         // Re-asserted on every apply: a game that goes fullscreen-borderless re-creates its window
         // above ours, and Topmost alone does not win that race.

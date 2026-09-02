@@ -413,7 +413,14 @@ public partial class App : Application, IDisposable
     /// </summary>
     private void StartUpdateChecks(AgentPaths paths, FileClientLog log)
     {
-        _updates = new UpdateDownloader(new HttpClient(), paths, log);
+        // HttpClient's 100-second default covers the whole operation, streamed body included, so a
+        // 59 MB installer needs a sustained 5 Mbps to beat it. Below that the transfer is cancelled
+        // mid-stream, the cancellation is swallowed as "try again later", and the agent retries for
+        // ever and never updates. The shutdown token is what bounds this transfer.
+        _updates = new UpdateDownloader(
+            new HttpClient { Timeout = Timeout.InfiniteTimeSpan },
+            paths,
+            log);
         _updateLog = log;
 
         var timer = new DispatcherTimer { Interval = UpdateCheckInterval };

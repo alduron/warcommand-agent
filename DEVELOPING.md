@@ -46,6 +46,36 @@ The menu itself is not developed by launching anything. `TrayMenu.Build` in
 does not render at all, which is why the menu can ship before speech, capture, hotkeys and the
 settings window exist: each one arrives as a filled-in field, not a rewrite.
 
+## 0b. The overlay, on its own
+
+Wardogs is not out, so the in-game surface cannot be looked at by running the game. This draws it on
+the primary monitor with the board from `docs/design/06-overlay-ux.md`, and nothing else:
+
+```powershell
+.\dev\overlay.ps1          # rebuilds and relaunches on every save
+.\dev\overlay.ps1 -Once    # single launch
+```
+
+That sets `WARCOMMAND_OVERLAY_DEMO=1`, which implies the dev profile and stops the startup sequence
+after the surface. **The overlay is click-through and cannot be focused**, so it cannot be closed by
+clicking it: quit from the tray icon, or stop the script.
+
+What the loop is for: anchor, width and opacity from the Overlay tab, the row anatomy, the entrance
+and exit transitions, the one pulsing slot digit, and how the scrim reads over a bright ground.
+
+**With the real game, the surface follows it, not the monitor.** `GameWindowWatcher` polls for a
+window owned by a process in `game.process_names`, and `OverlayLayout.Place` anchors inside that
+window's client rect. Out of process and by window handle only: nothing is opened, read or injected.
+
+**It hides when the game is not focused.** That is the default and it is deliberate: a topmost
+layered window that keeps drawing coordinates, callsigns and ticket codes draws them over Discord, a
+browser and a live stream. `Overlay when unfocused` on the Overlay tab switches that to `Dim` for a
+deliberate second-monitor setup, and Dim is what the demo loop leans on to draw with no game at all.
+
+**Exclusive fullscreen is a hard limit, not a bug.** A topmost layered window does not draw over it.
+The agent detects it, raises a tray balloon naming the setting to change, and second-screen mode
+carries on.
+
 ## 1. Start the local stack
 
 From the umbrella repo root:

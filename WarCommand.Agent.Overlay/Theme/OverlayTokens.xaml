@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     The overlay's design tokens, from docs/design/mocks/_ovl.css. This dictionary is the only place
     a colour or a font is named: nothing under WarCommand.Agent.Overlay writes a literal hex.
 
@@ -21,7 +21,10 @@
     <SolidColorBrush x:Key="Scrim" Color="#AD0E1012" />
     <SolidColorBrush x:Key="Edge" Color="#29FFFFFF" />
     <SolidColorBrush x:Key="RowDivider" Color="#17FFFFFF" />
-    <SolidColorBrush x:Key="TrackEmpty" Color="#38FFFFFF" />
+    <!-- OverlayRows.dc.html is the definitive row gallery: a 4px track at .15. The .22 that was
+         here is OverlayBoard.dc.html's 3px track, so the height came from one artboard and the
+         alpha from the other. -->
+    <SolidColorBrush x:Key="TrackEmpty" Color="#26FFFFFF" />
     <SolidColorBrush x:Key="BoxEdge" Color="#8CFFFFFF" />
     <SolidColorBrush x:Key="Transparent" Color="#00000000" />
     <SolidColorBrush x:Key="TakenWash" Color="#24F0A020" />
@@ -55,14 +58,27 @@
     <!-- Every panel is 380 wide, on every screen in the mocks. -->
     <sys:Double x:Key="PanelWidth">380</sys:Double>
 
+    <!-- _ovl.css .panel text-shadow. Applied only over the game, through PanelTextEffect: in the
+         settings window there is no terrain to lift text off. -->
     <DropShadowEffect x:Key="TextScrim" BlurRadius="4" ShadowDepth="1" Direction="270"
                       Color="#000000" Opacity="0.85" />
+
+    <!-- OverlayRows.dc.html: the expiring row's slot digit carries a 10px white glow. -->
+    <DropShadowEffect x:Key="SlotGlow" BlurRadius="10" ShadowDepth="0" Color="#FFFFFF"
+                      Opacity="0.85" />
 
     <Style x:Key="Mono" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
         <Setter Property="FontSize" Value="{StaticResource BodySize}" />
         <Setter Property="Foreground" Value="{StaticResource Ink}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
+        <!-- _ovl.css body line-height. WPF would otherwise pick ~17.3 for 13px Plex Mono and every
+             row would be a third of a pixel short of the mock. -->
+        <Setter Property="LineHeight" Value="18" />
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+        <!-- Unresolved in the settings window, which is null and therefore no effect. BoardView
+             sets it to TextScrim in overlay mode, where there is terrain behind the text. -->
+        <Setter Property="Effect" Value="{DynamicResource PanelTextEffect}" />
     </Style>
 
     <!-- The mock's .up: uppercase, condensed, semibold. WPF has no letter-spacing, so the .09em

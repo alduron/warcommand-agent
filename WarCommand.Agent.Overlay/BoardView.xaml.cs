@@ -1,6 +1,9 @@
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media.Animation;
 
 namespace WarCommand.Agent.Overlay;
 
@@ -47,9 +50,28 @@ public sealed record BoardHeader
 /// </remarks>
 public partial class BoardView : UserControl
 {
+    /// <summary>
+    /// How long a row takes to leave. Short enough that a filled request is gone before the next
+    /// glance, long enough that the rows below settle rather than jump.
+    /// </summary>
+    private static readonly Duration ExitDuration = new(TimeSpan.FromMilliseconds(160));
+
+    private readonly ObservableCollection<BoardRowViewModel> _rows = [];
+    private readonly ObservableCollection<BoardRowViewModel> _secondary = [];
+    private readonly HashSet<BoardRowViewModel> _retiring = [];
+
     public BoardView()
     {
         InitializeComponent();
+
+        // Bound once. RenderBoard reconciles these collections rather than replacing an ItemsSource,
+        // which is the difference between a poll updating one age and a poll rebuilding the board.
+        RowsList.ItemsSource = _rows;
+        SecondaryList.ItemsSource = _secondary;
+
+        // Establishes PanelGround and PanelTextEffect. Without it the DynamicResource lookups find
+        // nothing and the panel paints transparent inside the window.
+        SetOverlayMode(false);
     }
 
     /// <summary>Raised by the dev-only "Simulate PTT" button. Null in a production build's flow:
@@ -68,10 +90,14 @@ public partial class BoardView : UserControl
     /// </remarks>
     public void SetOverlayMode(bool overlay)
     {
+        // Both keys are DynamicResource lookups from the panel and the strip template, so one
+        // assignment repaints every surface that follows the mode.
+        Resources["PanelGround"] = FindResource(overlay ? "Scrim" : "Surface");
+        Resources["PanelTextEffect"] = overlay ? FindResource("TextScrim") : null;
+
         if (overlay)
         {
             Background = null;
-            PanelBorder.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "Scrim");
             Scroller.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
             Scroller.Margin = new Thickness(0);
             StatusText.Visibility = Visibility.Collapsed;
@@ -80,7 +106,6 @@ public partial class BoardView : UserControl
         else
         {
             SetResourceReference(BackgroundProperty, "Ground");
-            PanelBorder.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "Surface");
             Scroller.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
             Scroller.Margin = new Thickness(0, 14, 0, 0);
             StatusText.Visibility = Visibility.Visible;
@@ -145,21 +170,35 @@ public partial class BoardView : UserControl
         EmptyStateTitle.Text = title.ToUpperInvariant();
         EmptyStateHint.Text = hint;
         EmptyState.Visibility = Visibility.Visible;
-        RowsList.ItemsSource = Array.Empty<BoardRowViewModel>();
-        SecondaryList.ItemsSource = Array.Empty<BoardRowViewModel>();
+        _rows.Clear();
+        _secondary.Clear();
+        _retiring.Clear();
         OverflowRow.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>Renders one snapshot of the board. Called on every poll; there is no delta path here.</summary>
+    /// <summary>
+    /// Renders one snapshot of the board, as a reconcile against what is already on screen.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by ticket code, which is the row's identity everywhere else in the product. A row that
+    /// is still there is updated in place, a row that moved slot is moved rather than rebuilt, a
+    /// new row fades in, and a row that is gone fades and collapses out. Replacing the ItemsSource
+    /// would rebuild every container on every five-second poll, which is the whole board flashing
+    /// because one age went from 11s to 16s.
+    /// </remarks>
     public void RenderBoard(
         IReadOnlyList<BoardRowViewModel> rows,
         IReadOnlyList<BoardRowViewModel> secondaryStrip,
         int overflowCount,
         int overflowUrgentCount)
     {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(secondaryStrip);
+
         EmptyState.Visibility = Visibility.Collapsed;
-        RowsList.ItemsSource = rows;
-        SecondaryList.ItemsSource = secondaryStrip;
+        SpendAnimationBudget(rows);
+        Reconcile(_rows, rows, RowsList);
+        Reconcile(_secondary, secondaryStrip, SecondaryList);
 
         OverflowRow.Visibility = overflowCount > 0 ? Visibility.Visible : Visibility.Collapsed;
         OverflowText.Text = overflowCount > 0
@@ -168,6 +207,161 @@ public partial class BoardView : UserControl
         OverflowUrgentText.Text = overflowUrgentCount > 0
             ? $"{overflowUrgentCount.ToString(CultureInfo.InvariantCulture)} URGENT"
             : string.Empty;
+    }
+
+    /// <summary>
+    /// Spends the board-wide animation budget: at most two countdown bars, at most one pulsing
+    /// slot digit, both on the soonest to expire.
+    /// </summary>
+    /// <remarks>
+    /// 06-overlay-ux.md: "Animation is a budget, not a per-row property." Three or four digits
+    /// pulsing turns the digit column into the moving thing, which destroys the one property that
+    /// makes a slot findable inside the 400 ms glance. CountdownWidth is the fill of a 15 s track,
+    /// so the narrowest bar is the soonest to expire and no extra field is needed to rank them.
+    /// </remarks>
+    private static void SpendAnimationBudget(IReadOnlyList<BoardRowViewModel> rows)
+    {
+        const int barBudget = 2;
+
+        var expiring = rows
+            .Where(r => r.HasCountdown)
+            .OrderBy(r => r.CountdownWidth)
+            .ToList();
+
+        foreach (var row in rows)
+        {
+            row.Pulses = false;
+        }
+
+        for (var i = barBudget; i < expiring.Count; i++)
+        {
+            expiring[i].HasCountdown = false;
+        }
+
+        if (expiring.Count > 0)
+        {
+            expiring[0].Pulses = true;
+        }
+    }
+
+    /// <summary>
+    /// Brings <paramref name="live"/> in line with <paramref name="next"/>, touching only what
+    /// actually changed. Rows already retiring are ignored as matches, so a fading row cannot be
+    /// adopted as the container for a different ticket half way through its exit.
+    /// </summary>
+    private void Reconcile(
+        ObservableCollection<BoardRowViewModel> live,
+        IReadOnlyList<BoardRowViewModel> next,
+        ItemsControl host)
+    {
+        var wanted = new Dictionary<string, BoardRowViewModel>(StringComparer.Ordinal);
+        foreach (var row in next)
+        {
+            wanted[row.TicketCode] = row;
+        }
+
+        // Out first, so the indices below are placing into a list that holds only survivors.
+        for (var i = live.Count - 1; i >= 0; i--)
+        {
+            var existing = live[i];
+            if (wanted.ContainsKey(existing.TicketCode) && !_retiring.Contains(existing))
+            {
+                continue;
+            }
+
+            if (_retiring.Add(existing))
+            {
+                Retire(existing, live, host);
+            }
+        }
+
+        for (var target = 0; target < next.Count; target++)
+        {
+            var incoming = next[target];
+            var found = IndexOfLive(live, incoming.TicketCode);
+
+            if (found < 0)
+            {
+                live.Insert(Math.Min(target, live.Count), incoming);
+                continue;
+            }
+
+            live[found].CopyFrom(incoming);
+            live[found].Pulses = incoming.Pulses;
+
+            if (found != target && target < live.Count)
+            {
+                // Move rather than remove and re-insert: a move keeps the container, so a row that
+                // changed slot slides into place instead of replaying its entrance.
+                live.Move(found, target);
+            }
+        }
+    }
+
+    /// <summary>The index of a live row that is not on its way out, or -1.</summary>
+    private int IndexOfLive(ObservableCollection<BoardRowViewModel> live, string ticketCode)
+    {
+        for (var i = 0; i < live.Count; i++)
+        {
+            if (!_retiring.Contains(live[i])
+                && string.Equals(live[i].TicketCode, ticketCode, StringComparison.Ordinal))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Fades and collapses a row out, then removes it. The collapse is what stops everything below
+    /// jumping up by one row height the instant a request is filled.
+    /// </summary>
+    private void Retire(
+        BoardRowViewModel row,
+        ObservableCollection<BoardRowViewModel> live,
+        ItemsControl host)
+    {
+        void Drop()
+        {
+            _ = _retiring.Remove(row);
+            _ = live.Remove(row);
+        }
+
+        if (host.ItemContainerGenerator.ContainerFromItem(row) is not FrameworkElement container
+            || container.ActualHeight <= 0)
+        {
+            Drop();
+            return;
+        }
+
+        var storyboard = new Storyboard();
+
+        var fade = new DoubleAnimation(0, ExitDuration);
+        Storyboard.SetTarget(fade, container);
+        Storyboard.SetTargetProperty(fade, new PropertyPath(OpacityProperty));
+        storyboard.Children.Add(fade);
+
+        var collapse = new DoubleAnimation(container.ActualHeight, 0, ExitDuration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+        };
+        Storyboard.SetTarget(collapse, container);
+        Storyboard.SetTargetProperty(collapse, new PropertyPath(HeightProperty));
+        storyboard.Children.Add(collapse);
+
+        storyboard.Completed += (_, _) =>
+        {
+            // Hand the container back to the generator in the state it was found in: it is pooled
+            // and a leftover zero height would render the next row that lands in it invisible.
+            container.BeginAnimation(HeightProperty, null);
+            container.BeginAnimation(OpacityProperty, null);
+            container.Height = double.NaN;
+            container.Opacity = 1;
+            Drop();
+        };
+
+        storyboard.Begin();
     }
 
     private void OnSimulatePttClick(object sender, RoutedEventArgs e) =>

@@ -14,4 +14,8 @@
     <NoWarn>$(NoWarn);SYSLIB1054</NoWarn>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="WarCommand.Agent.Tests" />
+  </ItemGroup>
+
 </Project>

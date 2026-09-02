@@ -1,4 +1,4 @@
-<UserControl x:Class="WarCommand.Agent.Overlay.BoardView"
+﻿<UserControl x:Class="WarCommand.Agent.Overlay.BoardView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:WarCommand.Agent.Overlay"
@@ -17,6 +17,13 @@
             <!-- One row, the anatomy from docs/design/mocks/OverlayRows.dc.html. Every colour comes
                  from the accent, so an urgent edge can never sit beside a green digit. -->
             <DataTemplate x:Key="RowTemplate" DataType="{x:Type local:BoardRowViewModel}">
+                <!-- Entrance wraps the row rather than being the row: RowRoot's Opacity carries the
+                     .4 wash of somebody else's claim, and an animation on the same property would
+                     hold that value forever. Two Borders, two jobs. -->
+                <Border x:Name="Entrance" Opacity="0">
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="EntranceSlide" X="10" />
+                    </Border.RenderTransform>
                 <Border x:Name="RowRoot" BorderThickness="0,0,0,1" BorderBrush="{StaticResource RowDivider}"
                         Padding="0,5,9,5" Opacity="{Binding RowOpacity}" Background="{StaticResource Transparent}">
                     <DockPanel LastChildFill="True">
@@ -88,7 +95,52 @@
                         </StackPanel>
                     </DockPanel>
                 </Border>
+                </Border>
                 <DataTemplate.Triggers>
+                    <!-- A new row settles in rather than appearing under the reader's eye. 140 ms,
+                         opacity and a 10 px slide from the anchored edge, and nothing else: the
+                         slot digit, the ordering and the state colour never move or fade, because
+                         those are what the 400 ms glance is actually reading. -->
+                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Entrance"
+                                                 Storyboard.TargetProperty="Opacity"
+                                                 To="1" Duration="0:0:0.14" />
+                                <DoubleAnimation Storyboard.TargetName="EntranceSlide"
+                                                 Storyboard.TargetProperty="X"
+                                                 To="0" Duration="0:0:0.14">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                    <!-- OverlayRows.dc.html: the expiring digit carries a 10 px white glow. -->
+                    <DataTrigger Binding="{Binding HasCountdown}" Value="True">
+                        <Setter TargetName="Slot" Property="Effect" Value="{StaticResource SlotGlow}" />
+                    </DataTrigger>
+
+                    <!-- 06-overlay-ux.md: "Slot digit pulses at 1 Hz. The only animation in the
+                         product." At most one digit pulses board-wide, which BoardView enforces by
+                         setting Pulses on exactly one row. -->
+                    <DataTrigger Binding="{Binding Pulses}" Value="True">
+                        <DataTrigger.EnterActions>
+                            <BeginStoryboard x:Name="SlotPulse">
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="Slot"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     From="1" To="0.35" Duration="0:0:0.5"
+                                                     AutoReverse="True" RepeatBehavior="Forever" />
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </DataTrigger.EnterActions>
+                        <DataTrigger.ExitActions>
+                            <StopStoryboard BeginStoryboardName="SlotPulse" />
+                        </DataTrigger.ExitActions>
+                    </DataTrigger>
+
                     <DataTrigger Binding="{Binding Accent}" Value="Urgent">
                         <Setter TargetName="EdgeBar" Property="Fill" Value="{StaticResource Urgent}" />
                         <Setter TargetName="StateWord" Property="Foreground" Value="{StaticResource Urgent}" />
@@ -113,7 +165,7 @@
 
             <!-- The requester's own strip: ticket, type, point, then who has it. -->
             <DataTemplate x:Key="StripRowTemplate" DataType="{x:Type local:BoardRowViewModel}">
-                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}"
+                <Border Background="{DynamicResource PanelGround}" BorderBrush="{StaticResource Edge}"
                         BorderThickness="1,0,1,1" Padding="9,4">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -141,7 +193,7 @@
             <StackPanel x:Name="PanelStack" Width="{StaticResource PanelWidth}" HorizontalAlignment="Center">
 
                 <!-- Panel. Header, rows, overflow. -->
-                <Border x:Name="PanelBorder" Background="{StaticResource Surface}"
+                <Border x:Name="PanelBorder" Background="{DynamicResource PanelGround}"
                         BorderBrush="{StaticResource Edge}" BorderThickness="1">
                     <StackPanel>
                         <Border Padding="9,5" BorderBrush="{StaticResource Edge}" BorderThickness="0,0,0,1">
