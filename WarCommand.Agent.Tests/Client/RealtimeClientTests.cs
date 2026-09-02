@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using WarCommand.Agent.Client.Realtime;
 using WarCommand.Agent.Core.Abstractions;
 using WarCommand.Agent.Core.Contracts;
@@ -13,7 +13,17 @@ namespace WarCommand.Agent.Tests.Client;
 public class RealtimeClientTests
 {
     private static readonly Uri Url = new("wss://api.warcommand.app/v1/realtime");
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
+    /// <summary>
+    /// The budget for a whole scenario, and it is deliberately generous.
+    /// </summary>
+    /// <remarks>
+    /// One value covers both the Until deadline and the cancellation that stops the client, so a
+    /// cold Release runner that spends five seconds in JIT does not merely wait longer, it stops
+    /// the client before the condition it is waiting on can ever hold. That is what failed a
+    /// release build. A passing test never waits, so the only thing a large number costs is the
+    /// time a genuine hang takes to report.
+    /// </remarks>
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
 
     /// <summary>Server-derived. The client never names one; it only reports what it was given.</summary>
     private static readonly string[] Topics = ["deployment.all", "role.mortar"];
