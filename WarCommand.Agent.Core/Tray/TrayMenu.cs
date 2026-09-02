@@ -37,6 +37,8 @@ public enum TrayCommand
     ToggleScreenCapture,
     ToggleSounds,
     ToggleStartWithWindows,
+    ToggleOverlay,
+    CheckForUpdates,
     InstallUpdate,
     SelectSoundOutput,
     ToggleSecondScreen,
@@ -160,6 +162,31 @@ public sealed record TrayMenuState
 
     /// <summary>Whether second-screen mode's window is showing.</summary>
     public bool SecondScreenVisible { get; init; }
+
+    /// <summary>
+    /// The in-game overlay's master switch. Null until the overlay subsystem exists, which hides
+    /// the row rather than offering a toggle over nothing.
+    /// </summary>
+    public bool? OverlayEnabled { get; init; }
+
+    /// <summary>
+    /// Why the overlay is not on screen while it is switched on: "waiting for game", "game not
+    /// focused". Null when it is drawing, which renders the row as a plain on.
+    /// </summary>
+    /// <remarks>
+    /// Without this the row says on while nothing is visible, and the only conclusion available to
+    /// the user is that the overlay is broken. It usually is not: the game is not up yet.
+    /// </remarks>
+    public string? OverlayHint { get; init; }
+
+    /// <summary>False until the update checker exists. Hides the manual check row.</summary>
+    public bool UpdateCheckAvailable { get; init; }
+
+    /// <summary>True while a manual check is in flight, so the row cannot be clicked twice.</summary>
+    public bool UpdateCheckInProgress { get; init; }
+
+    /// <summary>The running build, e.g. "1.4.0". Rendered beside the manual check row.</summary>
+    public string? RunningVersion { get; init; }
 
     /// <summary>Set only in unpaired mode. Both pairing rows are absent once paired.</summary>
     public string? PairingCode { get; init; }
@@ -375,6 +402,19 @@ public static class TrayMenu
             });
         }
 
+        // Above second-screen mode because it is the mode most people are in, and the one whose
+        // "why can I not see anything" the hint answers.
+        if (state.OverlayEnabled is { } overlay)
+        {
+            items.Add(new TrayMenuItem
+            {
+                Text = "Overlay",
+                Value = overlay ? state.OverlayHint ?? "on" : "off",
+                Command = TrayCommand.ToggleOverlay,
+                IsChecked = overlay,
+            });
+        }
+
         items.Add(new TrayMenuItem
         {
             Text = "Second-screen mode",
@@ -437,6 +477,20 @@ public static class TrayMenu
     {
         if (state.UpdateVersion is not { } version)
         {
+            // Nothing on offer. The row still has to exist, because the six-hourly check is
+            // invisible and "am I on the latest build" is otherwise unanswerable from the tray.
+            if (state.UpdateCheckAvailable)
+            {
+                items.Add(new TrayMenuItem
+                {
+                    Text = state.UpdateCheckInProgress ? "Checking for updates..." : "Check for updates",
+                    Value = state.RunningVersion,
+                    Command = state.UpdateCheckInProgress ? TrayCommand.None : TrayCommand.CheckForUpdates,
+                    IsEnabled = !state.UpdateCheckInProgress,
+                });
+                items.Add(TrayMenuItem.Separator);
+            }
+
             return;
         }
 

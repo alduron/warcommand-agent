@@ -309,6 +309,23 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                            <TextBlock Text="Draw over the game"
+                                                       Style="{StaticResource FieldLabel}" />
+                                            <TextBlock Text="Borderless Windowed only. Off leaves second-screen mode"
+                                                       Style="{StaticResource FieldCaption}" />
+                                        </StackPanel>
+                                        <CheckBox x:Name="OverlayEnabled" Grid.Column="1"
+                                                  Style="{StaticResource Switch}" Click="OnDirty" />
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource FieldRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
                                             <TextBlock Text="Anchor position" Style="{StaticResource FieldLabel}" />
                                         </StackPanel>
                                         <ComboBox x:Name="AnchorBox" Grid.Column="1" Width="280"

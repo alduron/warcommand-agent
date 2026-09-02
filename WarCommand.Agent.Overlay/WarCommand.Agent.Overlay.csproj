@@ -9,6 +9,9 @@
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- DllImport rather than LibraryImport: the source generator needs AllowUnsafeBlocks, and
+         two window-style reads are not worth turning unsafe code on across a UI project. -->
+    <NoWarn>$(NoWarn);SYSLIB1054</NoWarn>
   </PropertyGroup>
 
 </Project>

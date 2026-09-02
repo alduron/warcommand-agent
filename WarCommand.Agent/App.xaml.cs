@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Reflection;
 using System.Net.Http;
 using System.Threading;
@@ -19,6 +19,8 @@ using WarCommand.Agent.Core.Model;
 using WarCommand.Agent.Core.Tray;
 using WarCommand.Agent.Core.Updates;
 using WarCommand.Agent.Dev;
+using WarCommand.Agent.Game;
+using WarCommand.Agent.Input;
 using WarCommand.Agent.Startup;
 using WarCommand.Agent.Core.Settings;
 using WarCommand.Agent.Overlay;
@@ -47,6 +49,12 @@ public partial class App : Application, IDisposable
     private const string SingleInstanceMutexName = @"Local\WarCommand.Agent.SingleInstance";
 
     /// <summary>
+    /// Set by a second launch to ask the running agent to show its window. Session-scoped for the
+    /// same reason the mutex is: two desktop sessions are two agents, not one.
+    /// </summary>
+    private const string ShowWindowEventName = @"Local\WarCommand.Agent.ShowWindow";
+
+    /// <summary>
     /// The running build, read from the assembly the release workflow stamps from the git tag.
     /// A constant here would have to be edited in lockstep with every tag, and the first time it
     /// was not, the agent would either offer an update it already has or refuse the one it needs.
@@ -73,12 +81,17 @@ public partial class App : Application, IDisposable
     private DispatcherTimer? _pollTimer;
     private CoordinateSourceRegistry? _devCoordinateSources;
     private AgentWindow? _window;
-    private BoardView? _board;
+    private BoardPresenter? _presenter;
+    private OverlayController? _overlay;
+    private GameWindowWatcher? _gameWatcher;
     private TrayMenuState _menuState = new();
     private WindowsStartup? _startup;
     private UpdateDownloader? _updates;
     private UpdateOffer? _offer;
     private DispatcherTimer? _updateTimer;
+    private FileClientLog? _updateLog;
+    private EventWaitHandle? _showRequest;
+    private RegisteredWaitHandle? _showRegistration;
 
     /// <summary>
     /// Starts the tray grey (unpaired/no session yet), then resolves the profile, ensures device
@@ -102,10 +115,15 @@ public partial class App : Application, IDisposable
         if (!TryTakeSingleInstanceLock())
         {
             // Before the tray, before any registration: a second instance must leave no trace.
+            // It does raise the running agent's window first: somebody who clicked the Start menu
+            // shortcut asked to see WarCommand, and silently exiting answers that with nothing.
             new FileClientLog(paths).Warn("Another agent is already running. This launch is exiting.");
+            AskRunningAgentToShowItself();
             Shutdown();
             return;
         }
+
+        ListenForShowRequests();
 
         _webOrigins = profile.WebOrigins;
         _settings = new SettingsStore(paths);
@@ -140,17 +158,30 @@ public partial class App : Application, IDisposable
             return;
         }
 
+        if (profile.IsOverlayDemo)
+        {
+            ShowOverlayDemo(log);
+            return;
+        }
+
         var window = new AgentWindow(_settings, devices: null);
         _window = window;
-        _board = window.BoardView;
         MainWindow = window;
         window.Closing += OnWindowClosing;
         var board = window.BoardView;
-        board.SetHeader(new BoardHeader { Title = "WarCommand", Hint = "RightAlt+H ?" });
-        board.SetStatus(FormattableString.Invariant(
+
+        // One render reaches every surface. The overlay's own BoardView joins the presenter the
+        // moment the controller builds it, and is replayed up to date rather than waiting a poll.
+        var presenter = new BoardPresenter(board);
+        _presenter = presenter;
+
+        presenter.SetHeader(new BoardHeader { Title = "WarCommand", Hint = "RightAlt+H ?" });
+        presenter.SetStatus(FormattableString.Invariant(
             $"WARCOMMAND {AgentVersion}  /  {(profile.IsDev ? "DEV" : "PROD")}  /  {profile.ApiBaseAddress.Host}"));
         window.Show();
         _menuState = _menuState with { SecondScreenVisible = true };
+
+        StartOverlay(presenter, log);
 
         if (profile.IsDev)
         {
@@ -162,13 +193,113 @@ public partial class App : Application, IDisposable
 
         try
         {
-            await RunAgentLoopAsync(profile, paths, log, board).ConfigureAwait(true);
+            await RunAgentLoopAsync(profile, paths, log, presenter).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             log.Error("Startup failed.", ex);
-            board.ShowEmptyState("API unreachable", profile.ApiBaseAddress.Host);
+            presenter.ShowEmptyState("API unreachable", profile.ApiBaseAddress.Host);
         }
+    }
+
+    /// <summary>
+    /// Draws the overlay on the primary monitor with the board from 06-overlay-ux.md and stops
+    /// there. No API, no device registration, no window, no game.
+    /// </summary>
+    /// <remarks>
+    /// Wardogs is not out. Without this loop the surface could only be looked at by somebody who
+    /// has the game, which is nobody, and it would ship unseen. The demo plays the game window
+    /// watcher's part by hand: it hands the controller a Show and no client rect, which is the
+    /// same path a second-monitor user in Dim takes.
+    /// </remarks>
+    private void ShowOverlayDemo(FileClientLog log)
+    {
+        if (_settings is not { } settings)
+        {
+            return;
+        }
+
+        var surface = new OverlayWindow();
+        var presenter = new BoardPresenter(surface.BoardView);
+        _presenter = presenter;
+
+        var controller = new OverlayController(
+            Dispatcher,
+            settings.Current with { OverlayEnabled = true },
+            factory: () => surface,
+            notify: (title, body) => _tray?.ShowNotice(title, body));
+        _overlay = controller;
+
+        controller.OverlayVisibilityChanged(OverlayVisibility.Show);
+
+        presenter.SetHeader(OverlayDemo.Header);
+        presenter.RenderBoard(
+            OverlayDemo.Rows,
+            OverlayDemo.SecondaryStrip,
+            OverlayDemo.OverflowCount,
+            OverlayDemo.OverflowUrgentCount);
+
+        _menuState = _menuState with { OverlayEnabled = true, OverlayHint = controller.Hint };
+
+        log.Info("Overlay demo: the surface is on the primary monitor. Nothing else is running.");
+    }
+
+    /// <summary>
+    /// Brings up the in-game surface and the watcher that decides when it draws. Both are built
+    /// unconditionally: the overlay's own master switch decides whether anything appears, and the
+    /// watcher has to run either way so the tray can say why it does not.
+    /// </summary>
+    /// <remarks>
+    /// The watcher polls out of process and by window handle only. Nothing here opens the game, and
+    /// nothing draws inside it: see 06-overlay-ux.md "Window" and binding rule 1.
+    /// </remarks>
+    private void StartOverlay(BoardPresenter presenter, FileClientLog log)
+    {
+        if (_settings is not { } settings)
+        {
+            return;
+        }
+
+        var controller = new OverlayController(
+            Dispatcher,
+            settings.Current,
+            factory: () =>
+            {
+                var surface = new OverlayWindow();
+                presenter.Add(surface.BoardView);
+                return surface;
+            },
+            notify: (title, body) => _tray?.ShowNotice(title, body));
+
+        controller.StateChanged += (_, _) => _menuState = _menuState with
+        {
+            OverlayEnabled = controller.IsEnabled,
+            OverlayHint = controller.Hint,
+        };
+        _overlay = controller;
+
+        _menuState = _menuState with { OverlayEnabled = settings.Current.OverlayEnabled };
+
+        var watcher = new GameWindowWatcher(
+            BundledContracts.GameProfile().Current,
+            controller,
+            settings.Current.WhenUnfocused == UnfocusedBehaviour.Dim
+                ? OverlayFocusBehavior.Dim
+                : OverlayFocusBehavior.Hide);
+        watcher.Start();
+        _gameWatcher = watcher;
+
+        // One subscription covers both ways settings move: the Overlay tab and the tray toggle
+        // both go through Save, so neither can change the overlay without the other seeing it.
+        settings.Changed += (_, saved) =>
+        {
+            controller.ApplySettings(saved);
+            watcher.Tracker.SetBehavior(saved.WhenUnfocused == UnfocusedBehaviour.Dim
+                ? OverlayFocusBehavior.Dim
+                : OverlayFocusBehavior.Hide);
+        };
+
+        log.Info("Overlay armed. Watching for a game window.");
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -206,6 +337,12 @@ public partial class App : Application, IDisposable
                 break;
             case TrayCommand.ToggleStartWithWindows:
                 ToggleStartWithWindows();
+                break;
+            case TrayCommand.ToggleOverlay:
+                ToggleSetting(s => s with { OverlayEnabled = !s.OverlayEnabled });
+                break;
+            case TrayCommand.CheckForUpdates:
+                CheckForUpdatesNow();
                 break;
             case TrayCommand.InstallUpdate:
                 InstallUpdate();
@@ -263,6 +400,8 @@ public partial class App : Application, IDisposable
         {
             ScreenCaptureEnabled = store.Current.ScreenCaptureEnabled,
             SoundsEnabled = store.Current.Sounds.AllSound,
+            OverlayEnabled = store.Current.OverlayEnabled,
+            OverlayHint = _overlay?.Hint,
         };
     }
 
@@ -275,13 +414,42 @@ public partial class App : Application, IDisposable
     private void StartUpdateChecks(AgentPaths paths, FileClientLog log)
     {
         _updates = new UpdateDownloader(new HttpClient(), paths, log);
+        _updateLog = log;
 
         var timer = new DispatcherTimer { Interval = UpdateCheckInterval };
         timer.Tick += async (_, _) => await CheckForUpdateAsync(log).ConfigureAwait(true);
         timer.Start();
         _updateTimer = timer;
 
+        // The row exists from here on, whether or not anything is on offer: six hours is a long
+        // time to have no way of asking, and "am I on the latest build" is the first question
+        // anybody asks when something looks wrong.
+        _menuState = _menuState with { UpdateCheckAvailable = true, RunningVersion = AgentVersion };
+
         _ = CheckForUpdateAsync(log);
+    }
+
+    /// <summary>
+    /// The tray's Check for updates row. Same call as the six-hourly one, with the row disabled
+    /// while it is in flight so a second click cannot start a second check.
+    /// </summary>
+    private async void CheckForUpdatesNow()
+    {
+        if (_updateLog is not { } log || _menuState.UpdateCheckInProgress)
+        {
+            return;
+        }
+
+        _menuState = _menuState with { UpdateCheckInProgress = true };
+
+        try
+        {
+            await CheckForUpdateAsync(log).ConfigureAwait(true);
+        }
+        finally
+        {
+            _menuState = _menuState with { UpdateCheckInProgress = false };
+        }
     }
 
     /// <summary>
@@ -504,6 +672,14 @@ public partial class App : Application, IDisposable
         _pollTimer = null;
         _updateTimer?.Stop();
         _updateTimer = null;
+        _ = _showRegistration?.Unregister(null);
+        _showRegistration = null;
+        _showRequest?.Dispose();
+        _showRequest = null;
+        _gameWatcher?.Dispose();
+        _gameWatcher = null;
+        _overlay?.Dispose();
+        _overlay = null;
         _tray?.Dispose();
         _tray = null;
         ReleaseSingleInstanceLock();
@@ -527,6 +703,50 @@ public partial class App : Application, IDisposable
         catch (AbandonedMutexException)
         {
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Listens for a second launch asking to be seen. The agent lives in the tray with no window
+    /// of its own, so the Start menu shortcut is how most people will reach it, and clicking it
+    /// while the agent is already running has to do something. It shows the window.
+    /// </summary>
+    private void ListenForShowRequests()
+    {
+        var signal = new EventWaitHandle(false, EventResetMode.AutoReset, ShowWindowEventName);
+        _showRequest = signal;
+        _showRegistration = ThreadPool.RegisterWaitForSingleObject(
+            signal,
+            (_, _) => Dispatcher.BeginInvoke(() => ShowWindowOn(settings: false)),
+            state: null,
+            Timeout.Infinite,
+            executeOnlyOnce: false);
+    }
+
+    /// <summary>
+    /// Asks the running agent to show itself. Called by the launch that lost the mutex, just
+    /// before it exits: without it a second click of the shortcut does nothing at all, which is
+    /// indistinguishable from an agent that failed to start.
+    /// </summary>
+    private static void AskRunningAgentToShowItself()
+    {
+        try
+        {
+            if (EventWaitHandle.TryOpenExisting(ShowWindowEventName, out var signal))
+            {
+                using (signal)
+                {
+                    _ = signal.Set();
+                }
+            }
+        }
+        catch (WaitHandleCannotBeOpenedException)
+        {
+            // The first instance is on its way down. Nothing to show.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Another desktop session owns it. Not our agent to raise.
         }
     }
 
@@ -568,7 +788,7 @@ public partial class App : Application, IDisposable
             : FormattableString.Invariant($"{point.Source}: x{point.X:0.00} y{point.Y:0.00}"));
     }
 
-    private async Task RunAgentLoopAsync(AgentProfile profile, AgentPaths paths, FileClientLog log, BoardView window)
+    private async Task RunAgentLoopAsync(AgentProfile profile, AgentPaths paths, FileClientLog log, BoardPresenter presenter)
     {
         var tokenStore = new TokenStore(paths, log: log);
         _tokenStore = tokenStore;
@@ -594,7 +814,7 @@ public partial class App : Application, IDisposable
 
         var me = await AuthenticateAsync(client, tokenStore, paths, profile, log).ConfigureAwait(true);
         AdoptAccount(me);
-        await RenderForAsync(client, me, window, log).ConfigureAwait(true);
+        await RenderForAsync(client, me, presenter, log).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -618,7 +838,7 @@ public partial class App : Application, IDisposable
     /// tray's counts. Called at startup and again whenever the linked account changes.
     /// </summary>
     private async Task RenderForAsync(
-        WarCommandApiClient client, MeResponse me, BoardView window, FileClientLog log)
+        WarCommandApiClient client, MeResponse me, BoardPresenter presenter, FileClientLog log)
     {
         var membership = me.Memberships.FirstOrDefault(m => m.Deployment is not null);
 
@@ -627,13 +847,13 @@ public partial class App : Application, IDisposable
             // Signed in, standing nowhere. The account goes in the header either way: an agent that
             // shows nothing about who it is reads as signed out, whatever it is holding.
             var group = me.Memberships.Count > 0 ? me.Memberships[0] : null;
-            window.SetHeader(new BoardHeader
+            presenter.SetHeader(new BoardHeader
             {
                 Title = group is null ? "WarCommand" : $"WarCommand / {group.GroupName}",
                 Right = me.User.Callsign,
                 Hint = "RightAlt+H ?",
             });
-            window.ShowEmptyState(
+            presenter.ShowEmptyState(
                 group is null ? "No group" : "No live deployment",
                 group is null
                     ? $"signed in as {me.User.Callsign}, join from the web"
@@ -652,7 +872,7 @@ public partial class App : Application, IDisposable
         // rows out, so the menu can never offer a click that does nothing.
         _menuState = _menuState with { OpenRequestCount = 0, MyRequestCount = 0 };
 
-        window.SetHeader(new BoardHeader
+        presenter.SetHeader(new BoardHeader
         {
             Title = $"{membership.GroupName} / {membership.Deployment.Label}",
             PeopleCount = membership.Deployment.MemberCount,
@@ -664,7 +884,7 @@ public partial class App : Application, IDisposable
             Hint = "RightAlt+H ?",
         });
 
-        await RefreshBoardAsync(client, catalog, board, deploymentId, membership.MembershipId, window, log)
+        await RefreshBoardAsync(client, catalog, board, deploymentId, membership.MembershipId, presenter, log)
             .ConfigureAwait(true);
 
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -672,7 +892,7 @@ public partial class App : Application, IDisposable
         {
             try
             {
-                await RefreshBoardAsync(client, catalog, board, deploymentId, membership.MembershipId, window, log)
+                await RefreshBoardAsync(client, catalog, board, deploymentId, membership.MembershipId, presenter, log)
                     .ConfigureAwait(true);
             }
             catch (WarCommandApiException ex)
@@ -793,7 +1013,7 @@ public partial class App : Application, IDisposable
         WarCommandApiClient client, TokenStore tokenStore, Guid deviceId, string deviceToken, FileClientLog log)
     {
         await ShowPairingCodeAsync(client, deviceId, deviceToken, log).ConfigureAwait(true);
-        _board?.ShowEmptyState("Not set up", _menuState.PairingCode is { } shown
+        _presenter?.ShowEmptyState("Not set up", _menuState.PairingCode is { } shown
             ? $"pairing code {shown}, or enter one from the web"
             : "pair from the web");
 
@@ -873,7 +1093,7 @@ public partial class App : Application, IDisposable
     /// </summary>
     private async Task ReloadAfterLinkAsync(WarCommandApiClient client, FileClientLog log)
     {
-        if (_board is not { } window)
+        if (_presenter is not { } presenter)
         {
             return;
         }
@@ -886,7 +1106,7 @@ public partial class App : Application, IDisposable
             var me = await client.GetMeAsync(_shutdown.Token).ConfigureAwait(true);
             AdoptAccount(me);
             log.Info("Linked to a different account. Reloading.");
-            await RenderForAsync(client, me, window, log).ConfigureAwait(true);
+            await RenderForAsync(client, me, presenter, log).ConfigureAwait(true);
         }
         catch (WarCommandApiException ex)
         {
@@ -940,7 +1160,7 @@ public partial class App : Application, IDisposable
         BoardState board,
         Guid deploymentId,
         Guid viewerId,
-        BoardView window,
+        BoardPresenter presenter,
         FileClientLog log)
     {
         var now = DateTimeOffset.UtcNow;
@@ -956,7 +1176,7 @@ public partial class App : Application, IDisposable
         var overflow = board.Overflow;
         var overflowUrgent = overflow.Count(r => r.Priority == Priority.Urgent);
 
-        window.RenderBoard(rows, secondary, overflow.Count, overflowUrgent);
+        presenter.RenderBoard(rows, secondary, overflow.Count, overflowUrgent);
         _menuState = _menuState with
         {
             OpenRequestCount = rows.Count + secondary.Count + overflow.Count,

@@ -136,12 +136,13 @@
     </UserControl.Resources>
 
     <Grid>
-        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+        <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                       Padding="0" Margin="0,14,0,0">
-            <StackPanel Width="{StaticResource PanelWidth}" HorizontalAlignment="Center">
+            <StackPanel x:Name="PanelStack" Width="{StaticResource PanelWidth}" HorizontalAlignment="Center">
 
                 <!-- Panel. Header, rows, overflow. -->
-                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Edge}" BorderThickness="1">
+                <Border x:Name="PanelBorder" Background="{StaticResource Surface}"
+                        BorderBrush="{StaticResource Edge}" BorderThickness="1">
                     <StackPanel>
                         <Border Padding="9,5" BorderBrush="{StaticResource Edge}" BorderThickness="0,0,0,1">
                             <StackPanel>

@@ -1,0 +1,27 @@
+<Window x:Class="WarCommand.Agent.Overlay.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:WarCommand.Agent.Overlay"
+        Title="WarCommand Overlay"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="{x:Null}"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Focusable="False"
+        IsHitTestVisible="False"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+    <!-- No chrome, no ground, no hit testing. The four extended styles that make this a real
+         in-game surface are applied in OnSourceInitialized; XAML cannot express them.
+
+         The window is the whole anchor rect and the board aligns inside it, rather than the window
+         sizing to the board. A bottom-anchored panel has to sit ON the bottom edge, and a window
+         that shrinks to its content cannot: it would float by however many rows are missing. -->
+    <Grid>
+        <local:BoardView x:Name="Board" VerticalAlignment="Center" />
+    </Grid>
+</Window>

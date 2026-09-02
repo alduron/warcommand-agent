@@ -36,7 +36,7 @@ VersionInfoVersion={#AppVersion}
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DefaultDirName={autopf}\{#AppName}
-DefaultGroupName={#AppName}
+; No program group: the single shortcut goes directly into Programs. See [Icons].
 DisableProgramGroupPage=yes
 DisableDirPage=auto
 
@@ -67,7 +67,10 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "..\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
+; Straight into Programs, NOT into a {group} folder of its own. A shortcut one level down is still
+; indexed, but the agent lives in the tray with no window of its own, so "type WarCommand into the
+; search bar" is the ONLY way most people will ever launch it. That path has to be the short one.
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; Comment: "WarCommand voice request board"
 Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 ; NOT a {userstartup} shortcut. The tray's "Start with Windows" row reads and writes the HKCU Run

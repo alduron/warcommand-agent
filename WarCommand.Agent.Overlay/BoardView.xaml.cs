@@ -56,9 +56,53 @@ public partial class BoardView : UserControl
     /// nothing wires this event unless the composition root is running under the dev profile.</summary>
     public event EventHandler? SimulatePttRequested;
 
+    /// <summary>
+    /// Switches the panel between the two grounds it is drawn on. In the window it sits on Ground
+    /// with an opaque Surface panel; over the game it sits on nothing with the mock's translucent
+    /// Scrim, so the terrain showing through is the actual game.
+    /// </summary>
+    /// <remarks>
+    /// Same rows, same header, same slot digits: 06-overlay-ux.md requires the two modes to be
+    /// identical to read, so this changes the ground and the chrome and nothing else. The status
+    /// line, the dev panel and the scrollbar are window furniture and have no place over a fight.
+    /// </remarks>
+    public void SetOverlayMode(bool overlay)
+    {
+        if (overlay)
+        {
+            Background = null;
+            PanelBorder.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "Scrim");
+            Scroller.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            Scroller.Margin = new Thickness(0);
+            StatusText.Visibility = Visibility.Collapsed;
+            DevPanel.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            SetResourceReference(BackgroundProperty, "Ground");
+            PanelBorder.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "Surface");
+            Scroller.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+            Scroller.Margin = new Thickness(0, 14, 0, 0);
+            StatusText.Visibility = Visibility.Visible;
+        }
+
+        _isOverlay = overlay;
+    }
+
+    /// <summary>
+    /// The rendered panel width. 380 in every mock; the Overlay tab lets it move because a 4K
+    /// player reads 380 px as a stamp and a 1080p player reads 560 as half the screen.
+    /// </summary>
+    public void SetPanelWidth(double width) => PanelStack.Width = width;
+
+    /// <summary>True while this view is drawing over the game rather than in the window.</summary>
+    public bool IsOverlay => _isOverlay;
+
+    private bool _isOverlay;
+
     /// <summary>Shows or hides the dev-only panel. Never true outside the dev profile.</summary>
     public void SetDevControlsVisible(bool visible) =>
-        DevPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        DevPanel.Visibility = visible && !_isOverlay ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>Displays the coordinate the dev source (or any source) just answered with.</summary>
     public void ShowSimulatedPoint(string text) => SimulatedPointText.Text = text;

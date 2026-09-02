@@ -112,6 +112,21 @@ public sealed class TrayIconController : ISuspendable, IDisposable
         _notifyIcon.ShowBalloonTip(10_000);
     }
 
+    /// <summary>
+    /// A balloon the agent raises for itself: the borderless-windowed prompt, and anything else
+    /// the user has to act on while looking at the game rather than at us.
+    /// </summary>
+    public void ShowNotice(string title, string body)
+    {
+        ArgumentNullException.ThrowIfNull(title);
+        ArgumentNullException.ThrowIfNull(body);
+
+        _notifyIcon.BalloonTipTitle = title;
+        _notifyIcon.BalloonTipText = body;
+        _notifyIcon.BalloonTipIcon = ToolTipIcon.Warning;
+        _notifyIcon.ShowBalloonTip(10_000);
+    }
+
     /// <summary>The hover tooltip. Windows caps it at 63 characters, so it is truncated here.</summary>
     public void SetTooltip(string text)
     {

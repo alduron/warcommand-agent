@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -122,6 +122,7 @@ public partial class AgentWindow : Window
         ConfidenceFloor.Value = settings.ConfidenceFloor;
         ShowRecognizedText.IsChecked = settings.ShowRecognizedText;
 
+        OverlayEnabled.IsChecked = settings.OverlayEnabled;
         AnchorBox.SelectedIndex = (int)settings.Anchor;
         WidthPx.Value = settings.ClampedWidth;
         OverlayOpacityBox.SelectedIndex = (int)settings.Opacity;
@@ -171,6 +172,7 @@ public partial class AgentWindow : Window
         },
         ConfidenceFloor = ConfidenceFloor.Value,
         ShowRecognizedText = ShowRecognizedText.IsChecked is true,
+        OverlayEnabled = OverlayEnabled.IsChecked is true,
         Anchor = (OverlayAnchor)Math.Max(AnchorBox.SelectedIndex, 0),
         WidthPx = (int)WidthPx.Value,
         Opacity = (OverlayOpacity)Math.Max(OverlayOpacityBox.SelectedIndex, 0),

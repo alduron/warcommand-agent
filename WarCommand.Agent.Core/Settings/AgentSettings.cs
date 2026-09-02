@@ -81,6 +81,13 @@ public sealed record AgentSettings
 
     // Overlay.
 
+    /// <summary>
+    /// The master switch for the in-game surface, on by default. Off is a real choice: a streamer
+    /// or a single-monitor player who works from second-screen mode wants nothing drawn over the
+    /// game, and turning every anchor and opacity into a way of hiding it is not that.
+    /// </summary>
+    public bool OverlayEnabled { get; init; } = true;
+
     public OverlayAnchor Anchor { get; init; } = OverlayAnchor.Right;
 
     /// <summary>Panel width in pixels. The mocks draw 380 everywhere.</summary>

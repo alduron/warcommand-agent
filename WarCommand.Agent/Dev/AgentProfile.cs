@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using WarCommand.Agent.Client.Storage;
 
 namespace WarCommand.Agent.Dev;
@@ -29,6 +29,14 @@ public sealed class AgentProfile
     /// icon or the menu needs neither docker nor the TLS proxy. See DEVELOPING.md.
     /// </summary>
     public const string TrayOnlyVariable = "WARCOMMAND_TRAY_ONLY";
+
+    /// <summary>
+    /// Set to 1 to draw the overlay on the primary monitor with the board from 06-overlay-ux.md,
+    /// and stop there: no API, no device registration, no game. Implies the dev profile. This is
+    /// the overlay's iteration loop, and the only way to look at the surface before the game ships.
+    /// See DEVELOPING.md.
+    /// </summary>
+    public const string OverlayDemoVariable = "WARCOMMAND_OVERLAY_DEMO";
 
     /// <summary>
     /// Set to 1 to take the cold-start path: activate the device into a brand new guest user of its
@@ -68,6 +76,7 @@ public sealed class AgentProfile
     private AgentProfile(
         bool isDev,
         bool isTrayOnly,
+        bool isOverlayDemo,
         bool isColdStart,
         Uri apiBaseAddress,
         string? pairCode,
@@ -75,6 +84,7 @@ public sealed class AgentProfile
     {
         IsDev = isDev;
         IsTrayOnly = isTrayOnly;
+        IsOverlayDemo = isOverlayDemo;
         IsColdStart = isColdStart;
         ApiBaseAddress = apiBaseAddress;
         PairCode = pairCode;
@@ -85,6 +95,9 @@ public sealed class AgentProfile
 
     /// <summary>Tray only: the startup sequence stops after the icon. Always a dev launch.</summary>
     public bool IsTrayOnly { get; }
+
+    /// <summary>Overlay demo: the surface, drawn with sample rows, and nothing else. Always dev.</summary>
+    public bool IsOverlayDemo { get; }
 
     /// <summary>Mint an account of the agent's own rather than waiting to be paired to one.</summary>
     public bool IsColdStart { get; }
@@ -99,8 +112,9 @@ public sealed class AgentProfile
     public static AgentProfile Resolve()
     {
         var isTrayOnly = IsTruthy(Environment.GetEnvironmentVariable(TrayOnlyVariable));
+        var isOverlayDemo = IsTruthy(Environment.GetEnvironmentVariable(OverlayDemoVariable));
 
-        var isDev = isTrayOnly || string.Equals(
+        var isDev = isTrayOnly || isOverlayDemo || string.Equals(
             Environment.GetEnvironmentVariable(ProfileVariable), "dev", StringComparison.OrdinalIgnoreCase);
 
         var overrideUrl = Environment.GetEnvironmentVariable(ApiBaseUrlVariable);
@@ -115,6 +129,7 @@ public sealed class AgentProfile
         return new AgentProfile(
             isDev,
             isTrayOnly,
+            isOverlayDemo,
             isColdStart,
             apiBaseAddress,
             string.IsNullOrWhiteSpace(pairCode) ? null : pairCode,

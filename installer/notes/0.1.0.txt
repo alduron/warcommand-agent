@@ -1,7 +1,3 @@
-First published build.
+First build. Tray icon, second-screen mode, pairing, self-update.
 
-Tray icon with the full menu, second-screen mode, device pairing, and the
-loopback link from the web app. Start with Windows, and self-update from
-here on: this build checks for a newer one on startup and every six hours.
-
-Not in this build: the in-game overlay, hotkeys, speech and screen capture.
+No overlay, hotkeys, speech or capture yet.

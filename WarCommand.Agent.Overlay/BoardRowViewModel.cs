@@ -1,4 +1,7 @@
+﻿using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using WarCommand.Agent.Core.Model;
 
 namespace WarCommand.Agent.Overlay;
@@ -36,7 +39,7 @@ public enum RowAccent
 /// digit, a label and coordinate line, an optional second point, a dim meta line, and an optional
 /// countdown. A field with no value collapses its line rather than rendering an empty one.
 /// </remarks>
-public sealed class BoardRowViewModel
+public sealed class BoardRowViewModel : INotifyPropertyChanged
 {
     /// <summary>The label column is 150 wide on every mock. Kept here so XAML cannot drift from it.</summary>
     public const double LabelColumnWidth = 150;
@@ -44,44 +47,177 @@ public sealed class BoardRowViewModel
     /// <summary>The requester column on the meta line.</summary>
     public const double RequesterColumnWidth = 80;
 
-    public required string SlotDisplay { get; init; }
+    public required string SlotDisplay
+    {
+        get => _slotDisplay;
+        set => Set(ref _slotDisplay, value);
+    }
+
+    private string _slotDisplay = string.Empty;
 
     /// <summary>Type plus its one qualifier word, uppercase. 'MORTAR SMOKE'.</summary>
-    public required string TypeAndQualifier { get; init; }
+    public required string TypeAndQualifier
+    {
+        get => _typeAndQualifier;
+        set => Set(ref _typeAndQualifier, value);
+    }
 
-    public required string CoordinatesDisplay { get; init; }
+    private string _typeAndQualifier = string.Empty;
+
+    public required string CoordinatesDisplay
+    {
+        get => _coordinatesDisplay;
+        set => Set(ref _coordinatesDisplay, value);
+    }
+
+    private string _coordinatesDisplay = string.Empty;
 
     /// <summary>The second point of an arity-2 row, prefixed. Null on a one-point row.</summary>
-    public string? SecondPointDisplay { get; init; }
+    public string? SecondPointDisplay
+    {
+        get => _secondPointDisplay;
+        set => Set(ref _secondPointDisplay, value);
+    }
+
+    private string? _secondPointDisplay;
 
     /// <summary>Bearing and range between the two points, in map units. Null on a one-point row.</summary>
-    public string? LegDisplay { get; init; }
+    public string? LegDisplay
+    {
+        get => _legDisplay;
+        set => Set(ref _legDisplay, value);
+    }
 
-    public required string Requester { get; init; }
+    private string? _legDisplay;
+
+    public required string Requester
+    {
+        get => _requester;
+        set => Set(ref _requester, value);
+    }
+
+    private string _requester = string.Empty;
 
     /// <summary>Coarse relative age: 4s, 31s, 1m02. Never an absolute time.</summary>
-    public required string AgeDisplay { get; init; }
+    public required string AgeDisplay
+    {
+        get => _ageDisplay;
+        set => Set(ref _ageDisplay, value);
+    }
+
+    private string _ageDisplay = string.Empty;
 
     /// <summary>'RETRY x2' and the like. Null when the row has nothing extra to say.</summary>
-    public string? MetaExtra { get; init; }
+    public string? MetaExtra
+    {
+        get => _metaExtra;
+        set => Set(ref _metaExtra, value);
+    }
 
-    public required string TicketCode { get; init; }
+    private string? _metaExtra;
+
+    public required string TicketCode
+    {
+        get => _ticketCode;
+        set => Set(ref _ticketCode, value);
+    }
+
+    private string _ticketCode = string.Empty;
 
     /// <summary>'URGENT', '[YOU]', 'TAKEN', 'REQUESTER MOVED'. Null on a plain open row.</summary>
-    public string? StateWord { get; init; }
+    public string? StateWord
+    {
+        get => _stateWord;
+        set => Set(ref _stateWord, value);
+    }
 
-    public RowAccent Accent { get; init; }
+    private string? _stateWord;
+
+    public RowAccent Accent
+    {
+        get => _accent;
+        set => Set(ref _accent, value);
+    }
+
+    private RowAccent _accent;
 
     /// <summary>A row held by another participant renders at .4, as drawn in the row gallery.</summary>
-    public double RowOpacity { get; init; } = 1.0;
+    public double RowOpacity
+    {
+        get => _rowOpacity;
+        set => Set(ref _rowOpacity, value);
+    }
+
+    private double _rowOpacity = 1.0;
 
     /// <summary>The sub-15s bar. False on a row with plenty of time left.</summary>
-    public bool HasCountdown { get; init; }
+    public bool HasCountdown
+    {
+        get => _hasCountdown;
+        set => Set(ref _hasCountdown, value);
+    }
+
+    private bool _hasCountdown;
 
     /// <summary>Track width is 120 in the mock; this is the filled portion of it.</summary>
-    public double CountdownWidth { get; init; }
+    public double CountdownWidth
+    {
+        get => _countdownWidth;
+        set => Set(ref _countdownWidth, value);
+    }
 
-    public string? CountdownText { get; init; }
+    private double _countdownWidth;
+
+    public string? CountdownText
+    {
+        get => _countdownText;
+        set => Set(ref _countdownText, value);
+    }
+
+    private string? _countdownText;
+
+    /// <inheritdoc />
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>
+    /// Copies every displayed field from a freshly built row onto this one, raising a change for
+    /// each field that actually moved and none for the rest.
+    /// </summary>
+    /// <remarks>
+    /// This is what keeps a poll from being a flash. Replacing the ItemsSource rebuilds every
+    /// container, so a board where one age went from 11s to 16s re-created eight rows and replayed
+    /// eight entrance animations. Updating in place touches the one TextBlock that changed.
+    /// </remarks>
+    public void CopyFrom(BoardRowViewModel other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        SlotDisplay = other.SlotDisplay;
+        TypeAndQualifier = other.TypeAndQualifier;
+        CoordinatesDisplay = other.CoordinatesDisplay;
+        SecondPointDisplay = other.SecondPointDisplay;
+        LegDisplay = other.LegDisplay;
+        Requester = other.Requester;
+        AgeDisplay = other.AgeDisplay;
+        MetaExtra = other.MetaExtra;
+        StateWord = other.StateWord;
+        Accent = other.Accent;
+        RowOpacity = other.RowOpacity;
+        HasCountdown = other.HasCountdown;
+        CountdownWidth = other.CountdownWidth;
+        CountdownText = other.CountdownText;
+    }
+
+    private void Set<T>(ref T field, T value, [CallerMemberName] string? property = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+        {
+            return;
+        }
+
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
+    }
 
     /// <summary>Row anatomy: exactly one qualifier word. Supply kind and ordnance modifier both
     /// arrive as catalog modifier ids on the wire; this dev viewer has no catalog metadata to tell
