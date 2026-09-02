@@ -206,6 +206,12 @@ public sealed record TrayMenuState
     /// <summary>The device name currently chosen. Null means the primary.</summary>
     public string? OverlayDisplayDeviceName { get; init; }
 
+    /// <summary>
+    /// The absolute URL of this deployment's board on the web, or null when there is nothing to
+    /// open: no account, no group, or no deployment. Null hides the row.
+    /// </summary>
+    public string? WebBoardUrl { get; init; }
+
     /// <summary>False until the update checker exists. Hides the manual check row.</summary>
     public bool UpdateCheckAvailable { get; init; }
 
@@ -349,9 +355,17 @@ public static class TrayMenu
         // Top level, not buried under the group name. This is where the queue lives now that the
         // agent carries no second copy of it: the web board is the queue, the overlay is the
         // glance, and the tray is the status.
-        if (state.IsPaired)
+        //
+        // Gated on the URL, not on IsPaired. A row whose click has nowhere to go is exactly what
+        // Convention_WarCommandTrayMenuRendersOnlyHonourableRows forbids.
+        if (state.WebBoardUrl is { } board)
         {
-            items.Add(new TrayMenuItem { Text = "Open web board", Command = TrayCommand.OpenWebBoard });
+            items.Add(new TrayMenuItem
+            {
+                Text = "Open web board",
+                Command = TrayCommand.OpenWebBoard,
+                Argument = board,
+            });
         }
 
         // Deployment, never Match: the entity is a Deployment everywhere else in the product.

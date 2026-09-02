@@ -372,6 +372,9 @@ public partial class App : Application, IDisposable
             case TrayCommand.EnterPairingCode:
                 ShowPairingCodeDialog();
                 break;
+            case TrayCommand.OpenWebBoard:
+                OpenInBrowser(invoked.Argument);
+                break;
             case TrayCommand.OpenSettings:
                 ShowSettings();
                 break;
@@ -406,6 +409,51 @@ public partial class App : Application, IDisposable
             default:
                 break;
         }
+    }
+
+    /// <summary>
+    /// Hands a URL to the default browser. Absolute https only, and one of the profile's own web
+    /// origins: the argument comes from a menu row this process built, and checking it anyway is
+    /// what stops a future row shipping a shell execute of something else.
+    /// </summary>
+    private void OpenInBrowser(string? url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var target)
+            || target.Scheme != Uri.UriSchemeHttps
+            || !_webOrigins.Contains(target.GetLeftPart(UriPartial.Authority), StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            using var browser = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = target.ToString(),
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            // No default browser, or the shell refused. Nothing to say in a tray menu.
+        }
+    }
+
+    /// <summary>
+    /// This deployment's board on the web, or null when there is nothing to open. The browser
+    /// addresses a group and a deployment by slug and never by uuid, so a membership that arrived
+    /// without slugs yields no row rather than a link that 404s.
+    /// </summary>
+    private string? WebBoardUrl(ConfigMembership? membership)
+    {
+        if (_webOrigins.Count == 0
+            || membership?.GroupSlug is not { Length: > 0 } group
+            || membership.Deployment?.Slug is not { Length: > 0 } deployment)
+        {
+            return null;
+        }
+
+        return $"{_webOrigins[0]}/g/{Uri.EscapeDataString(group)}/d/{Uri.EscapeDataString(deployment)}";
     }
 
     /// <summary>
@@ -970,7 +1018,12 @@ public partial class App : Application, IDisposable
         // Only the rows this build can honour are filled in. The group, match, map, microphone and
         // push-to-talk fields stay null until their subsystem lands, and TrayMenu.Build leaves the
         // rows out, so the menu can never offer a click that does nothing.
-        _menuState = _menuState with { OpenRequestCount = 0, MyRequestCount = 0 };
+        _menuState = _menuState with
+        {
+            OpenRequestCount = 0,
+            MyRequestCount = 0,
+            WebBoardUrl = WebBoardUrl(membership),
+        };
 
         presenter.SetHeader(new BoardHeader
         {

@@ -155,7 +155,12 @@ public class TrayMenuOverlayTests
     [Fact]
     public void The_agent_offers_no_board_of_its_own()
     {
-        var items = TrayMenu.Build(Empty with { IsPaired = true, SettingsAvailable = true });
+        var items = TrayMenu.Build(Empty with
+        {
+            IsPaired = true,
+            SettingsAvailable = true,
+            WebBoardUrl = "https://warcommand.app/g/61st/d/alpha",
+        });
 
         Assert.Null(Find(items, "Second-screen mode"));
         Assert.Null(Find(items, "Board window"));

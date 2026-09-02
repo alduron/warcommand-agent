@@ -156,13 +156,11 @@ public class TrayMenuTests
     /// it is top level rather than buried under the group name, and absent until there is an
     /// account to open it as.
     /// </summary>
+    /// <summary>Covered in full by TrayWebBoardTests; this only pins the absent case.</summary>
     [Fact]
-    public void The_web_board_row_is_top_level_and_only_once_paired()
+    public void There_is_no_web_board_row_without_a_url()
     {
-        Assert.Null(Find(TrayMenu.Build(Empty), TrayCommand.OpenWebBoard));
-
-        var items = TrayMenu.Build(Empty with { IsPaired = true });
-        Assert.Contains(items, i => i.Command == TrayCommand.OpenWebBoard);
+        Assert.Null(Find(TrayMenu.Build(Empty with { IsPaired = true }), TrayCommand.OpenWebBoard));
     }
 
     [Fact]

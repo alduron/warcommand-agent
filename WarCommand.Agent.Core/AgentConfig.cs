@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace WarCommand.Agent.Core;
 
@@ -35,6 +35,12 @@ public sealed record ConfigDeployment
 
     public required string Label { get; init; }
 
+    /// <summary>
+    /// How the browser addresses it. The web routes on /g/{group}/d/{deployment} and never on a
+    /// uuid, so the id alone cannot build a link somebody can open.
+    /// </summary>
+    public string? Slug { get; init; }
+
     public int MemberCount { get; init; }
 
     /// <summary>Six digits, rendered in the overlay header. Re-emitted on deployment.roster when rotated.</summary>
@@ -49,6 +55,9 @@ public sealed record ConfigMembership
     public required Guid GroupId { get; init; }
 
     public required string GroupName { get; init; }
+
+    /// <summary>The group half of a web URL. See <see cref="ConfigDeployment.Slug"/>.</summary>
+    public string? GroupSlug { get; init; }
 
     public required string Callsign { get; init; }
 
