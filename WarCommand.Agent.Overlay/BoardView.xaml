@@ -35,8 +35,12 @@
                         is what should drain. Deliberately faint: it is ambient state, not a thing
                         to look at, and the eye is hunting the slot digit.
                     -->
+                    <!-- Through SmoothProgress, not Value: the board ticks once a second, and a
+                         direct binding advances the wash in one second steps on every open row at
+                         once. Ambient state must not twitch. -->
                     <ProgressBar x:Name="TimeWashFill" Minimum="0" Maximum="1"
-                                 Value="{Binding CountdownFraction}" IsHitTestVisible="False"
+                                 local:SmoothProgress.Value="{Binding CountdownFraction}"
+                                 IsHitTestVisible="False"
                                  Visibility="{Binding HasCountdown, Converter={StaticResource BoolToVisibility}}">
                         <ProgressBar.Template>
                             <ControlTemplate TargetType="ProgressBar">
@@ -330,19 +334,34 @@
                                     <TextBlock x:Name="HeaderMap" Grid.Column="3" Style="{StaticResource Up}"
                                                FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}"
                                                Margin="8,0,0,0" />
+                                    <!-- The invite code is the one thing on this bar somebody reads
+                                         out loud, so it is the largest text on it and carries no
+                                         label: six digits in the corner are not mistakable for
+                                         anything else. -->
                                     <TextBlock x:Name="HeaderRight" Grid.Column="4" Style="{StaticResource Up}"
-                                               FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Squad}"
+                                               FontSize="{StaticResource InviteSize}" FontWeight="Bold"
+                                               Foreground="{StaticResource Squad}"
+                                               VerticalAlignment="Center"
                                                HorizontalAlignment="Right" Margin="8,0,0,0" />
                                 </Grid>
+                                <!--
+                                    The hint sizes first and the roles take what is left. The other
+                                    way round, fourteen subscribed roles ate the row and the hint
+                                    was clipped mid-word, which is worst exactly when it matters:
+                                    NO PTT KEY TRAY > SETTINGS is the line that says why nothing
+                                    responds to the keyboard.
+                                -->
                                 <Grid Margin="0,1,0,0">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <ItemsControl x:Name="HeaderRoles" Grid.Column="0">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
-                                                <StackPanel Orientation="Horizontal" />
+                                                <!-- Wraps, so a full role set costs a second line
+                                                     rather than the hint beside it. -->
+                                                <WrapPanel Orientation="Horizontal" />
                                             </ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
@@ -383,6 +402,7 @@
                                     </ItemsControl>
                                     <TextBlock x:Name="HeaderHint" Grid.Column="1" Style="{StaticResource Up}"
                                                FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}"
+                                               VerticalAlignment="Bottom"
                                                HorizontalAlignment="Right" Margin="8,0,0,0" />
                                 </Grid>
                             </StackPanel>

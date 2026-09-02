@@ -154,6 +154,7 @@ public partial class App : Application, IDisposable
     private WasapiAudioCapture? _audioDevices;
     private DispatcherTimer? _configTimer;
     private DispatcherTimer? _tickTimer;
+
     private RealtimeClient? _realtime;
     private BoardRealtimeObserver? _observer;
     private readonly SystemClockOffset _clockOffset = new();
@@ -227,6 +228,9 @@ public partial class App : Application, IDisposable
                 : (profile.IsDev ? AgentBackend.Local : AgentBackend.Production).ToString(),
         };
         _settings = new SettingsStore(paths);
+        // The stored chords, before anything reads a binding. Defaults leave push-to-talk unbound
+        // on purpose, so without this the user's choice died with the process every launch.
+        ApplyStoredBindings(_settings.Current);
         _menuState = _menuState with
         {
             IsDev = profile.IsDev,
@@ -422,9 +426,13 @@ public partial class App : Application, IDisposable
         watcher.Start();
         _gameWatcher = watcher;
 
+        // Every binding except Panic is inert unless the game is the foreground window, and Wardogs
+        // is not out, so on every machine today that is every binding. The probe answers yes while
+        // the overlay is Always on, which is the user saying they run it without the game: the rule
+        // is unchanged and the answer is supplied, which is what the seam is for.
         _input = Composition.InputComposition.Start(
             _bindings,
-            watcher,
+            new Composition.ModeAwareForegroundProbe(watcher, () => settings.Current.OverlayMode),
             controller,
             _tray,
             onPtt: held => log.Info(held ? "PTT down." : "PTT up."),
@@ -1110,6 +1118,29 @@ public partial class App : Application, IDisposable
         ? "LISTENING"
         : OverlayHint.Resolve(new HintState { PttLabel = _bindings[BindingAction.Ptt].Label });
 
+    /// <summary>Adopts the chords held in settings, leaving any the file does not name.</summary>
+    private void ApplyStoredBindings(AgentSettings settings)
+    {
+        foreach (var (name, label) in settings.Bindings)
+        {
+            if (Enum.TryParse<BindingAction>(name, out var action)
+                && Chord.TryParse(label, out var chord))
+            {
+                _ = _bindings.Rebind(action, chord);
+            }
+        }
+    }
+
+    /// <summary>The chords, as settings stores them. Unbound actions are simply absent.</summary>
+    internal static Dictionary<string, string> StoredBindings(BindingSet bindings)
+    {
+        ArgumentNullException.ThrowIfNull(bindings);
+
+        return bindings.All
+            .Where(pair => pair.Value.IsBound)
+            .ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.Label, StringComparer.Ordinal);
+    }
+
     private string HeaderHint(bool onNoDeployment = false) => OverlayHint.Resolve(new HintState
     {
         PttLabel = _bindings[BindingAction.Ptt].IsBound ? _bindings[BindingAction.Ptt].Label : null,
@@ -1212,9 +1243,9 @@ public partial class App : Application, IDisposable
             Title = $"{membership.GroupName} / {membership.Deployment.Label}",
             PeopleCount = membership.Deployment.MemberCount,
             Where = membership.ParticipantKind == "visitor" ? "visitor" : null,
-            Right = membership.Deployment.InviteCode is { } invite
-                ? $"invite {invite}"
-                : me.User.Callsign,
+            // The code alone. Six digits in the corner of the bar are not mistakable for anything
+            // else, and the label was competing with the thing it labelled for the same width.
+            Right = membership.Deployment.InviteCode ?? me.User.Callsign,
             RoleIds = membership.SubscribedRoleIds,
             Hint = HeaderHint(),
         }.WithGlyph(new RoleGlyphSource(catalog.Role));

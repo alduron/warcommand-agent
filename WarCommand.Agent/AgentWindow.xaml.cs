@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using WarCommand.Agent.Client.Storage;
 using WarCommand.Agent.Core.Settings;
 using WarCommand.Agent.Input.Bindings;
@@ -15,6 +16,9 @@ namespace WarCommand.Agent;
 public sealed record BindingRow
 {
     public required string Action { get; init; }
+
+    /// <summary>The enum name, carried on the pill so a click knows which action it is rebinding.</summary>
+    public required string ActionName { get; init; }
 
     public required string Chord { get; init; }
 
@@ -47,6 +51,7 @@ public partial class AgentWindow : Window
 {
     private readonly SettingsStore _store;
     private readonly BindingSet _bindings;
+    private RebindSession? _capture;
     private bool _loading;
 
     public AgentWindow(SettingsStore store, IAudioDeviceCatalog? devices, BindingSet? bindings = null)
@@ -115,12 +120,15 @@ public partial class AgentWindow : Window
         RecognizerName.Text = "Vosk small en-us";
     }
 
-    private void LoadBindings() =>
+    private void LoadBindings(BindingAction? capturing = null) =>
         Bindings.ItemsSource = BindingActions.All
             .Select(action => new BindingRow
             {
                 Action = BindingActions.Display(action),
-                Chord = _bindings[action].IsBound ? _bindings[action].ToString() : "Not set",
+                ActionName = action.ToString(),
+                Chord = capturing == action
+                    ? "Press a key"
+                    : _bindings[action].IsBound ? _bindings[action].ToString() : "Not set",
                 IsBound = _bindings[action].IsBound,
                 Note = action == BindingAction.Panic ? "Rebindable, cannot be unbound" : null,
             })
@@ -213,9 +221,126 @@ public partial class AgentWindow : Window
 
     private void OnResetBindings(object sender, RoutedEventArgs e)
     {
+        EndCapture();
         _bindings.ResetToDefaults();
         LoadBindings();
+        SaveBindings();
         SavedNote.Text = "Keybinds reset";
+    }
+
+    /// <summary>
+    /// Starts capturing the next key or mouse button for one action.
+    /// </summary>
+    /// <remarks>
+    /// The window takes the press itself rather than the global hook: rebinding happens with this
+    /// window focused, and routing it through the hook would mean the key being bound is also
+    /// dispatched as whatever it currently is.
+    /// </remarks>
+    private void OnRebind(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: string name } || !Enum.TryParse<BindingAction>(name, out var action))
+        {
+            return;
+        }
+
+        _capture = new RebindSession(_bindings, action, DateTimeOffset.UtcNow);
+        LoadBindings(capturing: action);
+        SavedNote.Text = "Press a key or mouse button. Esc cancels.";
+    }
+
+    private void EndCapture()
+    {
+        _capture = null;
+        LoadBindings();
+    }
+
+    /// <summary>Feeds one candidate chord to the open capture, and reports what happened.</summary>
+    private void Offer(Chord chord)
+    {
+        if (_capture is not { } session)
+        {
+            return;
+        }
+
+        switch (session.Offer(chord, DateTimeOffset.UtcNow))
+        {
+            case RebindOutcome.Captured:
+                _capture = null;
+                LoadBindings();
+                SaveBindings();
+                SavedNote.Text = $"{BindingActions.Display(session.Action)} is {chord.Label}";
+                break;
+            case RebindOutcome.RefusedConflict:
+                SavedNote.Text =
+                    $"{chord.Label} is already {BindingActions.Display(session.ConflictsWith)}";
+                break;
+            default:
+                break;
+        }
+    }
+
+    /// <summary>Writes the chords through the store, the same way every other control does.</summary>
+    private void SaveBindings() =>
+        _store.Save(_store.Current with { Bindings = App.StoredBindings(_bindings) });
+
+    protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnPreviewKeyDown(e);
+
+        if (_capture is null)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (e.Key == Key.Escape)
+        {
+            EndCapture();
+            SavedNote.Text = "Rebind cancelled";
+            return;
+        }
+
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var modifiers = Keyboard.IsKeyDown(Key.RightAlt) ? BindingModifiers.RightAlt : BindingModifiers.None;
+        if (key is Key.RightAlt or Key.LeftAlt or Key.LeftCtrl or Key.RightCtrl
+            or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
+        {
+            return;
+        }
+
+        if (BindingKey.TryFromVirtualKey(KeyInterop.VirtualKeyFromKey(key), out var bindingKey))
+        {
+            Offer(new Chord(modifiers, bindingKey));
+        }
+    }
+
+    protected override void OnPreviewMouseDown(System.Windows.Input.MouseButtonEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnPreviewMouseDown(e);
+
+        if (_capture is null)
+        {
+            return;
+        }
+
+        // Only the extra buttons. Left and right belong to the window while it is open, and a
+        // rebind that swallowed the click that started it could never be finished with a mouse.
+        var button = e.ChangedButton switch
+        {
+            System.Windows.Input.MouseButton.XButton1 => (Input.Bindings.MouseButton?)Input.Bindings.MouseButton.Button4,
+            System.Windows.Input.MouseButton.XButton2 => Input.Bindings.MouseButton.Button5,
+            System.Windows.Input.MouseButton.Middle => Input.Bindings.MouseButton.Middle,
+            _ => null,
+        };
+
+        if (button is { } chosen
+            && BindingKey.TryFromMouseButton(chosen, out var bindingKey))
+        {
+            e.Handled = true;
+            Offer(Chord.Of(bindingKey));
+        }
     }
 
     private void OnClose(object sender, RoutedEventArgs e) => Close();

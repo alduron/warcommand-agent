@@ -70,6 +70,10 @@
     <sys:Double x:Key="LabelSize">14</sys:Double>
     <sys:Double x:Key="SlotSize">24</sys:Double>
 
+    <!-- The invite code. Larger than every other header cell because it is the one string on the
+         surface a person reads out loud to somebody else. -->
+    <sys:Double x:Key="InviteSize">18</sys:Double>
+
     <!--
         How far a glyph rides UP beside an ALL CAPS label. Caps fill only the cap band, so the text
         ink sits high in its line box and box-centring alone leaves the icon visibly low. In device

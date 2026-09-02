@@ -234,7 +234,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
             _header = _header with
             {
                 PeopleCount = payload.MemberCount,
-                Right = $"invite {payload.InviteCode}",
+                Right = payload.InviteCode,
             };
             RenderHeader();
         });
@@ -254,14 +254,19 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     public void OnConfigChanged(ConfigChangedPayload payload) => OnUi(() => _onConfigChanged());
 
     /// <summary>Server-derived. The client never names a topic and never asks to subscribe.</summary>
+    /// <summary>
+    /// The viewer's roles changed, on the web or anywhere else. Re-read the config.
+    /// </summary>
+    /// <remarks>
+    /// This used to report a deployment id, and App ignores one that matches where it already
+    /// stands, so changing a role on the website moved nothing on the overlay: the header kept the
+    /// old glyphs because subscribed_role_ids only ever arrives on /v1/me.
+    /// </remarks>
     public void OnSubscriptionsChanged(SubscriptionsChangedPayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
 
-        var deployment = payload.Subscriptions
-            .FirstOrDefault(s => s.Deployment is not null)?.Deployment?.Id;
-
-        OnUi(() => _onDeploymentChanged(deployment));
+        OnUi(() => _onConfigChanged());
     }
 
     /// <summary>Stop rendering that group and say why. The socket stays up.</summary>

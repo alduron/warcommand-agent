@@ -1,4 +1,4 @@
-namespace WarCommand.Agent.Input.Bindings;
+﻿namespace WarCommand.Agent.Input.Bindings;
 
 /// <summary>
 /// The one modifier WarCommand uses. Right Alt is distinct from Left Alt, which many games bind, and
@@ -53,6 +53,36 @@ public readonly record struct Chord(BindingModifiers Modifiers, BindingKey Key)
 
         digit = -1;
         return false;
+    }
+
+    /// <summary>
+    /// Reads a chord back from its own <see cref="Label"/>. The only parser, so a stored binding
+    /// and a rendered one can never disagree about what a string means.
+    /// </summary>
+    public static bool TryParse(string? label, out Chord chord)
+    {
+        chord = Unbound;
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        const string prefix = "RightAlt+";
+        var modifiers = BindingModifiers.None;
+        var rest = label;
+        if (label.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            modifiers = BindingModifiers.RightAlt;
+            rest = label[prefix.Length..];
+        }
+
+        if (!BindingKey.TryFromLabel(rest, out var key))
+        {
+            return false;
+        }
+
+        chord = new Chord(modifiers, key);
+        return true;
     }
 
     private static BindingKey KeyFor(string keyLabel) =>

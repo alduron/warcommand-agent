@@ -1,4 +1,4 @@
-using WarCommand.Agent.Input.Bindings;
+﻿using WarCommand.Agent.Input.Bindings;
 
 namespace WarCommand.Agent.Tests.Input;
 
@@ -129,5 +129,27 @@ public class BindingTests
     {
         Assert.Equal("Mouse5", BindingSet.SuggestedPtt.Label);
         Assert.False(BindingSet.Defaults().PttChosen);
+    }
+
+    [Theory]
+    [InlineData("Mouse5")]
+    [InlineData("RightAlt+B")]
+    [InlineData("RightAlt+P")]
+    [InlineData("Escape")]
+    public void A_chord_survives_the_round_trip_through_its_own_label(string label)
+    {
+        Assert.True(Chord.TryParse(label, out var chord));
+        Assert.Equal(label, chord.Label);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("Ctrl+B")]
+    [InlineData("RightAlt+NotAKey")]
+    public void A_label_the_key_set_does_not_hold_parses_to_nothing(string? label)
+    {
+        Assert.False(Chord.TryParse(label, out var chord));
+        Assert.False(chord.IsBound);
     }
 }

@@ -1,0 +1,28 @@
+Keybinds you can actually set, and a header you can read.
+
+The keybinds tab could show a chord and never set one, and nothing was saved
+between launches, so push-to-talk stayed unbound and no key did anything on
+any machine. Click a chord to rebind it, press the key or mouse button, and it
+is kept. Esc cancels, and a chord another binding holds is refused by name.
+
+Hotkeys work without the game. Every binding except Panic is inert unless
+Wardogs is the foreground window, and Wardogs is not out. While the overlay is
+Always on, which is you saying you run it without the game, the gate answers
+yes. Mirroring keeps the strict rule.
+
+The header hint is no longer clipped. Fourteen subscribed roles ate the row
+and cut the line that says why the keyboard does nothing. The roles wrap now
+and the hint sizes first.
+
+The invite code is the largest thing on the top bar and the word "invite" is
+gone. It is the one string on the surface you read out loud.
+
+Changing a role on the website updates the overlay. The header kept its old
+glyphs because subscribed roles only ever arrive on the config read, and a
+role change never triggered one.
+
+The countdown glides instead of stepping once a second.
+
+Panic, since it is on the tray: one press, RightAlt+P, suspends every hook,
+capture, draw and audio path at once. It is the only binding that stays live
+when the game is not in front of you.

@@ -151,10 +151,16 @@
                                                                    Style="{StaticResource FieldCaption}"
                                                                    Visibility="{Binding NoteVisibility}" />
                                                     </StackPanel>
-                                                    <Border Grid.Column="1" Style="{StaticResource KeyPill}">
+                                                    <!-- The pill is the control. A row that shows a
+                                                         chord and cannot set one is why no hotkey
+                                                         had ever fired: push-to-talk ships unbound
+                                                         on purpose and this was the only screen
+                                                         the overlay pointed at to bind it. -->
+                                                    <Button Grid.Column="1" Style="{StaticResource KeyPillButton}"
+                                                            Tag="{Binding ActionName}" Click="OnRebind">
                                                         <TextBlock x:Name="ChordText" Text="{Binding Chord}"
                                                                    Style="{StaticResource KeyPillText}" />
-                                                    </Border>
+                                                    </Button>
                                                 </Grid>
                                             </Border>
                                             <DataTemplate.Triggers>

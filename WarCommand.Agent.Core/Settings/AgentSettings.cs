@@ -1,4 +1,4 @@
-namespace WarCommand.Agent.Core.Settings;
+﻿namespace WarCommand.Agent.Core.Settings;
 
 /// <summary>Where the overlay sits. From the Overlay tab of docs/design/mocks/TraySettings.dc.html.</summary>
 public enum OverlayAnchor
@@ -153,6 +153,18 @@ public sealed record AgentSettings
 
     /// <summary>Opt-in, off by default. Binding rule 9.</summary>
     public bool ScreenCaptureEnabled { get; init; }
+
+    /// <summary>
+    /// The chosen chord per binding action, keyed by the action's name and holding a chord label.
+    /// Empty takes the defaults, which is a first run.
+    /// </summary>
+    /// <remarks>
+    /// Without this every launch rebuilt the defaults, which leave push-to-talk unbound on purpose,
+    /// and there was nowhere to put a choice: the keybinds tab could show a chord and never set one,
+    /// so no hotkey could ever fire on any machine.
+    /// </remarks>
+    public IReadOnlyDictionary<string, string> Bindings { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>The width the overlay actually renders at, clamped to what the mocks support.</summary>
     public int ClampedWidth => Math.Clamp(WidthPx, 300, 560);

@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     Dark control styles for the agent's window, built from OverlayTokens. The product has one
     theme: the settings tabs and the board are the same surface.
 
@@ -395,6 +395,29 @@
         <Setter Property="Padding" Value="10,3" />
         <Setter Property="MinWidth" Value="118" />
         <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- The same pill, clickable. Rebinding starts by clicking the chord you want to replace. -->
+    <Style x:Key="KeyPillButton" TargetType="Button">
+        <Setter Property="MinWidth" Value="118" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Pill" Background="{StaticResource Field}"
+                            BorderBrush="{StaticResource BoxEdge}" BorderThickness="1"
+                            CornerRadius="3" Padding="10,3">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Pill" Property="Background" Value="{StaticResource Hover}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style x:Key="KeyPillText" TargetType="TextBlock">
