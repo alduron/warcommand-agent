@@ -92,6 +92,27 @@ public partial class App : Application, IDisposable
     /// <summary>Startup, then every six hours. From 10-agent-spec.md "Updates".</summary>
     private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(6);
 
+    /// <summary>
+    /// True when this process is running from an install rather than from a build output folder.
+    /// </summary>
+    /// <remarks>
+    /// The installer lays the agent down under <c>%LOCALAPPDATA%\Programs\WarCommand</c>, and the
+    /// self-update replaces that. A build tree has a <c>bin</c> segment and no install beside it;
+    /// updating one downloads a release over the top of the thing being worked on.
+    /// </remarks>
+    private static bool IsInstalledBuild()
+    {
+        var directory = AppContext.BaseDirectory
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        var installRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs",
+            "WarCommand");
+
+        return directory.StartsWith(installRoot, StringComparison.OrdinalIgnoreCase);
+    }
+
     private readonly CancellationTokenSource _shutdown = new();
 
     private Mutex? _instanceLock;
@@ -457,6 +478,16 @@ public partial class App : Application, IDisposable
     /// </summary>
     private void StartUpdateChecks(AgentPaths paths, FileClientLog log)
     {
+        if (!IsInstalledBuild())
+        {
+            // A build running out of bin/ or a dotnet run reports the Directory.Build.props default
+            // of 0.0.0, which is below every release on purpose. So the tray offered the last
+            // release, and one click REPLACED the newer working build with an older published one
+            // and relaunched into it. An update is for an installed agent; this is not one.
+            log.Info("Not an installed build: update checks are off.");
+            return;
+        }
+
         // HttpClient's 100-second default covers the whole operation, streamed body included, so a
         // 59 MB installer needs a sustained 5 Mbps to beat it. Below that the transfer is cancelled
         // mid-stream, the cancellation is swallowed as "try again later", and the agent retries for
