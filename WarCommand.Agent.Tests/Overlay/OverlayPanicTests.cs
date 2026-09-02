@@ -1,4 +1,4 @@
-using System.Threading;
+﻿using System.Threading;
 using System.Windows.Threading;
 using WarCommand.Agent.Core.Settings;
 using WarCommand.Agent.Game;
@@ -83,7 +83,7 @@ public class OverlayPanicTests
 
     private static OverlayController Controller() => new(
         Dispatcher.CurrentDispatcher,
-        new AgentSettings { OverlayEnabled = true },
+        new AgentSettings { OverlayMode = OverlayMode.AlwaysOn },
         factory: () => new OverlayWindow());
 
     private static void OnStaThread(Action body)

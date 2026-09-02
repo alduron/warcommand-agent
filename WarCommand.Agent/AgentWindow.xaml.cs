@@ -93,6 +93,7 @@ public partial class AgentWindow : Window
             .Select((screen, i) => new DeviceChoice(screen.DeviceName, OverlayController.DisplayName(screen, i)))
             .ToList();
 
+        OverlayModeBox.ItemsSource = new[] { "Always on", "Mirror Wardogs", "Hidden" };
         AnchorBox.ItemsSource = new[] { "Left", "Right", "Top right", "Bottom right" };
         OverlayOpacityBox.ItemsSource = new[] { "Low", "Normal", "High" };
         WhenUnfocused.ItemsSource = new[] { "Hide", "Dim" };
@@ -130,8 +131,7 @@ public partial class AgentWindow : Window
         ConfidenceFloor.Value = settings.ConfidenceFloor;
         ShowRecognizedText.IsChecked = settings.ShowRecognizedText;
 
-        OverlayEnabled.IsChecked = settings.OverlayEnabled;
-        ShowWithoutGame.IsChecked = settings.ShowWithoutGame;
+        OverlayModeBox.SelectedIndex = (int)settings.OverlayMode;
         DisplayBox.SelectedItem = ((IEnumerable<DeviceChoice>)DisplayBox.ItemsSource)
             .FirstOrDefault(d => d.Id == settings.DisplayDeviceName)
             ?? ((IEnumerable<DeviceChoice>)DisplayBox.ItemsSource).FirstOrDefault();
@@ -184,8 +184,7 @@ public partial class AgentWindow : Window
         },
         ConfidenceFloor = ConfidenceFloor.Value,
         ShowRecognizedText = ShowRecognizedText.IsChecked is true,
-        OverlayEnabled = OverlayEnabled.IsChecked is true,
-        ShowWithoutGame = ShowWithoutGame.IsChecked is true,
+        OverlayMode = (OverlayMode)Math.Max(OverlayModeBox.SelectedIndex, 0),
         DisplayDeviceName = (DisplayBox.SelectedItem as DeviceChoice)?.Id,
         Anchor = (OverlayAnchor)Math.Max(AnchorBox.SelectedIndex, 0),
         WidthPx = (int)WidthPx.Value,

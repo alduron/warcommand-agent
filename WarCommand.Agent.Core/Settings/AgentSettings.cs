@@ -28,6 +28,29 @@ public enum UnfocusedBehaviour
 }
 
 /// <summary>
+/// The three things the overlay can be doing. One setting, because "on", "follows the game" and
+/// "which monitor" were three booleans that could be combined into states nobody wanted.
+/// </summary>
+public enum OverlayMode
+{
+    /// <summary>
+    /// Always drawing, on <see cref="AgentSettings.DisplayDeviceName"/>, whatever the game is
+    /// doing. The default, and the only mode that shows anything until Wardogs ships.
+    /// </summary>
+    AlwaysOn = 0,
+
+    /// <summary>
+    /// Follows Wardogs: drawn only while it is the foreground window, and on its screen rather
+    /// than on a monitor of its own. The mode to be in once the game exists, and the one that
+    /// keeps coordinates and callsigns off a stream while alt-tabbed.
+    /// </summary>
+    MirrorGame,
+
+    /// <summary>Never drawn. Second-screen mode and the board window still work.</summary>
+    Hidden,
+}
+
+/// <summary>
 /// The six sounds the overlay can make, each mutable on its own. From the per-event mute grid.
 /// </summary>
 public sealed record SoundMutes
@@ -82,29 +105,19 @@ public sealed record AgentSettings
     // Overlay.
 
     /// <summary>
-    /// The master switch for the in-game surface, on by default. Off is a real choice: a streamer
-    /// or a single-monitor player who works from second-screen mode wants nothing drawn over the
-    /// game, and turning every anchor and opacity into a way of hiding it is not that.
+    /// Always on, mirroring the game, or hidden. Defaults to always on, and it has to: Wardogs is
+    /// not out, so mirroring it would leave the overlay correct and invisible on every machine.
     /// </summary>
-    public bool OverlayEnabled { get; init; } = true;
+    public OverlayMode OverlayMode { get; init; } = OverlayMode.AlwaysOn;
 
     /// <summary>
-    /// Draw even when no game window exists at all, anchored to <see cref="DisplayDeviceName"/>.
+    /// Which monitor the overlay draws on, as a Windows device name like <c>\.\DISPLAY2</c>.
+    /// Null means the primary.
     /// </summary>
     /// <remarks>
-    /// On by default, and it has to be: Wardogs is not out. Without it the overlay is switched on,
-    /// correct, and invisible on every machine in the world, which is indistinguishable from
-    /// broken. When the game ships this becomes the thing a single-monitor player turns off.
-    /// </remarks>
-    public bool ShowWithoutGame { get; init; } = true;
-
-    /// <summary>
-    /// Which monitor the overlay uses when there is no game window to follow, as a Windows device
-    /// name like <c>\.\DISPLAY2</c>. Null means the primary.
-    /// </summary>
-    /// <remarks>
-    /// Only consulted with no game running. With a game up the overlay follows its client rect,
-    /// because a board anchored to a monitor the game is not on is a board nobody can see.
+    /// Read in <see cref="Settings.OverlayMode.AlwaysOn"/> only. Mirroring the game puts the board
+    /// on the game's screen by definition, so a monitor chosen there would be a setting that does
+    /// nothing, which is worse than no setting.
     /// </remarks>
     public string? DisplayDeviceName { get; init; }
 

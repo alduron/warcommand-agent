@@ -1,4 +1,7 @@
-﻿namespace WarCommand.Agent.Core.Tray;
+﻿using System.Linq;
+using WarCommand.Agent.Core.Settings;
+
+namespace WarCommand.Agent.Core.Tray;
 
 /// <summary>
 /// What the tray icon's field colour is saying. Mapped from the realtime socket's state by the
@@ -37,8 +40,12 @@ public enum TrayCommand
     ToggleScreenCapture,
     ToggleSounds,
     ToggleStartWithWindows,
-    ToggleOverlay,
-    NextOverlayDisplay,
+    /// <summary>Argument is an <c>OverlayMode</c> name: AlwaysOn, MirrorGame, Hidden.</summary>
+    SelectOverlayMode,
+
+    /// <summary>Argument is a Windows display device name, or null for the primary.</summary>
+    SelectOverlayDisplay,
+
     CheckForUpdates,
     InstallUpdate,
     SelectSoundOutput,
@@ -58,6 +65,13 @@ public enum TrayCommand
     /// <summary>Dev profile only.</summary>
     DevForceOffline,
 }
+
+/// <summary>One monitor the overlay can be put on.</summary>
+/// <remarks>
+/// The device name is what is persisted and the label is what a person can recognise: nobody
+/// knows which panel is \.\DISPLAY2, and every monitor reports itself as Generic PnP Monitor.
+/// </remarks>
+public sealed record TrayDisplay(string DeviceName, string Label, bool IsPrimary);
 
 /// <summary>One row. A separator, a label, a command, or a parent holding children.</summary>
 public sealed record TrayMenuItem
@@ -79,6 +93,13 @@ public sealed record TrayMenuItem
 
     /// <summary>What clicking it raises. <see cref="TrayCommand.None"/> for labels and parents.</summary>
     public TrayCommand Command { get; init; } = TrayCommand.None;
+
+    /// <summary>
+    /// Which one. A submenu of monitors or of overlay modes is one command over many rows, and
+    /// without a payload each row would need a command of its own and the enum would grow with
+    /// the number of monitors somebody owns.
+    /// </summary>
+    public string? Argument { get; init; }
 
     /// <summary>False renders greyed. Prefer omitting the row: a control you cannot use is noise.</summary>
     public bool IsEnabled { get; init; } = true;
@@ -165,10 +186,10 @@ public sealed record TrayMenuState
     public bool SecondScreenVisible { get; init; }
 
     /// <summary>
-    /// The in-game overlay's master switch. Null until the overlay subsystem exists, which hides
-    /// the row rather than offering a toggle over nothing.
+    /// Always on, mirroring the game, or hidden. Null until the overlay subsystem exists, which
+    /// hides the row rather than offering a control over nothing.
     /// </summary>
-    public bool? OverlayEnabled { get; init; }
+    public string? OverlayMode { get; init; }
 
     /// <summary>
     /// Why the overlay is not on screen while it is switched on: "waiting for game", "game not
@@ -181,13 +202,13 @@ public sealed record TrayMenuState
     public string? OverlayHint { get; init; }
 
     /// <summary>
-    /// The monitor the overlay is anchored to with no game running, e.g. "display 2 (2560x1440)".
-    /// Null hides the row, which is right when there is only one monitor to be on.
+    /// The monitors to choose between, in order, as (device name, label). Empty hides the row,
+    /// which is right when there is only one monitor to be on.
     /// </summary>
-    public string? OverlayDisplay { get; init; }
+    public IReadOnlyList<TrayDisplay> Displays { get; init; } = [];
 
-    /// <summary>False on a single-monitor machine. The row is absent rather than a dead click.</summary>
-    public bool HasMultipleDisplays { get; init; }
+    /// <summary>The device name currently chosen. Null means the primary.</summary>
+    public string? OverlayDisplayDeviceName { get; init; }
 
     /// <summary>False until the update checker exists. Hides the manual check row.</summary>
     public bool UpdateCheckAvailable { get; init; }
@@ -245,7 +266,9 @@ public static class TrayMenu
 
         var items = new List<TrayMenuItem>
         {
-            new() { Text = "WarCommand", IsTitle = true, IsEnabled = false },
+            // The dot beside the name is the colour; the word beside it is the same thing said out
+            // loud, because a colour alone cannot distinguish "not connected" from "not signed in".
+            new() { Text = "WarCommand", Value = StatusWord(state), IsTitle = true, IsEnabled = false },
             TrayMenuItem.Separator,
         };
 
@@ -265,6 +288,27 @@ public static class TrayMenu
         items.Add(new TrayMenuItem { Text = "Quit", Command = TrayCommand.Quit });
 
         return Collapse(items);
+    }
+
+    /// <summary>
+    /// The status word beside the product name. Panic wins over everything, and an agent that is
+    /// connected but holds no account says so: those are different problems with different fixes.
+    /// </summary>
+    public static string StatusWord(TrayMenuState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (state.PanicEngaged)
+        {
+            return "panic engaged";
+        }
+
+        return state.Indicator switch
+        {
+            TrayIndicator.Connected => state.IsPaired ? "connected" : "not signed in",
+            TrayIndicator.Reconnecting => "reconnecting",
+            _ => "not connected",
+        };
     }
 
     /// <summary>The header line. Panic wins over the socket state, exactly as the icon does.</summary>
@@ -412,35 +456,13 @@ public static class TrayMenu
             });
         }
 
-        // Above second-screen mode because it is the mode most people are in, and the one whose
-        // "why can I not see anything" the hint answers.
-        if (state.OverlayEnabled is { } overlay)
-        {
-            items.Add(new TrayMenuItem
-            {
-                Text = "Overlay",
-                Value = overlay ? state.OverlayHint ?? "on" : "off",
-                Command = TrayCommand.ToggleOverlay,
-                IsChecked = overlay,
-            });
+        AppendOverlaySection(items, state);
 
-            // One click, not a dropdown. "It is on the wrong screen" is noticed while the surface
-            // is in front of you, and the fix has to be reachable from there. Absent on a single
-            // monitor, and absent while the overlay is off.
-            if (overlay && state.OverlayDisplay is { } display && state.HasMultipleDisplays)
-            {
-                items.Add(new TrayMenuItem
-                {
-                    Text = "Overlay display",
-                    Value = display,
-                    Command = TrayCommand.NextOverlayDisplay,
-                });
-            }
-        }
-
+        // Not "second-screen mode": that named a mode nobody could define. It is the app's own
+        // window, the same one Settings opens, on its Board tab.
         items.Add(new TrayMenuItem
         {
-            Text = "Second-screen mode",
+            Text = "Board window",
             Value = OnOff(state.SecondScreenVisible),
             Command = TrayCommand.ToggleSecondScreen,
             IsChecked = state.SecondScreenVisible,
@@ -448,6 +470,82 @@ public static class TrayMenu
 
         items.Add(TrayMenuItem.Separator);
     }
+
+    /// <summary>
+    /// The overlay's two rows: which mode, and on which monitor. The monitor row is absent while
+    /// mirroring the game, because mirroring puts the board on the game's screen by definition and
+    /// a monitor picker there would be a control that does nothing.
+    /// </summary>
+    private static void AppendOverlaySection(List<TrayMenuItem> items, TrayMenuState state)
+    {
+        if (state.OverlayMode is not { } mode)
+        {
+            return;
+        }
+
+        items.Add(new TrayMenuItem
+        {
+            Text = "Overlay",
+            Value = OverlayModeLabel(mode, state.OverlayHint),
+            Children =
+            [
+                ModeRow(mode, nameof(Settings.OverlayMode.AlwaysOn), "Always on"),
+                ModeRow(mode, nameof(Settings.OverlayMode.MirrorGame), "Mirror Wardogs"),
+                ModeRow(mode, nameof(Settings.OverlayMode.Hidden), "Hidden"),
+            ],
+        });
+
+        if (mode == nameof(Settings.OverlayMode.MirrorGame) || state.Displays.Count <= 1)
+        {
+            return;
+        }
+
+        items.Add(new TrayMenuItem
+        {
+            Text = "Overlay display",
+            Value = DisplayLabel(state),
+            Children = [.. state.Displays.Select(d => new TrayMenuItem
+            {
+                Text = d.Label,
+                Value = d.IsPrimary ? "primary" : null,
+                Command = TrayCommand.SelectOverlayDisplay,
+                Argument = d.DeviceName,
+                IsChecked = IsChosen(state, d),
+            })],
+        });
+    }
+
+    private static TrayMenuItem ModeRow(string current, string mode, string text) => new()
+    {
+        Text = text,
+        Command = TrayCommand.SelectOverlayMode,
+        Argument = mode,
+        IsChecked = string.Equals(current, mode, StringComparison.Ordinal),
+        Value = string.Equals(current, mode, StringComparison.Ordinal) ? "on" : null,
+    };
+
+    /// <summary>
+    /// What the collapsed row says. Always on and Hidden speak for themselves; mirroring reads
+    /// "waiting for Wardogs" until the game is up, because otherwise the row says it is mirroring
+    /// while nothing is on screen and the only conclusion available is that it is broken.
+    /// </summary>
+    private static string OverlayModeLabel(string mode, string? hint) => mode switch
+    {
+        nameof(Settings.OverlayMode.Hidden) => "hidden",
+        nameof(Settings.OverlayMode.MirrorGame) => hint ?? "mirroring Wardogs",
+        _ => hint ?? "always on",
+    };
+
+    private static string DisplayLabel(TrayMenuState state)
+    {
+        var chosen = state.Displays.FirstOrDefault(d => IsChosen(state, d));
+        return chosen?.Label ?? "primary";
+    }
+
+    private static bool IsChosen(TrayMenuState state, TrayDisplay display) =>
+        state.OverlayDisplayDeviceName is { } name
+            ? string.Equals(display.DeviceName, name, StringComparison.Ordinal)
+            : display.IsPrimary;
 
     private static void AppendControlSection(List<TrayMenuItem> items, TrayMenuState state)
     {

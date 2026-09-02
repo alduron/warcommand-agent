@@ -80,7 +80,7 @@ public class TrayIconControllerTests
             };
 
             static ToolStripItem Row(TrayIconController tray) =>
-                tray.Menu.Items.Cast<ToolStripItem>().Single(item => item.Text == "Second-screen mode");
+                tray.Menu.Items.Cast<ToolStripItem>().Single(item => item.Text == "Board window");
 
             Assert.Equal("off", ((ToolStripMenuItem)Row(tray)).ShortcutKeyDisplayString);
 

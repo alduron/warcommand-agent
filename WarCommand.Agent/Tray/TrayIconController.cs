@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -27,6 +27,12 @@ namespace WarCommand.Agent.Tray;
 /// <see cref="StateProvider"/>; whatever it leaves null simply does not render.
 /// </para>
 /// </remarks>
+/// <summary>
+/// One click, and which one. A submenu of monitors or of overlay modes is one command over many
+/// rows, so the row's payload travels with it.
+/// </summary>
+public sealed record TrayCommandInvoked(TrayCommand Command, string? Argument);
+
 public sealed class TrayIconController : ISuspendable, IDisposable
 {
     private readonly NotifyIcon _notifyIcon;
@@ -75,7 +81,7 @@ public sealed class TrayIconController : ISuspendable, IDisposable
     }
 
     /// <summary>Raised when a menu row is clicked. Dev force-state rows are applied here first.</summary>
-    public event EventHandler<TrayCommand>? CommandInvoked;
+    public event EventHandler<TrayCommandInvoked>? CommandInvoked;
 
     /// <summary>The live menu. Exposed so a test can assert it is never empty before it opens.</summary>
     internal ContextMenuStrip Menu => _menu;
@@ -228,7 +234,8 @@ public sealed class TrayIconController : ISuspendable, IDisposable
         if (item.Command is not TrayCommand.None)
         {
             var command = item.Command;
-            rendered.Click += (_, _) => Raise(command);
+            var argument = item.Argument;
+            rendered.Click += (_, _) => Raise(command, argument);
         }
 
         return rendered;
@@ -261,7 +268,7 @@ public sealed class TrayIconController : ISuspendable, IDisposable
     /// Dev force-state rows are handled here rather than in the composition root, so iterating on
     /// the three icons needs no API, no socket and no wiring. See DEVELOPING.md.
     /// </summary>
-    private void Raise(TrayCommand command)
+    private void Raise(TrayCommand command, string? argument = null)
     {
         switch (command)
         {
@@ -278,7 +285,7 @@ public sealed class TrayIconController : ISuspendable, IDisposable
                 break;
         }
 
-        CommandInvoked?.Invoke(this, command);
+        CommandInvoked?.Invoke(this, new TrayCommandInvoked(command, argument));
     }
 
     private void Apply(RealtimeConnectionState state) => _notifyIcon.Icon = ToIndicator(state) switch

@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using WarCommand.Agent.Client.Diagnostics;
 using WarCommand.Agent.Client.Http;
 using WarCommand.Agent.Client.Link;
+using WarCommand.Agent.Client.Realtime;
 using WarCommand.Agent.Client.Storage;
 using WarCommand.Agent.Client.Tokens;
 using WarCommand.Agent.Client.Updates;
@@ -249,7 +250,7 @@ public partial class App : Application, IDisposable
 
         var controller = new OverlayController(
             Dispatcher,
-            settings.Current with { OverlayEnabled = true },
+            settings.Current with { OverlayMode = OverlayMode.AlwaysOn },
             factory: () => surface,
             notify: (title, body) => _tray?.ShowNotice(title, body));
         _overlay = controller;
@@ -265,10 +266,10 @@ public partial class App : Application, IDisposable
 
         _menuState = _menuState with
         {
-            OverlayEnabled = true,
+            OverlayMode = controller.Mode.ToString(),
             OverlayHint = controller.Hint,
-            OverlayDisplay = controller.DisplayLabel(),
-            HasMultipleDisplays = System.Windows.Forms.Screen.AllScreens.Length > 1,
+            OverlayDisplayDeviceName = settings.Current.DisplayDeviceName,
+            Displays = OverlayController.Displays(),
         };
 
         log.Info("Overlay demo: the surface is on the primary monitor. Nothing else is running.");
@@ -303,37 +304,30 @@ public partial class App : Application, IDisposable
 
         controller.StateChanged += (_, _) => _menuState = _menuState with
         {
-            OverlayEnabled = controller.IsEnabled,
+            OverlayMode = controller.Mode.ToString(),
             OverlayHint = controller.Hint,
-            OverlayDisplay = controller.DisplayLabel(),
         };
         _overlay = controller;
 
         _menuState = _menuState with
         {
-            OverlayEnabled = settings.Current.OverlayEnabled,
-            OverlayDisplay = controller.DisplayLabel(),
-            HasMultipleDisplays = System.Windows.Forms.Screen.AllScreens.Length > 1,
+            OverlayMode = settings.Current.OverlayMode.ToString(),
+            OverlayDisplayDeviceName = settings.Current.DisplayDeviceName,
+            Displays = OverlayController.Displays(),
         };
 
+        // Always Hide. The tracker's Dim existed to keep drawing while unfocused, which is now
+        // what OverlayMode.AlwaysOn means, and the controller reads the mode rather than this.
         var watcher = new GameWindowWatcher(
             BundledContracts.GameProfile().Current,
             controller,
-            settings.Current.WhenUnfocused == UnfocusedBehaviour.Dim
-                ? OverlayFocusBehavior.Dim
-                : OverlayFocusBehavior.Hide);
+            OverlayFocusBehavior.Hide);
         watcher.Start();
         _gameWatcher = watcher;
 
         // One subscription covers both ways settings move: the Overlay tab and the tray toggle
         // both go through Save, so neither can change the overlay without the other seeing it.
-        settings.Changed += (_, saved) =>
-        {
-            controller.ApplySettings(saved);
-            watcher.Tracker.SetBehavior(saved.WhenUnfocused == UnfocusedBehaviour.Dim
-                ? OverlayFocusBehavior.Dim
-                : OverlayFocusBehavior.Hide);
-        };
+        settings.Changed += (_, saved) => controller.ApplySettings(saved);
 
         log.Info("Overlay armed. Watching for a game window.");
     }
@@ -349,9 +343,11 @@ public partial class App : Application, IDisposable
     /// is not wired up cannot arrive: <see cref="TrayMenu.Build"/> does not render its row until the
     /// matching <see cref="TrayMenuState"/> field is filled in.
     /// </summary>
-    private void OnTrayCommand(object? sender, TrayCommand command)
+    private void OnTrayCommand(object? sender, TrayCommandInvoked invoked)
     {
-        switch (command)
+        ArgumentNullException.ThrowIfNull(invoked);
+
+        switch (invoked.Command)
         {
             case TrayCommand.ToggleSecondScreen:
                 ToggleSecondScreen();
@@ -374,11 +370,15 @@ public partial class App : Application, IDisposable
             case TrayCommand.ToggleStartWithWindows:
                 ToggleStartWithWindows();
                 break;
-            case TrayCommand.ToggleOverlay:
-                ToggleSetting(s => s with { OverlayEnabled = !s.OverlayEnabled });
+            case TrayCommand.SelectOverlayMode:
+                if (Enum.TryParse<OverlayMode>(invoked.Argument, out var mode))
+                {
+                    ToggleSetting(s => s with { OverlayMode = mode });
+                }
+
                 break;
-            case TrayCommand.NextOverlayDisplay:
-                MoveOverlayToNextDisplay();
+            case TrayCommand.SelectOverlayDisplay:
+                ToggleSetting(s => s with { DisplayDeviceName = invoked.Argument });
                 break;
             case TrayCommand.CheckForUpdates:
                 CheckForUpdatesNow();
@@ -451,32 +451,6 @@ public partial class App : Application, IDisposable
         return window;
     }
 
-    /// <summary>
-    /// Moves the overlay to the next monitor and says which. One click, because "it is on the
-    /// wrong screen" is a thing somebody notices while the surface is in front of them, not a
-    /// thing they want to go and find a dropdown for.
-    /// </summary>
-    private void MoveOverlayToNextDisplay()
-    {
-        if (_settings is not { } store)
-        {
-            return;
-        }
-
-        var screens = System.Windows.Forms.Screen.AllScreens;
-        if (screens.Length <= 1)
-        {
-            return;
-        }
-
-        var current = store.Current.DisplayDeviceName is { } name
-            ? Array.FindIndex(screens, s => string.Equals(s.DeviceName, name, StringComparison.Ordinal))
-            : Array.FindIndex(screens, s => s.Primary);
-
-        var next = screens[((current < 0 ? 0 : current) + 1) % screens.Length];
-        ToggleSetting(s => s with { DisplayDeviceName = next.DeviceName });
-    }
-
     /// <summary>A tray toggle writes through the same store the settings window does.</summary>
     private void ToggleSetting(Func<AgentSettings, AgentSettings> change)
     {
@@ -490,9 +464,9 @@ public partial class App : Application, IDisposable
         {
             ScreenCaptureEnabled = store.Current.ScreenCaptureEnabled,
             SoundsEnabled = store.Current.Sounds.AllSound,
-            OverlayEnabled = store.Current.OverlayEnabled,
+            OverlayMode = store.Current.OverlayMode.ToString(),
             OverlayHint = _overlay?.Hint,
-            OverlayDisplay = _overlay?.DisplayLabel(),
+            OverlayDisplayDeviceName = store.Current.DisplayDeviceName,
         };
     }
 
@@ -938,6 +912,10 @@ public partial class App : Application, IDisposable
     private async Task RenderForAsync(
         WarCommandApiClient client, MeResponse me, BoardPresenter presenter, FileClientLog log)
     {
+        // Reaching /v1/me is the connection, deployment or not. An agent standing on no deployment
+        // is idle, not offline, and a grey dot would say the opposite.
+        _tray?.SetConnectionState(RealtimeConnectionState.Connected);
+
         var membership = me.Memberships.FirstOrDefault(m => m.Deployment is not null);
 
         if (membership?.Deployment is null)
@@ -995,10 +973,12 @@ public partial class App : Application, IDisposable
             }
             catch (WarCommandApiException ex)
             {
+                _tray?.SetConnectionState(RealtimeConnectionState.Reconnecting);
                 log.Warn($"Board poll failed: {ex.Code}");
             }
             catch (HttpRequestException ex)
             {
+                _tray?.SetConnectionState(RealtimeConnectionState.Reconnecting);
                 log.Warn($"Board poll failed: {ex.Message}");
             }
         };
@@ -1275,6 +1255,12 @@ public partial class App : Application, IDisposable
         var overflowUrgent = overflow.Count(r => r.Priority == Priority.Urgent);
 
         presenter.RenderBoard(rows, secondary, overflow.Count, overflowUrgent);
+
+        // The realtime socket is not wired up yet, so nothing else ever called SetConnectionState
+        // and the icon sat grey on a fully signed-in agent that was reaching the server every five
+        // seconds. A poll that came back IS the connection, and it is the honest signal until the
+        // socket lands.
+        _tray?.SetConnectionState(RealtimeConnectionState.Connected);
         _menuState = _menuState with
         {
             OpenRequestCount = rows.Count + secondary.Count + overflow.Count,

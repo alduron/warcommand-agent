@@ -309,13 +309,12 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                                            <TextBlock Text="Draw over the game"
-                                                       Style="{StaticResource FieldLabel}" />
-                                            <TextBlock Text="Borderless Windowed only. Off leaves second-screen mode"
+                                            <TextBlock Text="Overlay mode" Style="{StaticResource FieldLabel}" />
+                                            <TextBlock Text="Mirror Wardogs draws on its screen, only while it is focused"
                                                        Style="{StaticResource FieldCaption}" />
                                         </StackPanel>
-                                        <CheckBox x:Name="OverlayEnabled" Grid.Column="1"
-                                                  Style="{StaticResource Switch}" Click="OnDirty" />
+                                        <ComboBox x:Name="OverlayModeBox" Grid.Column="1" Width="280"
+                                                  VerticalAlignment="Center" SelectionChanged="OnDirty" />
                                     </Grid>
                                 </Border>
 
@@ -327,7 +326,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
                                             <TextBlock Text="Display" Style="{StaticResource FieldLabel}" />
-                                            <TextBlock Text="Used when no game is running. With a game up it follows the game"
+                                            <TextBlock Text="Always on only. Mirroring uses the screen Wardogs is on"
                                                        Style="{StaticResource FieldCaption}" />
                                         </StackPanel>
                                         <ComboBox x:Name="DisplayBox" Grid.Column="1" Width="280"
@@ -404,23 +403,6 @@
                                                        Style="{StaticResource FieldCaption}" />
                                         </StackPanel>
                                         <CheckBox x:Name="ColourblindSafe" Grid.Column="1"
-                                                  Style="{StaticResource Switch}" Click="OnDirty" />
-                                    </Grid>
-                                </Border>
-
-                                <Border Style="{StaticResource FieldRow}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                                            <TextBlock Text="Draw when no game is running"
-                                                       Style="{StaticResource FieldLabel}" />
-                                            <TextBlock Text="On until Wardogs ships. Off leaves the overlay hidden until a game window appears"
-                                                       Style="{StaticResource FieldCaption}" />
-                                        </StackPanel>
-                                        <CheckBox x:Name="ShowWithoutGame" Grid.Column="1"
                                                   Style="{StaticResource Switch}" Click="OnDirty" />
                                     </Grid>
                                 </Border>

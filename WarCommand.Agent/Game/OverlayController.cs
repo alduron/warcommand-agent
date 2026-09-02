@@ -1,6 +1,8 @@
 ﻿
 using System.Windows.Threading;
+using System.Linq;
 using WarCommand.Agent.Core.Settings;
+using WarCommand.Agent.Core.Tray;
 using WarCommand.Agent.Input;
 using WarCommand.Agent.Overlay;
 
@@ -63,8 +65,8 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
     /// <summary>The surface, once it has been built. Null before the first draw.</summary>
     public OverlayWindow? Window => _window;
 
-    /// <summary>The master switch, as the tray row renders it.</summary>
-    public bool IsEnabled => _settings.OverlayEnabled;
+    /// <summary>Always on, mirroring the game, or hidden.</summary>
+    public OverlayMode Mode => _settings.OverlayMode;
 
     /// <summary>True while the surface is actually on screen.</summary>
     public bool IsDrawing => _window is { IsVisible: true };
@@ -72,21 +74,12 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
     /// <summary>True while Panic is engaged. Nothing draws.</summary>
     public bool IsSuspended => _suspended;
 
-    /// <summary>True when the surface draws with no game window at all.</summary>
-    public bool DrawsWithNoGame => !_gameRunning && _settings.ShowWithoutGame;
-
-    /// <summary>The monitor the overlay is anchored to right now, for the tray row.</summary>
-    public string DisplayLabel()
-    {
-        var screens = System.Windows.Forms.Screen.AllScreens;
-        var chosen = _settings.DisplayDeviceName is { } name
-            ? Array.FindIndex(screens, s => string.Equals(s.DeviceName, name, StringComparison.Ordinal))
-            : Array.FindIndex(screens, s => s.Primary);
-
-        return chosen >= 0
-            ? DisplayName(screens[chosen], chosen)
-            : "display 1";
-    }
+    /// <summary>The monitors the overlay can be put on, in order, for the tray submenu.</summary>
+    public static IReadOnlyList<TrayDisplay> Displays() =>
+    [
+        .. System.Windows.Forms.Screen.AllScreens.Select((screen, i) =>
+            new TrayDisplay(screen.DeviceName, DisplayName(screen, i), screen.Primary)),
+    ];
 
     /// <summary>
     /// "display 2 (2560x1440)". The device name is what is persisted, but nobody recognises
@@ -97,10 +90,7 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
         ArgumentNullException.ThrowIfNull(screen);
 
         var bounds = screen.Bounds;
-        var label = FormattableString.Invariant(
-            $"display {index + 1} ({bounds.Width}x{bounds.Height})");
-
-        return screen.Primary ? label + ", primary" : label;
+        return FormattableString.Invariant($"display {index + 1} ({bounds.Width}x{bounds.Height})");
     }
 
     /// <summary>
@@ -116,17 +106,20 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
                 return "panic";
             }
 
-            if (!_settings.OverlayEnabled)
+            // Always on and Hidden are self-evident from the mode word, so they say nothing extra.
+            // Mirroring is the mode that can be correct and showing nothing, so it always explains
+            // itself: otherwise the row reads "mirroring Wardogs" over a blank screen.
+            if (_settings.OverlayMode != OverlayMode.MirrorGame)
             {
                 return null;
             }
 
-            if (IsDrawing)
+            if (!_gameRunning)
             {
-                return _gameRunning ? null : "no game, on " + DisplayLabel();
+                return "waiting for Wardogs";
             }
 
-            return _gameRunning ? "game not focused" : "waiting for game";
+            return IsDrawing ? "mirroring Wardogs" : "Wardogs not focused";
         }
     }
 
@@ -253,9 +246,15 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
 
         // Panic outranks every other input. Suspended means nothing draws, whatever the game,
         // the settings or the tracker say.
-        var wanted = !_suspended
-            && _settings.OverlayEnabled
-            && (_visibility != OverlayVisibility.Hide || DrawsWithNoGame);
+        //
+        // Otherwise the mode decides, and it is the only thing that decides. Show from the tracker
+        // means the game is up AND foreground, which is exactly what mirroring waits for.
+        var wanted = !_suspended && _settings.OverlayMode switch
+        {
+            OverlayMode.Hidden => false,
+            OverlayMode.MirrorGame => _visibility == OverlayVisibility.Show,
+            _ => true,
+        };
 
         if (!wanted)
         {
@@ -267,10 +266,10 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
 
         var window = _window ??= _factory();
 
-        // With a game up the overlay follows its client rect. With no game it falls back to the
-        // chosen monitor, because a board anchored to a monitor the game is not on is a board
-        // nobody can see, and a board anchored to nothing is a board nobody can see either.
-        var target = _gameRect.IsEmpty ? ChosenWorkArea() : _gameRect;
+        // Mirroring draws on the game's screen by definition. Always on draws on the monitor the
+        // user picked, and keeps doing so with a game up: they asked for that monitor.
+        var mirroring = _settings.OverlayMode == OverlayMode.MirrorGame && !_gameRect.IsEmpty;
+        var target = mirroring ? _gameRect : ChosenWorkArea();
         var bounds = OverlayLayout.Place(target, _settings.Anchor, _settings.ClampedWidth);
 
         if (!bounds.IsEmpty)
@@ -279,12 +278,9 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
             window.ApplyBounds(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
         }
 
-        // Dim is for a game that is up and not focused. Drawing with no game at all is not dim:
-        // there is nothing to be behind, and a half-faded board on an empty desktop reads as a
-        // rendering fault rather than a mode.
-        var opacity = OverlayWindow.OpacityFor(_settings.Opacity);
-        var dimmed = _visibility == OverlayVisibility.Dim && _gameRunning;
-        window.FadeTo(dimmed ? opacity * DimFactor : opacity);
+        // Mirroring only ever draws while the game is focused, and Always on is a mode the user
+        // asked for rather than a fallback, so neither is dimmed. There is nothing left to dim.
+        window.FadeTo(OverlayWindow.OpacityFor(_settings.Opacity));
 
         // Re-asserted on every apply: a game that goes fullscreen-borderless re-creates its window
         // above ours, and Topmost alone does not win that race.
