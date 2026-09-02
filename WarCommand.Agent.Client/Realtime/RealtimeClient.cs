@@ -1,5 +1,6 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Net.WebSockets;
+using System.Text.Json;
 using System.Threading.Channels;
 using WarCommand.Agent.Client.Diagnostics;
 using WarCommand.Agent.Client.Http;
@@ -443,7 +444,30 @@ public sealed class RealtimeClient : IAsyncDisposable
     // Dispatch
     // -----------------------------------------------------------------------
 
+    /// <summary>
+    /// One frame. A payload this build cannot read is discarded, never fatal.
+    /// </summary>
+    /// <remarks>
+    /// FrameCodec.TryRead only guards the envelope. PayloadAs deserializes lazily, so a payload
+    /// whose shape or format this build does not accept threw from here, out of the receive pump,
+    /// out of the connect loop, and killed the socket for the rest of the session. It happened on
+    /// the very first frame the agent ever received: the server rendered ready.server_time with a
+    /// space instead of an ISO T, and one JsonException took the whole socket down permanently.
+    /// A frame is not worth a connection.
+    /// </remarks>
     private void Dispatch(string message)
+    {
+        try
+        {
+            DispatchCore(message);
+        }
+        catch (JsonException ex)
+        {
+            _log.Warn($"Discarded a realtime frame this build could not read: {ex.Message}");
+        }
+    }
+
+    private void DispatchCore(string message)
     {
         var envelope = FrameCodec.TryRead(message);
         if (envelope is null)

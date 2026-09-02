@@ -139,6 +139,9 @@ public partial class App : Application, IDisposable
     private UpdateOffer? _offer;
     private DispatcherTimer? _updateTimer;
     private FileClientLog? _updateLog;
+
+    /// <summary>The session log. Set once in OnStartup, unlike _updateLog which installed builds own.</summary>
+    private FileClientLog? _log;
     private WasapiAudioCapture? _audioDevices;
     private DispatcherTimer? _configTimer;
     private RealtimeClient? _realtime;
@@ -219,6 +222,7 @@ public partial class App : Application, IDisposable
         _tray.ShowLocationHint();
 
         var log = new FileClientLog(paths);
+        _log = log;
 
         if (profile.IsTrayOnly)
         {
@@ -1144,7 +1148,16 @@ public partial class App : Application, IDisposable
                 log: log);
             _realtime = realtime;
 
-            _ = Task.Run(() => realtime.RunAsync(_shutdown.Token), _shutdown.Token);
+            // Observed, not fire-and-forget. RunAsync catches the four failures it expects and
+            // lets anything else out; an unobserved Task swallows that, and the symptom is a
+            // socket stuck on Connecting for ever with nothing in the log to say why.
+            _ = Task.Run(() => realtime.RunAsync(_shutdown.Token), _shutdown.Token)
+                .ContinueWith(
+                    t => log.Error("The realtime loop stopped.", t.Exception!.GetBaseException()),
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted,
+                    TaskScheduler.Default);
+
             log.Info($"Realtime socket opening on {url.Host}.");
         }
         catch (ArgumentException ex)
@@ -1156,10 +1169,16 @@ public partial class App : Application, IDisposable
     }
 
     /// <summary>The socket's health IS the dot. Nothing else may set it.</summary>
+    /// <remarks>
+    /// Logged on every transition, because the dot's colour is the only thing a user can see and
+    /// "why is it amber" is otherwise unanswerable from a log file. The client itself logs the
+    /// failures; this logs reaching Connected, which nothing else records.
+    /// </remarks>
     private void OnRealtimeState(RealtimeConnectionState state)
     {
         _sawFrameRecently = true;
         _tray?.SetConnectionState(state);
+        _log?.Info($"Realtime socket is {state}.");
     }
 
     /// <summary>
