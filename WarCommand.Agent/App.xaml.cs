@@ -13,6 +13,7 @@ using WarCommand.Agent.Client.Storage;
 using WarCommand.Agent.Client.Tokens;
 using WarCommand.Agent.Client.Updates;
 using WarCommand.Agent.Core;
+using WarCommand.Agent.Core.Abstractions;
 using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Dev;
@@ -23,6 +24,7 @@ using WarCommand.Agent.Dev;
 using WarCommand.Agent.Game;
 using WarCommand.Agent.Input;
 using WarCommand.Agent.Speech.Capture;
+using WarCommand.Agent.Realtime;
 using WarCommand.Agent.Startup;
 using WarCommand.Agent.Core.Settings;
 using WarCommand.Agent.Overlay;
@@ -139,6 +141,21 @@ public partial class App : Application, IDisposable
     private FileClientLog? _updateLog;
     private WasapiAudioCapture? _audioDevices;
     private DispatcherTimer? _configTimer;
+    private RealtimeClient? _realtime;
+    private BoardRealtimeObserver? _observer;
+    private readonly SystemClockOffset _clockOffset = new();
+
+    /// <summary>
+    /// Set by any frame. The fallback poll skips a tick a live socket already covered, so a healthy
+    /// socket costs one /v1/me every two minutes rather than every fifteen seconds.
+    /// </summary>
+    private bool _sawFrameRecently;
+
+    /// <summary>
+    /// How often the fallback re-reads the config. Two minutes, not fifteen seconds: the socket is
+    /// the mechanism now and this only catches a frame that never arrived.
+    /// </summary>
+    private static readonly TimeSpan ConfigFallbackInterval = TimeSpan.FromMinutes(2);
 
     /// <summary>The deployment the current render is for, or null when standing on none.</summary>
     private Guid? _standingOn;
@@ -818,6 +835,9 @@ public partial class App : Application, IDisposable
         _pollTimer = null;
         _configTimer?.Stop();
         _configTimer = null;
+        _realtime?.Stop("the agent is shutting down");
+        _realtime = null;
+        _observer = null;
         _updateTimer?.Stop();
         _updateTimer = null;
         _ = _showRegistration?.Unregister(null);
@@ -964,6 +984,7 @@ public partial class App : Application, IDisposable
 
         var me = await AuthenticateAsync(client, tokenStore, paths, profile, log).ConfigureAwait(true);
         AdoptAccount(me);
+        StartRealtime(client, me, presenter, log);
         await RenderForAsync(client, me, presenter, log).ConfigureAwait(true);
         StartConfigWatch(client, presenter, log);
     }
@@ -991,10 +1012,6 @@ public partial class App : Application, IDisposable
     private async Task RenderForAsync(
         WarCommandApiClient client, MeResponse me, BoardPresenter presenter, FileClientLog log)
     {
-        // Reaching /v1/me is the connection, deployment or not. An agent standing on no deployment
-        // is idle, not offline, and a grey dot would say the opposite.
-        _tray?.SetConnectionState(RealtimeConnectionState.Connected);
-
         var membership = me.Memberships.FirstOrDefault(m => m.Deployment is not null);
 
         if (membership?.Deployment is null)
@@ -1021,6 +1038,7 @@ public partial class App : Application, IDisposable
                 WebBoardUrl = null,
             };
             _standingOn = null;
+            _observer?.Detach();
             log.Info("No deployment: showing the cold-start empty state.");
             return;
         }
@@ -1045,7 +1063,7 @@ public partial class App : Application, IDisposable
             WebBoardUrl = WebBoardUrl(membership),
         };
 
-        presenter.SetHeader(new BoardHeader
+        var header = new BoardHeader
         {
             Title = $"{membership.GroupName} / {membership.Deployment.Label}",
             PeopleCount = membership.Deployment.MemberCount,
@@ -1055,32 +1073,166 @@ public partial class App : Application, IDisposable
                 : me.User.Callsign,
             Roles = string.Join(' ', membership.SubscribedRoleIds),
             Hint = "RightAlt+H ?",
-        });
+        };
+        presenter.SetHeader(header);
 
+        // The HTTPS seed, which is the only seed there is. Everything after this arrives as a
+        // frame: the socket owns the board and there is no poll behind it.
         await RefreshBoardAsync(client, catalog, board, deploymentId, membership.MembershipId, presenter, log)
             .ConfigureAwait(true);
 
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        timer.Tick += async (_, _) =>
+        _observer?.Attach(board, membership.MembershipId, header);
+    }
+
+    /// <summary>
+    /// Opens the realtime socket and keeps it open. This is what the board runs on.
+    /// </summary>
+    /// <remarks>
+    /// The client itself has existed and been tested since long before this method: what was
+    /// missing was anything constructing it, so the agent ran on a five second board poll and a
+    /// fifteen second config poll and reacted to nothing in under five seconds.
+    /// <para>
+    /// Started with Task.Run rather than awaited or run inline: RunAsync is a connect-and-receive
+    /// loop that returns only when cancelled, and an async loop whose delay completes synchronously
+    /// never yields.
+    /// </para>
+    /// <para>
+    /// The URL comes from <c>/v1/me</c>. No URL means no socket and the fallback poll carries on,
+    /// which is what an agent talking to an API older than that field gets.
+    /// </para>
+    /// </remarks>
+    private void StartRealtime(
+        WarCommandApiClient client, MeResponse me, BoardPresenter presenter, FileClientLog log)
+    {
+        if (me.RealtimeUrl is not { } url)
         {
-            try
+            log.Warn("No realtime_url in /v1/me: staying on the fallback poll.");
+            return;
+        }
+
+        var observer = new BoardRealtimeObserver(
+            Dispatcher,
+            presenter,
+            () => BundledContracts.Catalog().Current,
+            OnRealtimeState,
+            deployment => OnDeploymentFrame(client, presenter, deployment, log),
+            () => OnConfigFrame(client, presenter, log),
+            snapshot => _menuState = _menuState with
             {
-                await RefreshBoardAsync(client, catalog, board, deploymentId, membership.MembershipId, presenter, log)
-                    .ConfigureAwait(true);
-            }
-            catch (WarCommandApiException ex)
-            {
-                _tray?.SetConnectionState(RealtimeConnectionState.Reconnecting);
-                log.Warn($"Board poll failed: {ex.Code}");
-            }
-            catch (HttpRequestException ex)
-            {
-                _tray?.SetConnectionState(RealtimeConnectionState.Reconnecting);
-                log.Warn($"Board poll failed: {ex.Message}");
-            }
-        };
-        timer.Start();
-        _pollTimer = timer;
+                OpenRequestCount = snapshot.OpenCount,
+                MyRequestCount = snapshot.MineCount,
+            });
+        _observer = observer;
+
+        var presence = new AgentPresenceSource(
+            () => observer.ClaimedRequestIds,
+            () => _gameWatcher?.GameIsRunning ?? false);
+
+        var revalidator = new HttpBoardRevalidator((deployment, token) =>
+            ReseedBoardAsync(client, presenter, deployment, log, token));
+
+        try
+        {
+            var realtime = new RealtimeClient(
+                url,
+                client,
+                ClientWebSocketChannelFactory.Instance,
+                observer,
+                presence,
+                revalidator,
+                _clockOffset,
+                log: log);
+            _realtime = realtime;
+
+            _ = Task.Run(() => realtime.RunAsync(_shutdown.Token), _shutdown.Token);
+            log.Info($"Realtime socket opening on {url.Host}.");
+        }
+        catch (ArgumentException ex)
+        {
+            // TransportSecurity refuses a plaintext ws://. Not a reason to fail startup: the
+            // fallback poll still renders a board and the tray still says not connected.
+            log.Error("Realtime URL refused.", ex);
+        }
+    }
+
+    /// <summary>The socket's health IS the dot. Nothing else may set it.</summary>
+    private void OnRealtimeState(RealtimeConnectionState state)
+    {
+        _sawFrameRecently = true;
+        _tray?.SetConnectionState(state);
+    }
+
+    /// <summary>
+    /// A frame said the deployment moved. Re-read the config and re-render against that rather than
+    /// trusting the frame's own fields: the header, the tray rows and the web board link all come
+    /// from the membership, and only <c>/v1/me</c> carries one.
+    /// </summary>
+    private async void OnDeploymentFrame(
+        WarCommandApiClient client, BoardPresenter presenter, Guid? deployment, FileClientLog log)
+    {
+        _sawFrameRecently = true;
+
+        if (deployment == _standingOn)
+        {
+            return;
+        }
+
+        await ReloadConfigAsync(client, presenter, log).ConfigureAwait(true);
+    }
+
+    /// <summary>config.changed, membership.ended and resync all mean the same thing: read it again.</summary>
+    private async void OnConfigFrame(
+        WarCommandApiClient client, BoardPresenter presenter, FileClientLog log)
+    {
+        _sawFrameRecently = true;
+        await ReloadConfigAsync(client, presenter, log).ConfigureAwait(true);
+    }
+
+    private async Task ReloadConfigAsync(
+        WarCommandApiClient client, BoardPresenter presenter, FileClientLog log)
+    {
+        try
+        {
+            var me = await client.GetMeAsync(_shutdown.Token).ConfigureAwait(true);
+            AdoptAccount(me);
+            await RenderForAsync(client, me, presenter, log).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+        {
+            log.Warn($"Config reload failed: {ex.GetType().Name}");
+        }
+    }
+
+    /// <summary>
+    /// The socket asking for the board again, with an id it took from a frame. Never a remembered
+    /// one, and never the filtered form: <c>?state=open</c> hides the agent's own claims.
+    /// </summary>
+    private async Task ReseedBoardAsync(
+        WarCommandApiClient client,
+        BoardPresenter presenter,
+        Guid deploymentId,
+        FileClientLog log,
+        CancellationToken cancellationToken)
+    {
+        if (_observer?.Board is not { } board)
+        {
+            await ReloadConfigAsync(client, presenter, log).ConfigureAwait(true);
+            return;
+        }
+
+        var catalog = BundledContracts.Catalog().Current;
+        var now = DateTimeOffset.UtcNow;
+        var wire = await client.GetBoardAsync(deploymentId, query: null, cancellationToken)
+            .ConfigureAwait(true);
+
+        foreach (var body in wire)
+        {
+            var label = catalog.RequestType(body.TypeId)?.OverlayLabel ?? body.TypeId.ToUpperInvariant();
+            _ = board.Upsert(body.ToBoardRow(label), now);
+        }
+
+        _observer.Render();
+        log.Info($"Board re-seeded over HTTPS: {wire.Count} rows.");
     }
 
     /// <summary>
@@ -1101,11 +1253,20 @@ public partial class App : Application, IDisposable
     /// </remarks>
     private void StartConfigWatch(WarCommandApiClient client, BoardPresenter presenter, FileClientLog log)
     {
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+        var timer = new DispatcherTimer { Interval = ConfigFallbackInterval };
         timer.Tick += async (_, _) =>
         {
             try
             {
+                // While the socket is up it says so first, and this is only the safety net for a
+                // frame that never arrived. Skipping the call entirely would leave a agent that
+                // lost a frame stuck until the socket happened to drop.
+                if (_realtime?.State == RealtimeConnectionState.Connected && _sawFrameRecently)
+                {
+                    _sawFrameRecently = false;
+                    return;
+                }
+
                 var me = await client.GetMeAsync(_shutdown.Token).ConfigureAwait(true);
                 var deployment = me.Memberships
                     .FirstOrDefault(m => m.Deployment is not null)?.Deployment?.Id;
@@ -1122,7 +1283,6 @@ public partial class App : Application, IDisposable
             }
             catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
             {
-                _tray?.SetConnectionState(RealtimeConnectionState.Reconnecting);
                 log.Warn($"Config poll failed: {ex.GetType().Name}");
             }
         };
@@ -1400,11 +1560,6 @@ public partial class App : Application, IDisposable
 
         presenter.RenderBoard(rows, secondary, overflow.Count, overflowUrgent);
 
-        // The realtime socket is not wired up yet, so nothing else ever called SetConnectionState
-        // and the icon sat grey on a fully signed-in agent that was reaching the server every five
-        // seconds. A poll that came back IS the connection, and it is the honest signal until the
-        // socket lands.
-        _tray?.SetConnectionState(RealtimeConnectionState.Connected);
         _menuState = _menuState with
         {
             OpenRequestCount = rows.Count + secondary.Count + overflow.Count,

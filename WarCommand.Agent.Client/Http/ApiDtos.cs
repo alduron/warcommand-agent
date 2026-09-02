@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using WarCommand.Agent.Core;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Model;
@@ -199,6 +199,13 @@ public sealed record LinkPrompt
 public sealed record MeResponse
 {
     public required ConfigUser User { get; init; }
+
+    /// <summary>
+    /// Where this account's socket lives, server-owned. On MeOut because the agent reads /v1/me on
+    /// every launch and the pairing config exactly once, so without it the socket URL could only be
+    /// had by hardcoding a path onto the API host.
+    /// </summary>
+    public Uri? RealtimeUrl { get; init; }
 
     public IReadOnlyList<ConfigMembership> Memberships { get; init; } = [];
 
