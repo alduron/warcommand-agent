@@ -7,91 +7,143 @@
       "id": "mortar",
       "display": "Mortar",
       "ticket_prefix": "MTR",
-      "color_group": "indirect",
-      "game_note": "FOB-built mortars. Wardogs mortars want a separate spotter, which is why spotter_request exists."
+      "color_group": "fire",
+      "game_note": "FOB-built mortars. Wardogs mortars want a separate spotter, which is why spotter_request exists.",
+      "icon": {
+        "d1": "M3 20C7 6 17 6 21 20",
+        "d2": "M3 20h4M17 20h4"
+      }
     },
     {
       "id": "artillery",
       "display": "Artillery",
       "ticket_prefix": "ART",
-      "color_group": "indirect",
-      "game_note": "SPH-2 self-propelled gun."
+      "color_group": "fire",
+      "game_note": "SPH-2 self-propelled gun.",
+      "icon": {
+        "d1": "M4 17 19 8",
+        "d2": "M6 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4M4 17h3"
+      }
     },
     {
       "id": "armor",
       "display": "Armor",
       "ticket_prefix": "ARM",
-      "color_group": "ground",
-      "game_note": "L2A6 main battle tank."
+      "color_group": "fire",
+      "game_note": "L2A6 main battle tank.",
+      "icon": {
+        "d1": "M3 17h13v-4H3z",
+        "d2": "M9 13V9h11"
+      }
     },
     {
       "id": "anti_air",
       "display": "Anti-Air",
       "ticket_prefix": "AAA",
-      "color_group": "ground",
-      "game_note": "Flakpanzer Gepard, and FOB-built AA."
+      "color_group": "fire",
+      "game_note": "Flakpanzer Gepard, and FOB-built AA.",
+      "icon": {
+        "d1": "M9 3v9M15 3v9",
+        "d2": "M5 20h14l-3-8H8z"
+      }
     },
     {
       "id": "air_support",
       "display": "Air Support",
       "ticket_prefix": "CAS",
-      "color_group": "air",
-      "game_note": "AH-6M (miniguns), AH-6R (rockets), Havoc, armed UH-1Y."
+      "color_group": "fire",
+      "game_note": "AH-6M (miniguns), AH-6R (rockets), Havoc, armed UH-1Y.",
+      "icon": {
+        "d1": "M12 3 14 12l7 3-7 1-2 5-2-5-7-1 7-3z",
+        "d2": ""
+      }
     },
     {
       "id": "air_transport",
       "display": "Air Transport",
       "ticket_prefix": "LFT",
-      "color_group": "air",
-      "game_note": "MH-6 (6 seats), UH-1Y (9 seats)."
+      "color_group": "move",
+      "game_note": "MH-6 (6 seats), UH-1Y (9 seats).",
+      "icon": {
+        "d1": "M3 6h18",
+        "d2": "M12 6v4M6 14h12l-2 5H8z"
+      }
     },
     {
       "id": "ground_transport",
       "display": "Ground Transport",
       "ticket_prefix": "TPT",
-      "color_group": "ground",
-      "game_note": "Bobcat, Dune Buggy, Kodiak, Humvee."
+      "color_group": "move",
+      "game_note": "Bobcat, Dune Buggy, Kodiak, Humvee.",
+      "icon": {
+        "d1": "M3 8h10v8H3z",
+        "d2": "M13 11h4l3 3v2h-7zM7 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M17 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"
+      }
     },
     {
       "id": "logistics",
       "display": "Logistics",
       "ticket_prefix": "LOG",
-      "color_group": "support",
-      "game_note": "Ural family and supply pallets. The Support and Driver tracks."
+      "color_group": "move",
+      "game_note": "Ural family and supply pallets. The Support and Driver tracks.",
+      "icon": {
+        "d1": "M4 7h16v13H4z",
+        "d2": "M4 12h16M12 7v13"
+      }
     },
     {
       "id": "engineer",
       "display": "Engineer",
       "ticket_prefix": "ENG",
-      "color_group": "support",
-      "game_note": "FOB construction and vehicle repair. Wardogs calls this the Support track; 'engineer' reads better on a 380px overlay."
+      "color_group": "build",
+      "game_note": "FOB construction and vehicle repair. Wardogs calls this the Support track; 'engineer' reads better on a 380px overlay.",
+      "icon": {
+        "d1": "M12 3 20 7.5v9L12 21 4 16.5v-9z",
+        "d2": "M12 9.5 15.5 11.5v3L12 16.5 8.5 14.5v-3z"
+      }
     },
     {
       "id": "medic",
       "display": "Medic",
       "ticket_prefix": "MED",
-      "color_group": "support"
+      "color_group": "medic",
+      "icon": {
+        "d1": "M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6z",
+        "d2": ""
+      }
     },
     {
       "id": "recon",
       "display": "Recon",
       "ticket_prefix": "RCN",
-      "color_group": "ground",
-      "game_note": "Binoculars, monocular, rangefinder, IR rangefinder, and marking."
+      "color_group": "recon",
+      "game_note": "Binoculars, monocular, rangefinder, IR rangefinder, and marking.",
+      "icon": {
+        "d1": "M7 20a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M17 20a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7",
+        "d2": "M7 13V5h3v8M17 13V5h-3v8M10 9h4"
+      }
     },
     {
       "id": "uav",
       "display": "UAV",
       "ticket_prefix": "UAV",
-      "color_group": "air",
-      "game_note": "Wardogs has both recon UAVs and FPV strike drones. Separated from recon because a drone operator is sitting still somewhere safe flying a camera, which is a different person doing a different job from a scout with binoculars."
+      "color_group": "recon",
+      "game_note": "Wardogs has both recon UAVs and FPV strike drones. Separated from recon because a drone operator is sitting still somewhere safe flying a camera, which is a different person doing a different job from a scout with binoculars.",
+      "icon": {
+        "d1": "M5 5h4M15 5h4M7 5v4M17 5v4",
+        "d2": "M9 9h6v6H9z"
+      }
     },
     {
       "id": "infantry",
       "display": "Infantry",
       "ticket_prefix": "INF",
-      "color_group": "ground",
-      "game_note": "The Assault track. The target for maneuver requests: flank, hold, breach, anti-tank."
+      "color_group": "fire",
+      "game_note": "The Assault track. The target for maneuver requests: flank, hold, breach, anti-tank.",
+      "icon": {
+        "d1": "M12 7a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5",
+        "d2": "M8 22v-6l-2-3 3-3h6l3 3-2 3v6"
+      }
     },
     {
       "id": "command",
@@ -101,7 +153,11 @@
       "receives_all": true,
       "grant_only": true,
       "note": "Subscribing to command receives every request in the SUBSCRIBER'S DEPLOYMENT regardless of target role. Never group-wide.",
-      "grant_only_note": "Requires groups.memberships.can_command, set by owner or admin through role.command.grant. Subscription decides what you receive; a capability decides what you may see. Self-service command is the one privilege escalation this product could plausibly introduce, and it also degrades the subscriber's own board to 100 percent of the deployment's traffic on nine slots."
+      "grant_only_note": "Requires groups.memberships.can_command, set by owner or admin through role.command.grant. Subscription decides what you receive; a capability decides what you may see. Self-service command is the one privilege escalation this product could plausibly introduce, and it also degrades the subscriber's own board to 100 percent of the deployment's traffic on nine slots.",
+      "icon": {
+        "d1": "M12 3 5 6v6c0 4 3 7 7 8 4-1 7-4 7-8V6z",
+        "d2": "M9 12h6M12 9v6"
+      }
     }
   ],
   "default_enabled_roles": [
@@ -1499,5 +1555,7 @@
     "left": "FORBIDDEN in the initial class. One feature from 'lift' (same syllables, same L onset, same F-T coda). It is legal in adjust_direction, where 'lift' cannot appear.",
     "right": "FORBIDDEN in the initial class. One feature from 'ride' (same syllables, same AY1, same R onset, coda differing only in voicing). It is legal in adjust_direction, where 'ride' cannot appear.",
     "rover": "Never add it. One feature from the adjust direction 'over': same syllable count, same OW1, same coda, differing only in a null versus R onset. If a ground-vehicle type ever wants this word it must take a two-word form."
-  }
+  },
+  "color_groups_note": "A colour group answers what the role DOES, so a queue glyph reads without its label: fire, recon, move, build, medic, command. It is not the domain the role sits in.",
+  "icon_note": "Two SVG path `d` strings on a 24x24 viewBox, stroke only, no fill. d2 may be empty. Served, never compiled in, so a glyph can be corrected without shipping a client."
 }

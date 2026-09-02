@@ -1572,8 +1572,13 @@ public partial class App : Application, IDisposable
             board.Upsert(body.ToBoardRow(overlayLabel), now);
         }
 
-        var rows = board.Rows.Select(r => BoardRowViewModel.FromPrimary(r, viewerId, now)).ToList();
-        var secondary = board.SecondaryStrip.Select(r => BoardRowViewModel.FromSecondary(r, now)).ToList();
+        var glyphs = new RoleGlyphSource(catalog.Role);
+        var rows = board.Rows
+            .Select(r => BoardRowViewModel.FromPrimary(r, viewerId, now).WithGlyph(glyphs))
+            .ToList();
+        var secondary = board.SecondaryStrip
+            .Select(r => BoardRowViewModel.FromSecondary(r, now).WithGlyph(glyphs))
+            .ToList();
         var overflow = board.Overflow;
         var overflowUrgent = overflow.Count(r => r.Priority == Priority.Urgent);
 

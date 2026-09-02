@@ -17,6 +17,17 @@
     <SolidColorBrush x:Key="Warn" Color="#E3AC43" />
     <SolidColorBrush x:Key="Squad" Color="#D9A840" />
 
+    <!--
+        Role identity. Same hex as the web's role tokens, keyed on the served color_group, so
+        one role reads the same on a board row and on an overlay row.
+    -->
+    <SolidColorBrush x:Key="RoleFire" Color="#E56A5C" />
+    <SolidColorBrush x:Key="RoleRecon" Color="#A98BE8" />
+    <SolidColorBrush x:Key="RoleMove" Color="#5A9FE6" />
+    <SolidColorBrush x:Key="RoleBuild" Color="#3FAF9F" />
+    <SolidColorBrush x:Key="RoleMedic" Color="#58B15A" />
+    <SolidColorBrush x:Key="RoleCommand" Color="#B4B6B8" />
+
     <!-- Panel chrome. scrim is rgba(14,16,18,.68); edge is rgba(255,255,255,.16). -->
     <SolidColorBrush x:Key="Scrim" Color="#AD0E1012" />
     <SolidColorBrush x:Key="Edge" Color="#29FFFFFF" />

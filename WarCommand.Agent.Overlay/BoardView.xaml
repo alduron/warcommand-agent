@@ -12,6 +12,7 @@
             </ResourceDictionary.MergedDictionaries>
 
             <local:NullToVisibilityConverter x:Key="NullToVisibility" />
+            <local:RoleBrushConverter x:Key="RoleBrush" />
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
             <!-- One row, the anatomy from docs/design/mocks/OverlayRows.dc.html. Every colour comes
@@ -40,9 +41,26 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Style="{StaticResource Up}"
-                                           FontSize="{StaticResource LabelSize}"
-                                           Text="{Binding TypeAndQualifier}" TextTrimming="CharacterEllipsis" />
+                                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                    <Canvas Width="18" Height="18" Margin="0,0,7,0" VerticalAlignment="Center"
+                                            SnapsToDevicePixels="True">
+                                        <Canvas.LayoutTransform>
+                                            <ScaleTransform ScaleX="0.75" ScaleY="0.75" />
+                                        </Canvas.LayoutTransform>
+                                        <Path Data="{Binding RoleGlyphFirst}" StrokeThickness="1.7"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              StrokeLineJoin="Round"
+                                              Stroke="{Binding RoleBrushKey, Converter={StaticResource RoleBrush}}" />
+                                        <Path Data="{Binding RoleGlyphSecond}" StrokeThickness="1.7"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              StrokeLineJoin="Round"
+                                              Stroke="{Binding RoleBrushKey, Converter={StaticResource RoleBrush}}" />
+                                    </Canvas>
+                                    <TextBlock Style="{StaticResource Up}"
+                                               FontSize="{StaticResource LabelSize}"
+                                               Text="{Binding TypeAndQualifier}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
                                 <TextBlock Grid.Column="1" Style="{StaticResource Mono}"
                                            Text="{Binding CoordinatesDisplay}" />
                                 <TextBlock x:Name="StateWord" Grid.Column="2" Style="{StaticResource Up}"

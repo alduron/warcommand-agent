@@ -3,6 +3,14 @@ using WarCommand.Agent.Core.Model;
 
 namespace WarCommand.Agent.Core.Contracts;
 
+/// <summary>Two SVG path 'd' strings on a 24x24 box, stroke only. D2 is empty for one path.</summary>
+public sealed record RoleIconDef
+{
+    public string D1 { get; init; } = string.Empty;
+
+    public string D2 { get; init; } = string.Empty;
+}
+
 /// <summary>A role a request can be addressed to.</summary>
 public sealed record RoleDef
 {
@@ -13,7 +21,11 @@ public sealed record RoleDef
     /// <summary>Ticket prefix, 'MTR'. The ticket counter is per group and never resets.</summary>
     public required string TicketPrefix { get; init; }
 
+    /// <summary>What the role DOES: fire, recon, move, build, medic, command. Drives the hue.</summary>
     public string? ColorGroup { get; init; }
+
+    /// <summary>The glyph the overlay and the web both draw. Served, never compiled in.</summary>
+    public RoleIconDef? Icon { get; init; }
 
     /// <summary>Subscribing receives every request in the subscriber's deployment. Never group-wide.</summary>
     public bool ReceivesAll { get; init; }

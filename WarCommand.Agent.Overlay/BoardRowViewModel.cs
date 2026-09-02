@@ -55,6 +55,17 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
     private string _slotDisplay = string.Empty;
 
+    /// <summary>The lead target role's id. Empty when the row names none.</summary>
+    public string RoleId { get; set; } = string.Empty;
+
+    /// <summary>The role glyph's two paths, resolved from the served catalog. Null draws nothing.</summary>
+    public System.Windows.Media.Geometry? RoleGlyphFirst { get; set; }
+
+    public System.Windows.Media.Geometry? RoleGlyphSecond { get; set; }
+
+    /// <summary>Resource key of the role's brush. Same hue the web paints the same role.</summary>
+    public string RoleBrushKey { get; set; } = "RoleCommand";
+
     /// <summary>Type plus its one qualifier word, uppercase. 'MORTAR SMOKE'.</summary>
     public required string TypeAndQualifier
     {
@@ -210,6 +221,10 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         ArgumentNullException.ThrowIfNull(other);
 
         SlotDisplay = other.SlotDisplay;
+        RoleId = other.RoleId;
+        RoleGlyphFirst = other.RoleGlyphFirst;
+        RoleGlyphSecond = other.RoleGlyphSecond;
+        RoleBrushKey = other.RoleBrushKey;
         TypeAndQualifier = other.TypeAndQualifier;
         CoordinatesDisplay = other.CoordinatesDisplay;
         SecondPointDisplay = other.SecondPointDisplay;
@@ -317,6 +332,18 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         return (true, track * fraction, $"{FormatAge(left)} left");
     }
 
+    /// <summary>Fills the glyph from the current catalog. A row with no glyph renders its text.</summary>
+    public BoardRowViewModel WithGlyph(RoleGlyphSource glyphs)
+    {
+        ArgumentNullException.ThrowIfNull(glyphs);
+
+        var (first, second) = glyphs.Geometry(RoleId);
+        RoleGlyphFirst = first;
+        RoleGlyphSecond = second;
+        RoleBrushKey = glyphs.BrushKey(RoleId);
+        return this;
+    }
+
     public static BoardRowViewModel FromPrimary(BoardRow row, Guid viewerParticipantId, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(row);
@@ -335,6 +362,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         return new BoardRowViewModel
         {
             SlotDisplay = row.Slot?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            RoleId = row.TargetRoleIds.Count > 0 ? row.TargetRoleIds[0] : string.Empty,
             TypeAndQualifier = typeAndQualifier.ToUpperInvariant(),
             CoordinatesDisplay = primary,
             SecondPointDisplay = second,
@@ -386,6 +414,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         return new BoardRowViewModel
         {
             SlotDisplay = string.Empty,
+            RoleId = row.TargetRoleIds.Count > 0 ? row.TargetRoleIds[0] : string.Empty,
             TypeAndQualifier = row.OverlayLabel.ToUpperInvariant(),
             CoordinatesDisplay = primary,
             Requester = row.ClaimantCallsign ?? string.Empty,

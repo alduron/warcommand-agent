@@ -315,8 +315,13 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         }
 
         var now = DateTimeOffset.UtcNow;
-        var rows = board.Rows.Select(r => BoardRowViewModel.FromPrimary(r, _viewerId, now)).ToList();
-        var secondary = board.SecondaryStrip.Select(r => BoardRowViewModel.FromSecondary(r, now)).ToList();
+        var glyphs = new RoleGlyphSource(_catalog().Role);
+        var rows = board.Rows
+            .Select(r => BoardRowViewModel.FromPrimary(r, _viewerId, now).WithGlyph(glyphs))
+            .ToList();
+        var secondary = board.SecondaryStrip
+            .Select(r => BoardRowViewModel.FromSecondary(r, now).WithGlyph(glyphs))
+            .ToList();
         var overflow = board.Overflow;
         var urgent = overflow.Count(r => r.Priority == Priority.Urgent);
 
