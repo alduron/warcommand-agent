@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -306,6 +306,24 @@ public partial class BoardView : UserControl
     /// actually changed. Rows already retiring are ignored as matches, so a fading row cannot be
     /// adopted as the container for a different ticket half way through its exit.
     /// </summary>
+    /// <summary>Draws the menu, or takes it off the surface when it is closed.</summary>
+    public void RenderMenu(MenuViewModel menu)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+
+        MenuPanel.Visibility = menu.IsOpen ? Visibility.Visible : Visibility.Collapsed;
+        if (!menu.IsOpen)
+        {
+            MenuOptions.ItemsSource = null;
+            return;
+        }
+
+        MenuTitle.Text = menu.Title;
+        MenuOptions.ItemsSource = menu.Options;
+        MenuTyped.Text = menu.Typed ?? string.Empty;
+        MenuTyped.Visibility = menu.Typed is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     private void Reconcile(
         ObservableCollection<BoardRowViewModel> live,
         IReadOnlyList<BoardRowViewModel> next,

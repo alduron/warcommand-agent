@@ -1,0 +1,24 @@
+Keyboard commands. The menu is connected.
+
+The menu, its tree and every outcome it can produce were written and tested and
+nothing ever constructed them: the composition root passed null where the menu
+belongs, so no digit reached anything and there was no way to make a request,
+take one, or close one without the web board. That is the half that was
+missing, and this is it.
+
+TAP push-to-talk. It latches the menu open and stays open with the key
+released, so the whole thing is a keyboard surface and needs no microphone.
+Holding it is still the voice path: hold, speak, let go on the confirm.
+
+Make a request: tap, pick the category, pick the type, type the grid, and it
+sends on confirm. The coordinate is taken the moment the key goes down and is
+never resampled while you read the menu.
+
+Take one or close one: tap, then 0 for the board, then the slot digit, then
+1 ACCEPT, 2 START, 3 DONE, 4 PASS, 5 RELEASE, 6 MUTE, 7 COPY.
+
+Backspace goes up a level, Escape closes, and a menu left open closes itself.
+
+Bind push-to-talk to a keyboard key if you do not want a mouse button: tray,
+Settings, KEYBINDS, click the chord, press the key. Any key works, and nothing
+about the menu needs a microphone.

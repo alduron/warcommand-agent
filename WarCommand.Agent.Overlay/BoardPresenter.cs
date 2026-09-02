@@ -1,4 +1,4 @@
-namespace WarCommand.Agent.Overlay;
+﻿namespace WarCommand.Agent.Overlay;
 
 /// <summary>
 /// Fans one board render out to every surface drawing it: the window's Board tab and, when it is
@@ -25,6 +25,7 @@ public sealed class BoardPresenter
 
     private BoardHeader? _header;
     private string? _status;
+    private MenuViewModel? _menu;
 
     /// <summary>
     /// Adds a surface and brings it up to date. The overlay is built after the first render, so
@@ -46,6 +47,11 @@ public sealed class BoardPresenter
             view.SetStatus(status);
         }
 
+        if (_menu is { } menu)
+        {
+            view.RenderMenu(menu);
+        }
+
         _last?.Invoke(view);
     }
 
@@ -54,6 +60,15 @@ public sealed class BoardPresenter
     {
         _header = header;
         Each(v => v.SetHeader(header));
+    }
+
+    /// <summary>The menu, on every surface the presenter drives, replayed onto a late one.</summary>
+    public void SetMenu(MenuViewModel menu)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+
+        _menu = menu;
+        Each(v => v.RenderMenu(menu));
     }
 
     /// <summary>The build line. Drawn on the window only; the overlay has no room for it.</summary>

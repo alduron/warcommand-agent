@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Model;
 
@@ -579,13 +579,27 @@ public sealed class MenuStateMachine
         return Level == MenuLevel.Closed ? MenuOutcome.None : Close("focus_lost");
     }
 
-    /// <summary>Releasing the key. Only the confirm level commits; every other level discards.</summary>
+    /// <summary>
+    /// Releasing the key. Confirm commits, a tap latches the menu open, everything else discards.
+    /// </summary>
+    /// <remarks>
+    /// A tap is a release still at the root with nothing chosen, and it latches so the whole menu
+    /// can be driven with the key released. Holding is the voice path and is unchanged: you speak
+    /// while it is down and let go on Confirm. Without the latch the only way to reach any of this
+    /// was to hold a key down through every digit, which is not a keyboard control surface.
+    /// </remarks>
     public MenuOutcome KeyUp(DateTimeOffset now)
     {
         _ = now;
         if (Level == MenuLevel.Closed || _latched)
         {
             return MenuOutcome.None;
+        }
+
+        if (Level == MenuLevel.Root && _path.Count == 0 && _digits.Count == 0)
+        {
+            _latched = true;
+            return new MenuNavigated(Level);
         }
 
         if (Level != MenuLevel.Confirm)

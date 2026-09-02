@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using System.Net.Http;
 using System.Threading;
@@ -155,6 +156,7 @@ public partial class App : Application, IDisposable
     private DispatcherTimer? _configTimer;
     private DispatcherTimer? _tickTimer;
 
+    private Composition.MenuDriver? _menu;
     private RealtimeClient? _realtime;
     private BoardRealtimeObserver? _observer;
     private readonly SystemClockOffset _clockOffset = new();
@@ -180,6 +182,9 @@ public partial class App : Application, IDisposable
 
     /// <summary>The deployment the current render is for, or null when standing on none.</summary>
     private Guid? _standingOn;
+
+    /// <summary>The group that deployment belongs to. A submit is group scoped, not deployment scoped.</summary>
+    private Guid? _groupId;
     private EventWaitHandle? _showRequest;
     private RegisteredWaitHandle? _showRegistration;
 
@@ -430,13 +435,19 @@ public partial class App : Application, IDisposable
         // is not out, so on every machine today that is every binding. The probe answers yes while
         // the overlay is Always on, which is the user saying they run it without the game: the rule
         // is unchanged and the answer is supplied, which is what the seam is for.
+        // The menu. Tapping push-to-talk latches it open and every digit below is a keyboard
+        // control; holding it is the voice path. Built here because it needs the catalog, and
+        // rebuilt by RebuildMenu when a config frame changes it.
+        _menu = BuildMenu(presenter, log);
+
         _input = Composition.InputComposition.Start(
             _bindings,
             new Composition.ModeAwareForegroundProbe(watcher, () => settings.Current.OverlayMode),
             controller,
             _tray,
-            onPtt: held => log.Info(held ? "PTT down." : "PTT up."),
-            log);
+            onPtt: held => OnPtt(held, log),
+            log,
+            _menu);
 
         // One subscription covers both ways settings move: the Overlay tab and the tray toggle
         // both go through Save, so neither can change the overlay without the other seeing it.
@@ -446,6 +457,223 @@ public partial class App : Application, IDisposable
 
         log.Info("Overlay armed. Watching for a game window.");
     }
+
+    /// <summary>Compiles the menu for the current catalog and wires its outcomes.</summary>
+    private Composition.MenuDriver BuildMenu(BoardPresenter presenter, FileClientLog log)
+    {
+        var catalog = BundledContracts.Catalog().Current;
+        var tree = MenuTree.Compile(catalog);
+        var machine = new MenuStateMachine(tree, catalog);
+        return new Composition.MenuDriver(
+            Dispatcher,
+            machine,
+            outcome => OnMenuOutcome(outcome, presenter, log));
+    }
+
+    /// <summary>
+    /// Push-to-talk down opens the menu; up latches it on a tap and commits or discards on a hold.
+    /// </summary>
+    /// <remarks>
+    /// The coordinate is snapshotted on key DOWN and handed to the menu here, never sampled later:
+    /// people move the mouse while they talk and while they read a menu.
+    /// </remarks>
+    private void OnPtt(bool held, FileClientLog log)
+    {
+        if (_menu is not { } menu)
+        {
+            return;
+        }
+
+        if (!held)
+        {
+            menu.KeyUp();
+            return;
+        }
+
+        log.Info("PTT down.");
+        menu.Open(SnapshotCoordinate(), new MenuContext
+        {
+            OccupiedSlots = [.. _observer?.Board?.Rows.Where(r => r.Slot is not null).Select(r => r.Slot!.Value) ?? []],
+            CanRestart = _menuState.CanRestartMatch,
+        });
+    }
+
+    /// <summary>
+    /// The coordinate at key-down, from the enabled sources in priority order. Null when none
+    /// answers, which is every machine until capture or a typed grid provides one.
+    /// </summary>
+    private static MapPoint? SnapshotCoordinate() => null;
+
+    /// <summary>Everything the menu can decide, and what the agent does about it.</summary>
+    private void OnMenuOutcome(MenuOutcome outcome, BoardPresenter presenter, FileClientLog log)
+    {
+        switch (outcome)
+        {
+            case MenuRequestReady ready:
+                SubmitFromMenu(ready, log);
+                break;
+
+            case MenuBoardAction action:
+                RunBoardVerb(action, log);
+                break;
+
+            case MenuJoinReady join:
+                JoinFromMenu(join.InviteCode, log);
+                break;
+
+            case MenuDiscarded discarded:
+                log.Info($"Menu closed: {discarded.Reason}.");
+                break;
+
+            default:
+                break;
+        }
+
+        RenderMenu(presenter);
+    }
+
+    /// <summary>Pushes the menu's current state onto the surface, closed included.</summary>
+    private void RenderMenu(BoardPresenter presenter)
+    {
+        if (_menu is not { } menu)
+        {
+            return;
+        }
+
+        presenter.SetMenu(MenuViewModel.From(menu.Menu));
+        _observer?.SetHint(MenuHint(menu.Menu));
+    }
+
+    /// <summary>
+    /// A request the menu finished composing. Optimistic: the row is the server's answer, and a
+    /// refusal is reported on the surface rather than swallowed.
+    /// </summary>
+    private async void SubmitFromMenu(MenuRequestReady ready, FileClientLog log)
+    {
+        if (_client is not { } client
+            || _standingOn is not { } deployment
+            || _groupId is not { } group)
+        {
+            return;
+        }
+
+        var type = BundledContracts.Catalog().Current.RequestType(ready.TypeId);
+        var body = new SubmitRequestBody
+        {
+            TypeId = ready.TypeId,
+            CapturedInDeploymentId = deployment,
+            Modifiers = ready.Modifiers,
+            Priority = ready.Modifiers.Contains("urgent") ? Priority.Urgent : Priority.Normal,
+            ClientSubmittedAt = DateTimeOffset.UtcNow,
+            Points =
+            [
+                new PointBody
+                {
+                    Ordinal = 0,
+                    Label = type is { PointLabels.Count: > 0 } ? type.PointLabels[0] : "target",
+                    X = ready.Point.X.ToString(CultureInfo.InvariantCulture),
+                    Y = ready.Point.Y.ToString(CultureInfo.InvariantCulture),
+                    Source = ready.Point.Source,
+                    RawText = ready.Point.RawText,
+                    Confidence = ready.Point.Confidence,
+                },
+            ],
+        };
+
+        try
+        {
+            var result = await client
+                .SubmitRequestAsync(group, Guid.NewGuid().ToString("n"), body, _shutdown.Token)
+                .ConfigureAwait(true);
+            log.Info($"Request submitted: {result.Request.TicketCode}.");
+        }
+        catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+        {
+            log.Warn($"Submit failed: {ex.GetType().Name}");
+            _observer?.SetFault("SUBMIT FAILED");
+        }
+    }
+
+    /// <summary>
+    /// A verb against one slot. Sent on the socket, which is where every request command lives.
+    /// </summary>
+    /// <remarks>
+    /// A claim is never queued: a replayed one takes work somebody else has already finished.
+    /// </remarks>
+    private void RunBoardVerb(MenuBoardAction action, FileClientLog log)
+    {
+        if (_realtime is not { } realtime || _observer?.Board is not { } board)
+        {
+            return;
+        }
+
+        if (board.BySlot(action.Slot) is not { } row)
+        {
+            log.Info($"No row on slot {action.Slot.ToString(CultureInfo.InvariantCulture)}.");
+            return;
+        }
+
+        var sent = action.VerbId switch
+        {
+            "accept" => realtime.Claim(row.Id, row.Version),
+            "start" => realtime.Start(row.Id, row.Version),
+            "done" => realtime.Complete(row.Id, Outcome.Serviced, null, null, row.Version),
+            "release" => realtime.Release(row.Id, row.Version),
+            "pass" => board.Pass(row.Id, DateTimeOffset.UtcNow),
+            "mute" => board.MuteRequester(row.RequestedByParticipantId, DateTimeOffset.UtcNow) > 0,
+            "copy" => CopyPoint(row),
+            _ => false,
+        };
+
+        log.Info(sent
+            ? $"{action.VerbId} on slot {action.Slot.ToString(CultureInfo.InvariantCulture)}."
+            : $"{action.VerbId} refused on slot {action.Slot.ToString(CultureInfo.InvariantCulture)}.");
+        _observer?.Render();
+    }
+
+    /// <summary>
+    /// The coordinate to the clipboard, and never a synthesised keystroke. Pressing the paste key
+    /// on somebody's behalf is input synthesis, which binding rule 1 forbids outright: the
+    /// architecture test greps for the API name, in comments too, which is how this one was caught.
+    /// </summary>
+    private static bool CopyPoint(BoardRow row)
+    {
+        if (row.Points.Count == 0)
+        {
+            return false;
+        }
+
+        var point = row.Points[0].Point;
+        System.Windows.Clipboard.SetText(FormattableString.Invariant($"{point.X:0.00} {point.Y:0.00}"));
+        return true;
+    }
+
+    /// <summary>Six digits off the keypad, for anybody with no microphone and no web board open.</summary>
+    private async void JoinFromMenu(string inviteCode, FileClientLog log)
+    {
+        if (_client is not { } client || _presenter is not { } presenter)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = await client.JoinDeploymentAsync(inviteCode, _shutdown.Token).ConfigureAwait(true);
+            await ReloadConfigAsync(client, presenter, log).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+        {
+            log.Warn($"Join failed: {ex.GetType().Name}");
+            _observer?.SetFault("JOIN REFUSED");
+        }
+    }
+
+    private string MenuHint(MenuStateMachine menu) => OverlayHint.Resolve(new HintState
+    {
+        PttLabel = _bindings[BindingAction.Ptt].IsBound ? _bindings[BindingAction.Ptt].Label : null,
+        MenuLevel = menu.Level,
+        OnNoDeployment = _standingOn is null,
+    });
 
     /// <summary>
     /// Re-renders the board once a second so the countdown actually counts down.
@@ -467,6 +695,9 @@ public partial class App : Application, IDisposable
 
             _ = board.Tick(DateTimeOffset.UtcNow);
             _observer.Render();
+            // The menu's own idle timeout rides the same tick, so a latched menu left open closes
+            // itself rather than sitting over the board until somebody presses Escape.
+            _menu?.Tick();
         };
         timer.Start();
         _tickTimer = timer;
@@ -1207,6 +1438,7 @@ public partial class App : Application, IDisposable
                 WebBoardUrl = null,
             };
             _standingOn = null;
+            _groupId = null;
             _observer?.Detach();
             log.Info("No deployment: showing the cold-start empty state.");
             // Standing nowhere is exactly when the tray's switch list is most useful.
@@ -1227,6 +1459,7 @@ public partial class App : Application, IDisposable
         // push-to-talk fields stay null until their subsystem lands, and TrayMenu.Build leaves the
         // rows out, so the menu can never offer a click that does nothing.
         _standingOn = deploymentId;
+        _groupId = membership.GroupId;
         _menuState = _menuState with
         {
             GroupName = membership.GroupName,

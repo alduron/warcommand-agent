@@ -408,6 +408,47 @@
                             </StackPanel>
                         </Border>
 
+                        <!--
+                            The menu. It draws its own digits, which is the whole reason the hotkey
+                            surface is four bindings and not twelve: a chord draws nothing, a menu
+                            teaches itself while you use it.
+                        -->
+                        <Border x:Name="MenuPanel" Padding="9,7" Visibility="Collapsed"
+                                BorderBrush="{StaticResource Edge}" BorderThickness="0,0,0,1"
+                                Background="{StaticResource TakenWash}">
+                            <StackPanel>
+                                <TextBlock x:Name="MenuTitle" Style="{StaticResource Up}"
+                                           FontSize="{StaticResource LabelSize}"
+                                           Foreground="{StaticResource Ink}" />
+                                <TextBlock x:Name="MenuTyped" Style="{StaticResource Mono}"
+                                           FontSize="{StaticResource SlotSize}"
+                                           Foreground="{StaticResource Yours}" Margin="0,2,0,0"
+                                           Visibility="Collapsed" />
+                                <ItemsControl x:Name="MenuOptions" Margin="0,4,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,1,0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="22" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Style="{StaticResource Up}"
+                                                           FontSize="{StaticResource LabelSize}"
+                                                           FontWeight="Bold"
+                                                           Foreground="{StaticResource Squad}"
+                                                           Text="{Binding Digit}" />
+                                                <TextBlock Grid.Column="1" Style="{StaticResource Up}"
+                                                           FontSize="{StaticResource LabelSize}"
+                                                           Foreground="{StaticResource Ink}"
+                                                           Text="{Binding Label}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
                         <ItemsControl x:Name="RowsList" ItemTemplate="{StaticResource RowTemplate}" />
 
                         <Border x:Name="OverflowRow" Padding="9,5" Visibility="Collapsed">

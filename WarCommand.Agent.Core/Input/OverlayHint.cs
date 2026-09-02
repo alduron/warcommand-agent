@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace WarCommand.Agent.Core.Input;
 
@@ -100,7 +100,10 @@ public static class OverlayHint
             return $"SAME MATCH?  {Route(ptt, "match")}";
         }
 
-        return $"HOLD {ptt}  {HelpMarker}";
+        // TAP, not HOLD. A tap latches the menu open and every digit below it is a keyboard
+        // control; holding is the voice path. Naming the hold taught the one route that needs a
+        // microphone and hid the one that does not.
+        return $"TAP {ptt}  {HelpMarker}";
     }
 
     /// <summary>

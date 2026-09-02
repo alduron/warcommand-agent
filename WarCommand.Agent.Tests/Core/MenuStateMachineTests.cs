@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 
@@ -98,6 +98,78 @@ public class MenuStateMachineTests
 
         Assert.NotNull(tree.Find("fire.1"));
         Assert.Null(tree.Find("medical.1"));
+    }
+
+    [Fact]
+    public void A_tap_latches_the_menu_so_it_can_be_driven_with_the_key_released()
+    {
+        var menu = Machine();
+        menu.Open(T0);
+
+        // Down and straight back up, having chosen nothing. That is a tap.
+        var outcome = menu.KeyUp(T0.AddMilliseconds(80));
+
+        Assert.IsType<MenuNavigated>(outcome);
+        Assert.True(menu.IsOpen);
+        Assert.True(menu.IsLatched);
+        Assert.Equal(MenuLevel.Root, menu.Level);
+
+        // And the digits still work with nothing held down.
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0.AddSeconds(1));
+        Assert.Equal(MenuLevel.Branch, menu.Level);
+    }
+
+    [Fact]
+    public void A_hold_that_reached_a_level_still_discards_on_release()
+    {
+        var menu = Machine();
+        menu.Open(T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0.AddMilliseconds(50));
+
+        var outcome = menu.KeyUp(T0.AddMilliseconds(120));
+
+        Assert.IsType<MenuDiscarded>(outcome);
+        Assert.False(menu.IsOpen);
+    }
+
+    [Fact]
+    public void A_latched_menu_takes_a_whole_request_from_the_keyboard_alone()
+    {
+        var menu = Machine();
+        menu.Open(T0);
+        _ = menu.KeyUp(T0.AddMilliseconds(80));
+
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0.AddSeconds(1));
+        menu.Digit(1, T0.AddSeconds(2));
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+
+        foreach (var digit in new[] { 8, 5, 5, 3, 6, 9, 4, 2 })
+        {
+            menu.Digit(digit, T0.AddSeconds(3));
+        }
+
+        Assert.Equal(MenuLevel.Confirm, menu.Level);
+        Assert.Equal("mortar_fire", menu.SelectedTypeId);
+    }
+
+    [Fact]
+    public void Zero_reaches_the_board_and_a_slot_takes_a_verb()
+    {
+        var menu = Machine();
+        menu.Open(T0, context: new MenuContext { OccupiedSlots = [4] });
+        _ = menu.KeyUp(T0.AddMilliseconds(80));
+
+        menu.Digit(0, T0.AddSeconds(1));
+        Assert.Equal(MenuLevel.Board, menu.Level);
+
+        menu.Digit(4, T0.AddSeconds(2));
+        Assert.Equal(MenuLevel.BoardAction, menu.Level);
+
+        var outcome = menu.Digit(1, T0.AddSeconds(3));
+
+        var action = Assert.IsType<MenuBoardAction>(outcome);
+        Assert.Equal("accept", action.VerbId);
+        Assert.Equal(4, action.Slot);
     }
 
     [Fact]

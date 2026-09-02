@@ -340,6 +340,20 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
             rows.Count(r => r.Accent == RowAccent.Mine)));
     }
 
+    /// <summary>Replaces the header's hint cell, which the menu owns while it is open.</summary>
+    public void SetHint(string? hint) => OnUi(() =>
+    {
+        _header = _header with { Hint = hint };
+        RenderHeader();
+    });
+
+    /// <summary>Shows a fault word in the header, or clears it with null.</summary>
+    public void SetFault(string? fault) => OnUi(() =>
+    {
+        _fault = fault;
+        RenderHeader();
+    });
+
     private void RenderHeader() => _presenter.SetHeader(_header with { Fault = _fault });
 
     private string OverlayLabel(string typeId) =>

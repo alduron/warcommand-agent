@@ -1,4 +1,4 @@
-using WarCommand.Agent.Client.Diagnostics;
+﻿using WarCommand.Agent.Client.Diagnostics;
 using WarCommand.Agent.Game;
 using WarCommand.Agent.Input;
 using WarCommand.Agent.Input.Bindings;
@@ -51,13 +51,18 @@ public sealed class InputComposition : IDisposable
     /// <param name="overlay">Registered as the drawing subsystem and driven by the Board chord.</param>
     /// <param name="tray">Registered as the indicator subsystem so it greys on panic.</param>
     /// <param name="onPtt">Push-to-talk edges. Down is where a coordinate is snapshotted.</param>
+    /// <param name="menu">
+    /// The menu keys and the gate. Null leaves every digit inert, which is the tray-only and
+    /// overlay-demo case: there is no board for a verb to act on.
+    /// </param>
     public static InputComposition Start(
         BindingSet bindings,
         IForegroundProbe foreground,
         OverlayController overlay,
         TrayIconController? tray,
         Action<bool> onPtt,
-        IClientLog log)
+        IClientLog log,
+        MenuDriver? menu = null)
     {
         ArgumentNullException.ThrowIfNull(bindings);
         ArgumentNullException.ThrowIfNull(foreground);
@@ -70,7 +75,17 @@ public sealed class InputComposition : IDisposable
         var hooks = new HookHost(bridge);
 
         var chords = new ChordRouter(overlay, panic, log);
-        bridge.Connect(new PttRouter(onPtt), menu: null, chords, menuGate: null);
+
+        // The menu, and the gate that decides whether bare digits are hooked at all. Passing null
+        // for both is what made every digit inert: the machine, its tree and its outcomes were all
+        // written and tested with nothing on the other end of them.
+        bridge.Connect(new PttRouter(onPtt), menu, chords, menuGate: menu);
+        if (menu is not null)
+        {
+            // Bare digits are hooked only while the menu is open, so every state change has to
+            // rebuild the armed table before the next key lands.
+            menu.Rearm = bridge.Rearm;
+        }
 
         // Arm() refuses until every subsystem is registered, so a new one cannot silently miss the
         // kill switch. Capture and audio are not built yet and register as explicit no-ops rather
