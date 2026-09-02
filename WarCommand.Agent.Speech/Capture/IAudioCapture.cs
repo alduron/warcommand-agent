@@ -1,4 +1,4 @@
-namespace WarCommand.Agent.Speech.Capture;
+﻿namespace WarCommand.Agent.Speech.Capture;
 
 /// <summary>One WASAPI capture endpoint, by its friendly name.</summary>
 /// <param name="Id">Endpoint id. Stable across reboots; what settings stores.</param>
@@ -41,7 +41,12 @@ public sealed record AudioCaptureHealth(AudioCaptureState State, string? DeviceN
     public string? OverlayLine => State == AudioCaptureState.NoInputDevice ? "NO MICROPHONE" : null;
 }
 
-/// <summary>Every active capture endpoint, refreshed on device change.</summary>
+/// <summary>Every active endpoint, capture and render, refreshed on device change.</summary>
+/// <remarks>
+/// Render endpoints are here for the settings list and the sound output row. Enumerating an
+/// endpoint opens nothing and captures nothing: the names come from the shell's device enumerator,
+/// and audio only ever moves once <see cref="IAudioCapture.Open"/> is called.
+/// </remarks>
 public interface IAudioDeviceCatalog
 {
     /// <summary>Active capture endpoints, Default first when one exists.</summary>
@@ -49,6 +54,12 @@ public interface IAudioDeviceCatalog
 
     /// <summary>The system default communications capture device, or null when there is none.</summary>
     AudioDevice? DefaultInput { get; }
+
+    /// <summary>Active render endpoints, Default first when one exists.</summary>
+    IReadOnlyList<AudioDevice> Outputs { get; }
+
+    /// <summary>The system default render device, or null when there is none.</summary>
+    AudioDevice? DefaultOutput { get; }
 }
 
 /// <summary>

@@ -64,24 +64,39 @@ public partial class AgentWindow : Window
 
     private void LoadDevices(IAudioDeviceCatalog? devices)
     {
-        var inputs = new List<DeviceChoice> { new(null, "Default") };
+        InputDevice.ItemsSource = Choices(devices?.Inputs, devices?.DefaultInput);
+        OutputDevice.ItemsSource = Choices(devices?.Outputs, devices?.DefaultOutput);
+
+        if (devices is null)
+        {
+            AudioNotice.Text = "No audio device list. Only Default can be chosen.";
+            AudioNoticeBox.Visibility = Visibility.Visible;
+        }
+    }
+
+    /// <summary>
+    /// One device list: Default first, naming the device it currently resolves to, then every
+    /// other active endpoint.
+    /// </summary>
+    /// <remarks>
+    /// Default is a real choice and not a placeholder: it follows the user changing their default
+    /// in Windows, which a pinned endpoint id does not. Naming what it resolves to is what makes
+    /// the difference visible, so nobody picks their headset twice.
+    /// </remarks>
+    private static List<DeviceChoice> Choices(
+        IReadOnlyList<AudioDevice>? devices, AudioDevice? fallback)
+    {
+        var label = fallback is { } current ? $"Default ({current.FriendlyName})" : "Default";
+        var choices = new List<DeviceChoice> { new(null, label) };
+
         if (devices is not null)
         {
-            inputs.AddRange(devices.Inputs
+            choices.AddRange(devices
                 .Where(d => !d.IsDefault)
                 .Select(d => new DeviceChoice(d.Id, d.FriendlyName)));
         }
-        else
-        {
-            AudioNotice.Text = "Capture not running. Only Default can be chosen.";
-            AudioNoticeBox.Visibility = Visibility.Visible;
-        }
 
-        InputDevice.ItemsSource = inputs;
-
-        // Render endpoints are not enumerated yet: nothing plays a sound, so a list of outputs
-        // would be a list of choices that change nothing.
-        OutputDevice.ItemsSource = new List<DeviceChoice> { new(null, "Default") };
+        return choices;
     }
 
     private void LoadChoices()
@@ -118,7 +133,9 @@ public partial class AgentWindow : Window
         InputDevice.SelectedItem = ((IEnumerable<DeviceChoice>)InputDevice.ItemsSource)
             .FirstOrDefault(d => d.Id == settings.InputDeviceId)
             ?? ((IEnumerable<DeviceChoice>)InputDevice.ItemsSource).First();
-        OutputDevice.SelectedIndex = 0;
+        OutputDevice.SelectedItem = ((IEnumerable<DeviceChoice>)OutputDevice.ItemsSource)
+            .FirstOrDefault(d => d.Id == settings.OutputDeviceId)
+            ?? ((IEnumerable<DeviceChoice>)OutputDevice.ItemsSource).First();
 
         MasterVolume.Value = settings.MasterVolume;
         SoundBoardEmpty.IsChecked = settings.Sounds.BoardWentFromEmpty;

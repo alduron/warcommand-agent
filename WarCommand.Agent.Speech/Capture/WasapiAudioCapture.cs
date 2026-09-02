@@ -1,4 +1,4 @@
-using NAudio.CoreAudioApi;
+﻿using NAudio.CoreAudioApi;
 using NAudio.CoreAudioApi.Interfaces;
 using NAudio.Wave;
 
@@ -84,26 +84,50 @@ public sealed class WasapiAudioCapture : IAudioCapture, IAudioDeviceCatalog
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<AudioDevice> Inputs
+    public IReadOnlyList<AudioDevice> Inputs => Enumerate(DataFlow.Capture, Role.Communications);
+
+    /// <inheritdoc />
+    public AudioDevice? DefaultInput => Inputs.FirstOrDefault(d => d.IsDefault);
+
+    /// <summary>
+    /// Render endpoints, for the sound output list. Console rather than Communications: readback
+    /// and the board's ticks follow where the user hears the game, not where their comms app is.
+    /// </summary>
+    public IReadOnlyList<AudioDevice> Outputs => Enumerate(DataFlow.Render, Role.Console);
+
+    /// <inheritdoc />
+    public AudioDevice? DefaultOutput => Outputs.FirstOrDefault(d => d.IsDefault);
+
+    /// <summary>
+    /// Active endpoints for one direction, Default first. Opens nothing: this reads the shell's
+    /// device list, which is the same list Windows' own sound settings show.
+    /// </summary>
+    private IReadOnlyList<AudioDevice> Enumerate(DataFlow flow, Role role)
     {
-        get
+        var defaultId = DefaultEndpointId(flow, role);
+        var devices = new List<AudioDevice>();
+
+        try
         {
-            var defaultId = DefaultEndpointId();
-            var devices = new List<AudioDevice>();
-            foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
+            foreach (var device in _enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active))
             {
                 devices.Add(new AudioDevice(
                     device.ID,
                     device.FriendlyName,
                     string.Equals(device.ID, defaultId, StringComparison.Ordinal)));
             }
-
-            return [.. devices.OrderByDescending(d => d.IsDefault).ThenBy(d => d.FriendlyName, StringComparer.CurrentCulture)];
         }
-    }
+        catch (Exception error) when (error is not OutOfMemoryException and not StackOverflowException)
+        {
+            // A machine mid-driver-install enumerates nothing rather than throwing at a settings
+            // window. An empty list renders as Default only, which is what it was before.
+            return [];
+        }
 
-    /// <inheritdoc />
-    public AudioDevice? DefaultInput => Inputs.FirstOrDefault(d => d.IsDefault);
+        return [.. devices
+            .OrderByDescending(d => d.IsDefault)
+            .ThenBy(d => d.FriendlyName, StringComparer.CurrentCulture)];
+    }
 
     /// <inheritdoc />
     public void Open(string? deviceId)
@@ -199,12 +223,14 @@ public sealed class WasapiAudioCapture : IAudioCapture, IAudioDeviceCatalog
             encoding == WaveFormatEncoding.IeeeFloat);
     }
 
-    private string? DefaultEndpointId()
+    private string? DefaultEndpointId() => DefaultEndpointId(DataFlow.Capture, Role.Communications);
+
+    private string? DefaultEndpointId(DataFlow flow, Role role)
     {
         try
         {
-            return _enumerator.HasDefaultAudioEndpoint(DataFlow.Capture, Role.Communications)
-                ? _enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications).ID
+            return _enumerator.HasDefaultAudioEndpoint(flow, role)
+                ? _enumerator.GetDefaultAudioEndpoint(flow, role).ID
                 : null;
         }
         catch (Exception error) when (error is not OutOfMemoryException and not StackOverflowException)

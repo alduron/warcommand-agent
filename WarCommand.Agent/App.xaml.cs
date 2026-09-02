@@ -22,6 +22,7 @@ using WarCommand.Agent.Core.Updates;
 using WarCommand.Agent.Dev;
 using WarCommand.Agent.Game;
 using WarCommand.Agent.Input;
+using WarCommand.Agent.Speech.Capture;
 using WarCommand.Agent.Startup;
 using WarCommand.Agent.Core.Settings;
 using WarCommand.Agent.Overlay;
@@ -136,6 +137,7 @@ public partial class App : Application, IDisposable
     private UpdateOffer? _offer;
     private DispatcherTimer? _updateTimer;
     private FileClientLog? _updateLog;
+    private WasapiAudioCapture? _audioDevices;
     private EventWaitHandle? _showRequest;
     private RegisteredWaitHandle? _showRegistration;
 
@@ -428,6 +430,35 @@ public partial class App : Application, IDisposable
     }
 
     /// <summary>
+    /// The audio endpoint list, built once and held. Constructing it opens the shell's device
+    /// enumerator and nothing else: no endpoint is opened, and no audio moves until capture is
+    /// started, which this does not do.
+    /// </summary>
+    /// <remarks>
+    /// Never constructed before it is needed, which today is the settings window. A machine with a
+    /// broken audio stack must still get a tray icon, so a failure here is a settings window with
+    /// Default only rather than an agent that does not start.
+    /// </remarks>
+    private WasapiAudioCapture? EnsureAudioDevices()
+    {
+        if (_audioDevices is not null)
+        {
+            return _audioDevices;
+        }
+
+        try
+        {
+            var capture = new WasapiAudioCapture();
+            _audioDevices = capture;
+            return capture;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// The one window, built on demand. Every launch that reaches the tray can open Settings,
     /// including the overlay demo, which previously showed a Settings row that did nothing because
     /// it returned before the window existed.
@@ -444,7 +475,7 @@ public partial class App : Application, IDisposable
             return null;
         }
 
-        var window = new AgentWindow(settings, devices: null);
+        var window = new AgentWindow(settings, EnsureAudioDevices());
         window.Closing += OnWindowClosing;
         _window = window;
         MainWindow = window;
@@ -739,6 +770,8 @@ public partial class App : Application, IDisposable
         _showRegistration = null;
         _showRequest?.Dispose();
         _showRequest = null;
+        _audioDevices?.Dispose();
+        _audioDevices = null;
         _gameWatcher?.Dispose();
         _gameWatcher = null;
         _overlay?.Dispose();
