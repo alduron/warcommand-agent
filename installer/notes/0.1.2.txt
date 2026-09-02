@@ -1,0 +1,23 @@
+The in-game overlay, and a working socket.
+
+Overlay. A layered click-through surface that draws the board over the game.
+Three modes: always on, mirror Wardogs, hidden. Mirror follows the game's own
+screen and only while it is focused; always on takes a monitor you pick.
+
+Realtime. The agent runs on the socket now, not on a five second poll. The
+board changes as the server changes. The tray dot is the socket's own state.
+
+Fixes that matter if you had 0.1.0:
+
+- 0.1.0 could not pair at all. The version string it sent was 46 characters
+  against a 32 character limit and device registration failed every time.
+- The settings window listed no audio devices, because nothing ever enumerated
+  them. Inputs and outputs are both real lists now.
+- The Start menu shortcut goes straight into Programs, so Windows search finds
+  it, and launching it while the agent is running raises the window.
+
+The board tab is gone. The queue is warcommand.app; the agent is the overlay,
+the tray and the settings.
+
+Still not here: hotkeys, speech, screen capture. Nothing claims a request from
+the agent yet.
