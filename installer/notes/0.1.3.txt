@@ -1,0 +1,24 @@
+One build, one tray, and a board that ticks.
+
+Backend is a row in the tray now, Production or Local, instead of a second
+build with its own icon and its own account. Switching restarts the agent.
+
+The countdown actually counts down. The wash, the pulsing slot digit and the
+slot budget are all read off the clock, and nothing re-read the clock between
+socket frames, so on a quiet board the countdown froze where it was seeded.
+
+YOURS works. Board rows are keyed on the participant id the API now serves;
+the agent had been using the membership id, which matches no row, so YOURS was
+always empty and your own claims counted as somebody else's work. Its rows
+carry their colour across the whole row rather than on one word.
+
+Right-click, Deployment lists every live deployment you can stand in and
+switches to the one you pick. The rows there used to do nothing at all.
+
+The agent follows the browser. It stands on the deployment you most recently
+entered rather than whichever group sorted first, and a re-seed drops rows it
+no longer carries, so a role change is reflected instead of leaving stale rows
+on the surface.
+
+Sign out and quit clears this device's tokens, for when the agent is holding
+an account you are not signed into.
