@@ -419,6 +419,11 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         var (accent, word) = Accented(row, mine, takenFromMe, urgent);
         var (showBar, barFraction) = Countdown(row, now);
 
+        // YOU, not your own callsign. Your own request is always on your board, whatever roles you
+        // run, because you have to be able to watch it and cancel it. Printed as a callsign it
+        // looks identical to work addressed to you, which reads as the role filter being broken.
+        var requester = row.IsRequestedBy(viewerParticipantId) ? "YOU" : row.RequestedByCallsign;
+
         return new BoardRowViewModel
         {
             SlotDisplay = row.Slot?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
@@ -429,7 +434,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
             SecondPointDisplay = second,
             SecondPointLabel = PointLabel(row, 1),
             LegDisplay = Leg(row, unitsToMeters),
-            Requester = row.RequestedByCallsign,
+            Requester = requester,
             AgeDisplay = FormatAge(now - row.CreatedAt),
             MetaExtra = row.ReleaseCount > 0
                 ? $"RETRY x{row.ReleaseCount.ToString(CultureInfo.InvariantCulture)}"
