@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -68,7 +68,8 @@ public class AgentWindowTests
                 window.UpdateLayout();
             }
 
-            Assert.Equal(5, window.Tabs.Items.Count);
+            // Audio, Keybinds, Speech, Overlay. No Board: the queue is the web board.
+            Assert.Equal(4, window.Tabs.Items.Count);
             window.Close();
         });
     }
@@ -81,30 +82,14 @@ public class AgentWindowTests
             var window = new AgentWindow(TempStore(), devices: null);
             window.Show();
 
+            // Settings and nothing else. The queue is the web board and the glance is the overlay,
+            // so a third copy of the board in a desktop tab was the same list a worse way.
             window.ShowSettingsTab();
-            var settingsTab = window.Tabs.SelectedIndex;
-            window.ShowBoardTab();
-            var boardTab = window.Tabs.SelectedIndex;
 
-            Assert.NotEqual(settingsTab, boardTab);
-            Assert.Equal(0, boardTab);
-            Assert.NotNull(window.BoardView);
-            window.Close();
-        });
-    }
-
-    [Fact]
-    public void The_board_sits_on_the_same_ground_as_every_other_tab()
-    {
-        OnStaThread(() =>
-        {
-            var window = new AgentWindow(TempStore(), devices: null);
-            window.Show();
-
-            var ground = (SolidColorBrush)window.FindResource("Ground");
-            var board = (SolidColorBrush)window.BoardView.Background;
-
-            Assert.Equal(ground.Color, board.Color);
+            Assert.Equal(0, window.Tabs.SelectedIndex);
+            Assert.DoesNotContain(
+                window.Tabs.Items.Cast<TabItem>(),
+                tab => string.Equals(tab.Header as string, "BOARD", StringComparison.Ordinal));
             window.Close();
         });
     }

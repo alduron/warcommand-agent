@@ -1,4 +1,4 @@
-using System.Threading;
+﻿using System.Threading;
 using System.Windows.Forms;
 using WarCommand.Agent.Core.Tray;
 using WarCommand.Agent.Tray;
@@ -73,22 +73,32 @@ public class TrayIconControllerTests
     {
         OnStaThread(() =>
         {
-            var secondScreenVisible = false;
+            var soundsEnabled = false;
             using var tray = new TrayIconController
             {
-                StateProvider = () => new TrayMenuState { SecondScreenVisible = secondScreenVisible },
+                StateProvider = () => new TrayMenuState { SoundsEnabled = soundsEnabled },
             };
 
             static ToolStripItem Row(TrayIconController tray) =>
-                tray.Menu.Items.Cast<ToolStripItem>().Single(item => item.Text == "Board window");
+                tray.Menu.Items.Cast<ToolStripItem>().Single(item => item.Text == "Sounds");
 
+            static void Rebuild(TrayIconController tray)
+            {
+                tray.Menu.PerformLayout();
+                typeof(TrayIconController)
+                    .GetMethod(
+                        "Rebuild",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .Invoke(tray, null);
+            }
+
+            // The constructor builds from the DEFAULT provider, because an object initializer runs
+            // after it. Both reads have to come from a rebuild or the first one is a different menu.
+            Rebuild(tray);
             Assert.Equal("off", ((ToolStripMenuItem)Row(tray)).ShortcutKeyDisplayString);
 
-            secondScreenVisible = true;
-            tray.Menu.PerformLayout();
-            typeof(TrayIconController)
-                .GetMethod("Rebuild", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-                .Invoke(tray, null);
+            soundsEnabled = true;
+            Rebuild(tray);
 
             Assert.Equal("on", ((ToolStripMenuItem)Row(tray)).ShortcutKeyDisplayString);
         });

@@ -189,22 +189,18 @@ public partial class App : Application, IDisposable
             return;
         }
 
-        var window = new AgentWindow(_settings, devices: null);
-        _window = window;
-        MainWindow = window;
-        window.Closing += OnWindowClosing;
-        var board = window.BoardView;
-
-        // One render reaches every surface. The overlay's own BoardView joins the presenter the
-        // moment the controller builds it, and is replayed up to date rather than waiting a poll.
-        var presenter = new BoardPresenter(board);
+        // No window is built here any more, and none is shown. The agent is a tray app: the queue
+        // is the web board, the glance is the overlay, and the status is the tray's own rows. The
+        // settings window is built on demand by EnsureWindow when somebody asks for it.
+        //
+        // The overlay is the only surface the presenter starts with. It joins the moment the
+        // controller builds it, and is replayed up to date rather than waiting a poll.
+        var presenter = new BoardPresenter();
         _presenter = presenter;
 
         presenter.SetHeader(new BoardHeader { Title = "WarCommand", Hint = "RightAlt+H ?" });
         presenter.SetStatus(FormattableString.Invariant(
             $"WARCOMMAND {AgentVersion}  /  {(profile.IsDev ? "DEV" : "PROD")}  /  {profile.ApiBaseAddress.Host}"));
-        window.Show();
-        _menuState = _menuState with { SecondScreenVisible = true };
 
         StartOverlay(presenter, log);
 
@@ -212,8 +208,6 @@ public partial class App : Application, IDisposable
         {
             var fakeSource = new FakeCoordinateSource();
             _devCoordinateSources = new CoordinateSourceRegistry([fakeSource], DevCoordinateSources.FakeOnly());
-            board.SetDevControlsVisible(true);
-            board.SimulatePttRequested += async (_, _) => await OnSimulatePttAsync(board).ConfigureAwait(true);
         }
 
         try
@@ -349,9 +343,6 @@ public partial class App : Application, IDisposable
 
         switch (invoked.Command)
         {
-            case TrayCommand.ToggleSecondScreen:
-                ToggleSecondScreen();
-                break;
             case TrayCommand.CopyPairingCode:
                 CopyPairingCode();
                 break;
@@ -394,14 +385,12 @@ public partial class App : Application, IDisposable
         }
     }
 
-    /// <summary>The tray's Settings row. Same window as the board, a different tab.</summary>
-    private void ShowSettings() => ShowWindowOn(settings: true);
-
     /// <summary>
-    /// Brings the one window up on the tab the caller wants. The tray's double-click and its
-    /// Settings row are the same action but for which tab lands in front.
+    /// The tray's Settings row and its double-click. One window, settings only: the queue is the
+    /// web board and the glance is the overlay, so a third copy in a desktop tab was the same list
+    /// a worse way.
     /// </summary>
-    private void ShowWindowOn(bool settings)
+    private void ShowSettings()
     {
         if (EnsureWindow() is not { } window)
         {
@@ -413,17 +402,8 @@ public partial class App : Application, IDisposable
             window.Show();
         }
 
-        if (settings)
-        {
-            window.ShowSettingsTab();
-        }
-        else
-        {
-            window.ShowBoardTab();
-        }
-
+        window.ShowSettingsTab();
         _ = window.Activate();
-        _menuState = _menuState with { SecondScreenVisible = true };
     }
 
     /// <summary>
@@ -447,7 +427,6 @@ public partial class App : Application, IDisposable
         window.Closing += OnWindowClosing;
         _window = window;
         MainWindow = window;
-        _presenter?.Add(window.BoardView);
         return window;
     }
 
@@ -694,27 +673,9 @@ public partial class App : Application, IDisposable
         _ = dialog.ShowDialog();
     }
 
-    /// <summary>Shows or hides the one window, on its Board tab. Never closes it.</summary>
-    private void ToggleSecondScreen()
-    {
-        if (_window is not { } window)
-        {
-            return;
-        }
-
-        if (window.IsVisible && window.Tabs.SelectedIndex == 0)
-        {
-            window.Hide();
-            _menuState = _menuState with { SecondScreenVisible = false };
-            return;
-        }
-
-        ShowWindowOn(settings: false);
-    }
-
     /// <summary>
-    /// The close button hides the window rather than destroying it. A closed WPF window cannot be
-    /// shown again, so closing it would make the tray's Second-screen mode row a dead toggle.
+    /// The close button hides the settings window rather than destroying it. A closed WPF window
+    /// cannot be shown again, so closing it would make the tray's Settings row a dead click.
     /// </summary>
     private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
@@ -727,7 +688,6 @@ public partial class App : Application, IDisposable
 
         e.Cancel = true;
         window.Hide();
-        _menuState = _menuState with { SecondScreenVisible = false };
     }
 
     public void Dispose()
@@ -789,7 +749,7 @@ public partial class App : Application, IDisposable
         _showRequest = signal;
         _showRegistration = ThreadPool.RegisterWaitForSingleObject(
             signal,
-            (_, _) => Dispatcher.BeginInvoke(() => ShowWindowOn(settings: false)),
+            (_, _) => Dispatcher.BeginInvoke(ShowSettings),
             state: null,
             Timeout.Infinite,
             executeOnlyOnce: false);

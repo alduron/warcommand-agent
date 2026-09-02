@@ -49,7 +49,6 @@ public enum TrayCommand
     CheckForUpdates,
     InstallUpdate,
     SelectSoundOutput,
-    ToggleSecondScreen,
     CopyPairingCode,
     EnterPairingCode,
     OpenSettings,
@@ -181,9 +180,6 @@ public sealed record TrayMenuState
 
     /// <summary>Null hides the toggle.</summary>
     public bool? SoundsEnabled { get; init; }
-
-    /// <summary>Whether second-screen mode's window is showing.</summary>
-    public bool SecondScreenVisible { get; init; }
 
     /// <summary>
     /// Always on, mirroring the game, or hidden. Null until the overlay subsystem exists, which
@@ -335,7 +331,8 @@ public static class TrayMenu
             items.Add(new TrayMenuItem
             {
                 Text = $"{group}  ({state.GroupMemberCount})",
-                Children = [new TrayMenuItem { Text = "Open web board", Command = TrayCommand.OpenWebBoard }],
+                IsHeading = true,
+                IsEnabled = false,
             });
         }
 
@@ -347,6 +344,14 @@ public static class TrayMenu
                 IsHeading = true,
                 IsEnabled = false,
             });
+        }
+
+        // Top level, not buried under the group name. This is where the queue lives now that the
+        // agent carries no second copy of it: the web board is the queue, the overlay is the
+        // glance, and the tray is the status.
+        if (state.IsPaired)
+        {
+            items.Add(new TrayMenuItem { Text = "Open web board", Command = TrayCommand.OpenWebBoard });
         }
 
         // Deployment, never Match: the entity is a Deployment everywhere else in the product.
@@ -457,16 +462,6 @@ public static class TrayMenu
         }
 
         AppendOverlaySection(items, state);
-
-        // Not "second-screen mode": that named a mode nobody could define. It is the app's own
-        // window, the same one Settings opens, on its Board tab.
-        items.Add(new TrayMenuItem
-        {
-            Text = "Board window",
-            Value = OnOff(state.SecondScreenVisible),
-            Command = TrayCommand.ToggleSecondScreen,
-            IsChecked = state.SecondScreenVisible,
-        });
 
         items.Add(TrayMenuItem.Separator);
     }

@@ -77,7 +77,9 @@ public sealed class TrayIconController : ISuspendable, IDisposable
             ContextMenuStrip = _menu,
         };
 
-        _notifyIcon.DoubleClick += (_, _) => Raise(TrayCommand.ToggleSecondScreen);
+        // Settings, because that is the only thing the window holds now. The queue is the web
+        // board, and the tray's own rows are the status.
+        _notifyIcon.DoubleClick += (_, _) => Raise(TrayCommand.OpenSettings);
     }
 
     /// <summary>Raised when a menu row is clicked. Dev force-state rows are applied here first.</summary>

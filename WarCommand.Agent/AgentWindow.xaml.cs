@@ -139,7 +139,6 @@ public partial class AgentWindow : Window
         WidthPx.Value = settings.ClampedWidth;
         OverlayOpacityBox.SelectedIndex = (int)settings.Opacity;
         ColourblindSafe.IsChecked = settings.ColourblindSafe;
-        SecondScreen.IsChecked = settings.SecondScreenMode;
         WhenUnfocused.SelectedIndex = (int)settings.WhenUnfocused;
         AutoCopyOnClaim.IsChecked = settings.AutoCopyOnClaim;
         ScreenCapture.IsChecked = settings.ScreenCaptureEnabled;
@@ -190,7 +189,6 @@ public partial class AgentWindow : Window
         WidthPx = (int)WidthPx.Value,
         Opacity = (OverlayOpacity)Math.Max(OverlayOpacityBox.SelectedIndex, 0),
         ColourblindSafe = ColourblindSafe.IsChecked is true,
-        SecondScreenMode = SecondScreen.IsChecked is true,
         WhenUnfocused = (UnfocusedBehaviour)Math.Max(WhenUnfocused.SelectedIndex, 0),
         AutoCopyOnClaim = AutoCopyOnClaim.IsChecked is true,
         ScreenCaptureEnabled = ScreenCapture.IsChecked is true,
@@ -205,12 +203,9 @@ public partial class AgentWindow : Window
 
     private void OnClose(object sender, RoutedEventArgs e) => Close();
 
-    /// <summary>The board, for the composition root to render into.</summary>
-    public BoardView BoardView => Board;
-
-    /// <summary>Second-screen mode. The tray's double-click lands here.</summary>
-    public void ShowBoardTab() => Tabs.SelectedIndex = 0;
-
-    /// <summary>The tray's Settings row lands on Audio, the first settings tab.</summary>
-    public void ShowSettingsTab() => Tabs.SelectedIndex = 1;
+    /// <summary>
+    /// The window is settings and nothing else. The queue lives on the web board and, in a fight,
+    /// on the overlay; a third copy of it in a desktop tab was the same list a worse way.
+    /// </summary>
+    public void ShowSettingsTab() => Tabs.SelectedIndex = 0;
 }

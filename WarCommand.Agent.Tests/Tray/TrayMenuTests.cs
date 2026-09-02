@@ -1,4 +1,4 @@
-using WarCommand.Agent.Core.Tray;
+﻿using WarCommand.Agent.Core.Tray;
 
 namespace WarCommand.Agent.Tests.Tray;
 
@@ -27,7 +27,6 @@ public class TrayMenuTests
         Assert.Equal("WarCommand", items[0].Text);
         Assert.True(items[0].IsTitle);
         Assert.False(items[0].IsEnabled);
-        Assert.NotNull(Find(items, TrayCommand.ToggleSecondScreen));
         Assert.NotNull(Find(items, TrayCommand.Quit));
         Assert.Equal(TrayCommand.Quit, items[^1].Command);
     }
@@ -123,8 +122,8 @@ public class TrayMenuTests
     [Fact]
     public void A_toggle_carries_its_state_as_a_value_rather_than_a_checkmark()
     {
-        var off = Find(TrayMenu.Build(Empty), TrayCommand.ToggleSecondScreen);
-        var on = Find(TrayMenu.Build(Empty with { SecondScreenVisible = true }), TrayCommand.ToggleSecondScreen);
+        var off = Find(TrayMenu.Build(Empty with { SoundsEnabled = false }), TrayCommand.ToggleSounds);
+        var on = Find(TrayMenu.Build(Empty with { SoundsEnabled = true }), TrayCommand.ToggleSounds);
 
         Assert.Equal("off", off!.Value);
         Assert.Equal("on", on!.Value);
@@ -152,11 +151,18 @@ public class TrayMenuTests
         Assert.DoesNotContain(texts, t => t.Contains("Match", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The queue is the web board. The agent carries no second copy of it, so the row that opens
+    /// it is top level rather than buried under the group name, and absent until there is an
+    /// account to open it as.
+    /// </summary>
     [Fact]
-    public void Second_screen_mode_carries_its_own_check_state()
+    public void The_web_board_row_is_top_level_and_only_once_paired()
     {
-        Assert.False(Find(TrayMenu.Build(Empty), TrayCommand.ToggleSecondScreen)!.IsChecked);
-        Assert.True(Find(TrayMenu.Build(Empty with { SecondScreenVisible = true }), TrayCommand.ToggleSecondScreen)!.IsChecked);
+        Assert.Null(Find(TrayMenu.Build(Empty), TrayCommand.OpenWebBoard));
+
+        var items = TrayMenu.Build(Empty with { IsPaired = true });
+        Assert.Contains(items, i => i.Command == TrayCommand.OpenWebBoard);
     }
 
     [Fact]

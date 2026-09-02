@@ -1,7 +1,6 @@
 ﻿<Window x:Class="WarCommand.Agent.AgentWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:overlay="clr-namespace:WarCommand.Agent.Overlay;assembly=WarCommand.Agent.Overlay"
         Title="WarCommand"
         Width="760" Height="760" MinWidth="620" MinHeight="480"
         WindowStartupLocation="CenterScreen"
@@ -30,10 +29,6 @@
         </Border>
 
         <TabControl x:Name="Tabs">
-
-            <TabItem Header="BOARD">
-                <overlay:BoardView x:Name="Board" />
-            </TabItem>
 
             <TabItem Header="AUDIO">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,20,24,24">
@@ -403,22 +398,6 @@
                                                        Style="{StaticResource FieldCaption}" />
                                         </StackPanel>
                                         <CheckBox x:Name="ColourblindSafe" Grid.Column="1"
-                                                  Style="{StaticResource Switch}" Click="OnDirty" />
-                                    </Grid>
-                                </Border>
-
-                                <Border Style="{StaticResource FieldRow}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                                            <TextBlock Text="Second-screen mode" Style="{StaticResource FieldLabel}" />
-                                            <TextBlock Text="The only mode that works with exclusive fullscreen"
-                                                       Style="{StaticResource FieldCaption}" />
-                                        </StackPanel>
-                                        <CheckBox x:Name="SecondScreen" Grid.Column="1"
                                                   Style="{StaticResource Switch}" Click="OnDirty" />
                                     </Grid>
                                 </Border>

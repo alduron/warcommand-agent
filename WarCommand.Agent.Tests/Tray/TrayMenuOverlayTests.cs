@@ -1,4 +1,4 @@
-using WarCommand.Agent.Core.Tray;
+﻿using WarCommand.Agent.Core.Tray;
 
 namespace WarCommand.Agent.Tests.Tray;
 
@@ -149,16 +149,18 @@ public class TrayMenuOverlayTests
     // --- the rest of what the menu must carry ----------------------------------------------------
 
     /// <summary>
-    /// "Second-screen mode" named a mode nobody could define. It is the app's own window, the same
-    /// one Settings opens.
+    /// The agent shows no queue of its own. Second-screen mode and the board window were both the
+    /// web board a worse way, and the window that is left is settings.
     /// </summary>
     [Fact]
-    public void The_window_row_is_called_what_it_is()
+    public void The_agent_offers_no_board_of_its_own()
     {
-        var items = TrayMenu.Build(Empty);
+        var items = TrayMenu.Build(Empty with { IsPaired = true, SettingsAvailable = true });
 
         Assert.Null(Find(items, "Second-screen mode"));
-        Assert.Equal(TrayCommand.ToggleSecondScreen, Find(items, "Board window")!.Command);
+        Assert.Null(Find(items, "Board window"));
+        Assert.Equal(TrayCommand.OpenWebBoard, Find(items, "Open web board")!.Command);
+        Assert.Equal(TrayCommand.OpenSettings, Find(items, "Settings...")!.Command);
     }
 
     [Fact]
