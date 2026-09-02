@@ -1,4 +1,4 @@
-namespace WarCommand.Agent.Core.Tray;
+﻿namespace WarCommand.Agent.Core.Tray;
 
 /// <summary>
 /// What the tray icon's field colour is saying. Mapped from the realtime socket's state by the
@@ -38,6 +38,7 @@ public enum TrayCommand
     ToggleSounds,
     ToggleStartWithWindows,
     ToggleOverlay,
+    NextOverlayDisplay,
     CheckForUpdates,
     InstallUpdate,
     SelectSoundOutput,
@@ -178,6 +179,15 @@ public sealed record TrayMenuState
     /// the user is that the overlay is broken. It usually is not: the game is not up yet.
     /// </remarks>
     public string? OverlayHint { get; init; }
+
+    /// <summary>
+    /// The monitor the overlay is anchored to with no game running, e.g. "display 2 (2560x1440)".
+    /// Null hides the row, which is right when there is only one monitor to be on.
+    /// </summary>
+    public string? OverlayDisplay { get; init; }
+
+    /// <summary>False on a single-monitor machine. The row is absent rather than a dead click.</summary>
+    public bool HasMultipleDisplays { get; init; }
 
     /// <summary>False until the update checker exists. Hides the manual check row.</summary>
     public bool UpdateCheckAvailable { get; init; }
@@ -413,6 +423,19 @@ public static class TrayMenu
                 Command = TrayCommand.ToggleOverlay,
                 IsChecked = overlay,
             });
+
+            // One click, not a dropdown. "It is on the wrong screen" is noticed while the surface
+            // is in front of you, and the fix has to be reachable from there. Absent on a single
+            // monitor, and absent while the overlay is off.
+            if (overlay && state.OverlayDisplay is { } display && state.HasMultipleDisplays)
+            {
+                items.Add(new TrayMenuItem
+                {
+                    Text = "Overlay display",
+                    Value = display,
+                    Command = TrayCommand.NextOverlayDisplay,
+                });
+            }
         }
 
         items.Add(new TrayMenuItem

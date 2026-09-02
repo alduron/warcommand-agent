@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using WarCommand.Agent.Client.Storage;
 using WarCommand.Agent.Core.Settings;
 using WarCommand.Agent.Input.Bindings;
+using WarCommand.Agent.Game;
 using WarCommand.Agent.Overlay;
 using WarCommand.Agent.Speech.Capture;
 
@@ -85,6 +86,13 @@ public partial class AgentWindow : Window
 
     private void LoadChoices()
     {
+        // Device name is what is persisted; nobody recognises \.\DISPLAY2, and every monitor
+        // reports itself as Generic PnP Monitor, so the label is the index and the resolution.
+        var screens = System.Windows.Forms.Screen.AllScreens;
+        DisplayBox.ItemsSource = screens
+            .Select((screen, i) => new DeviceChoice(screen.DeviceName, OverlayController.DisplayName(screen, i)))
+            .ToList();
+
         AnchorBox.ItemsSource = new[] { "Left", "Right", "Top right", "Bottom right" };
         OverlayOpacityBox.ItemsSource = new[] { "Low", "Normal", "High" };
         WhenUnfocused.ItemsSource = new[] { "Hide", "Dim" };
@@ -123,6 +131,10 @@ public partial class AgentWindow : Window
         ShowRecognizedText.IsChecked = settings.ShowRecognizedText;
 
         OverlayEnabled.IsChecked = settings.OverlayEnabled;
+        ShowWithoutGame.IsChecked = settings.ShowWithoutGame;
+        DisplayBox.SelectedItem = ((IEnumerable<DeviceChoice>)DisplayBox.ItemsSource)
+            .FirstOrDefault(d => d.Id == settings.DisplayDeviceName)
+            ?? ((IEnumerable<DeviceChoice>)DisplayBox.ItemsSource).FirstOrDefault();
         AnchorBox.SelectedIndex = (int)settings.Anchor;
         WidthPx.Value = settings.ClampedWidth;
         OverlayOpacityBox.SelectedIndex = (int)settings.Opacity;
@@ -173,6 +185,8 @@ public partial class AgentWindow : Window
         ConfidenceFloor = ConfidenceFloor.Value,
         ShowRecognizedText = ShowRecognizedText.IsChecked is true,
         OverlayEnabled = OverlayEnabled.IsChecked is true,
+        ShowWithoutGame = ShowWithoutGame.IsChecked is true,
+        DisplayDeviceName = (DisplayBox.SelectedItem as DeviceChoice)?.Id,
         Anchor = (OverlayAnchor)Math.Max(AnchorBox.SelectedIndex, 0),
         WidthPx = (int)WidthPx.Value,
         Opacity = (OverlayOpacity)Math.Max(OverlayOpacityBox.SelectedIndex, 0),

@@ -72,6 +72,37 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
     /// <summary>True while Panic is engaged. Nothing draws.</summary>
     public bool IsSuspended => _suspended;
 
+    /// <summary>True when the surface draws with no game window at all.</summary>
+    public bool DrawsWithNoGame => !_gameRunning && _settings.ShowWithoutGame;
+
+    /// <summary>The monitor the overlay is anchored to right now, for the tray row.</summary>
+    public string DisplayLabel()
+    {
+        var screens = System.Windows.Forms.Screen.AllScreens;
+        var chosen = _settings.DisplayDeviceName is { } name
+            ? Array.FindIndex(screens, s => string.Equals(s.DeviceName, name, StringComparison.Ordinal))
+            : Array.FindIndex(screens, s => s.Primary);
+
+        return chosen >= 0
+            ? DisplayName(screens[chosen], chosen)
+            : "display 1";
+    }
+
+    /// <summary>
+    /// "display 2 (2560x1440)". The device name is what is persisted, but nobody recognises
+    /// \.\DISPLAY2, and every monitor is called Generic PnP Monitor.
+    /// </summary>
+    public static string DisplayName(System.Windows.Forms.Screen screen, int index)
+    {
+        ArgumentNullException.ThrowIfNull(screen);
+
+        var bounds = screen.Bounds;
+        var label = FormattableString.Invariant(
+            $"display {index + 1} ({bounds.Width}x{bounds.Height})");
+
+        return screen.Primary ? label + ", primary" : label;
+    }
+
     /// <summary>
     /// What the tray row says beside "Overlay". Null when it is drawing and the row reads a plain
     /// on; otherwise the reason it is not, which is nearly always that the game is not up.
@@ -92,7 +123,7 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
 
             if (IsDrawing)
             {
-                return null;
+                return _gameRunning ? null : "no game, on " + DisplayLabel();
             }
 
             return _gameRunning ? "game not focused" : "waiting for game";
@@ -224,7 +255,7 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
         // the settings or the tracker say.
         var wanted = !_suspended
             && _settings.OverlayEnabled
-            && _visibility != OverlayVisibility.Hide;
+            && (_visibility != OverlayVisibility.Hide || DrawsWithNoGame);
 
         if (!wanted)
         {
@@ -236,10 +267,10 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
 
         var window = _window ??= _factory();
 
-        // With no game window there is no client rect to anchor to. The primary monitor's work
-        // area is the only honest fallback, and it is only ever reached in Dim, which is the
-        // deliberate second-monitor mode.
-        var target = _gameRect.IsEmpty ? PrimaryWorkArea() : _gameRect;
+        // With a game up the overlay follows its client rect. With no game it falls back to the
+        // chosen monitor, because a board anchored to a monitor the game is not on is a board
+        // nobody can see, and a board anchored to nothing is a board nobody can see either.
+        var target = _gameRect.IsEmpty ? ChosenWorkArea() : _gameRect;
         var bounds = OverlayLayout.Place(target, _settings.Anchor, _settings.ClampedWidth);
 
         if (!bounds.IsEmpty)
@@ -248,8 +279,12 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
             window.ApplyBounds(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
         }
 
+        // Dim is for a game that is up and not focused. Drawing with no game at all is not dim:
+        // there is nothing to be behind, and a half-faded board on an empty desktop reads as a
+        // rendering fault rather than a mode.
         var opacity = OverlayWindow.OpacityFor(_settings.Opacity);
-        window.FadeTo(_visibility == OverlayVisibility.Dim ? opacity * DimFactor : opacity);
+        var dimmed = _visibility == OverlayVisibility.Dim && _gameRunning;
+        window.FadeTo(dimmed ? opacity * DimFactor : opacity);
 
         // Re-asserted on every apply: a game that goes fullscreen-borderless re-creates its window
         // above ours, and Topmost alone does not win that race.
@@ -258,9 +293,20 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private static ScreenRect PrimaryWorkArea()
+    /// <summary>
+    /// The monitor the user picked, by Windows device name, or the primary. A name that no longer
+    /// resolves falls back to the primary rather than to nothing: unplugging a monitor must not
+    /// make the overlay disappear with no way to find it again.
+    /// </summary>
+    private ScreenRect ChosenWorkArea()
     {
-        var screen = System.Windows.Forms.Screen.PrimaryScreen;
+        var screens = System.Windows.Forms.Screen.AllScreens;
+
+        var screen = _settings.DisplayDeviceName is { } name
+            ? Array.Find(screens, s => string.Equals(s.DeviceName, name, StringComparison.Ordinal))
+            : null;
+
+        screen ??= System.Windows.Forms.Screen.PrimaryScreen;
         if (screen is null)
         {
             return ScreenRect.Empty;

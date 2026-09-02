@@ -1,4 +1,4 @@
-namespace WarCommand.Agent.Core.Settings;
+﻿namespace WarCommand.Agent.Core.Settings;
 
 /// <summary>Where the overlay sits. From the Overlay tab of docs/design/mocks/TraySettings.dc.html.</summary>
 public enum OverlayAnchor
@@ -87,6 +87,26 @@ public sealed record AgentSettings
     /// game, and turning every anchor and opacity into a way of hiding it is not that.
     /// </summary>
     public bool OverlayEnabled { get; init; } = true;
+
+    /// <summary>
+    /// Draw even when no game window exists at all, anchored to <see cref="DisplayDeviceName"/>.
+    /// </summary>
+    /// <remarks>
+    /// On by default, and it has to be: Wardogs is not out. Without it the overlay is switched on,
+    /// correct, and invisible on every machine in the world, which is indistinguishable from
+    /// broken. When the game ships this becomes the thing a single-monitor player turns off.
+    /// </remarks>
+    public bool ShowWithoutGame { get; init; } = true;
+
+    /// <summary>
+    /// Which monitor the overlay uses when there is no game window to follow, as a Windows device
+    /// name like <c>\.\DISPLAY2</c>. Null means the primary.
+    /// </summary>
+    /// <remarks>
+    /// Only consulted with no game running. With a game up the overlay follows its client rect,
+    /// because a board anchored to a monitor the game is not on is a board nobody can see.
+    /// </remarks>
+    public string? DisplayDeviceName { get; init; }
 
     public OverlayAnchor Anchor { get; init; } = OverlayAnchor.Right;
 

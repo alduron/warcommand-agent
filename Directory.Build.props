@@ -15,5 +15,11 @@
          every real release, so an untagged local build can never look newer than a published
          one: UpdateDecision refuses to offer a downgrade. -->
     <Version>0.0.0</Version>
+
+    <!-- The SDK otherwise stamps AssemblyInformationalVersion as "0.1.0+<40 char sha>", 46
+         characters. POST /v1/devices/register caps agent_version at 32, so every git-built agent
+         was rejected with a 422 and could never pair. The sha is not something any surface shows
+         and not something the API stores. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 </Project>

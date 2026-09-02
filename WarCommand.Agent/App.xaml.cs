@@ -59,10 +59,34 @@ public partial class App : Application, IDisposable
     /// A constant here would have to be edited in lockstep with every tag, and the first time it
     /// was not, the agent would either offer an update it already has or refuse the one it needs.
     /// </summary>
-    private static string AgentVersion { get; } =
+    private static string AgentVersion { get; } = CleanVersion(
         typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
         ?? typeof(App).Assembly.GetName().Version?.ToString(3)
-        ?? "0.0.0";
+        ?? "0.0.0");
+
+    /// <summary>
+    /// The version without SemVer build metadata, capped at what the API accepts.
+    /// </summary>
+    /// <remarks>
+    /// Belt and braces with IncludeSourceRevisionInInformationalVersion in Directory.Build.props.
+    /// A "+&lt;40 char sha&gt;" suffix put the string at 46 characters against a 32 character
+    /// limit on POST /v1/devices/register, so registration failed with a 422 and the agent could
+    /// never pair with anything. A build that reintroduces the suffix must not break pairing again.
+    /// </remarks>
+    internal static string CleanVersion(string version)
+    {
+        ArgumentNullException.ThrowIfNull(version);
+
+        var plus = version.IndexOf('+', StringComparison.Ordinal);
+        var trimmed = plus >= 0 ? version[..plus] : version;
+
+        return trimmed.Length <= AgentVersionMaxLength
+            ? trimmed
+            : trimmed[..AgentVersionMaxLength];
+    }
+
+    /// <summary>The API's cap on agent_version. Mirrored, not guessed: see RegisterDeviceIn.</summary>
+    private const int AgentVersionMaxLength = 32;
 
     /// <summary>Startup, then every six hours. From 10-agent-spec.md "Updates".</summary>
     private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(6);
@@ -239,7 +263,13 @@ public partial class App : Application, IDisposable
             OverlayDemo.OverflowCount,
             OverlayDemo.OverflowUrgentCount);
 
-        _menuState = _menuState with { OverlayEnabled = true, OverlayHint = controller.Hint };
+        _menuState = _menuState with
+        {
+            OverlayEnabled = true,
+            OverlayHint = controller.Hint,
+            OverlayDisplay = controller.DisplayLabel(),
+            HasMultipleDisplays = System.Windows.Forms.Screen.AllScreens.Length > 1,
+        };
 
         log.Info("Overlay demo: the surface is on the primary monitor. Nothing else is running.");
     }
@@ -275,10 +305,16 @@ public partial class App : Application, IDisposable
         {
             OverlayEnabled = controller.IsEnabled,
             OverlayHint = controller.Hint,
+            OverlayDisplay = controller.DisplayLabel(),
         };
         _overlay = controller;
 
-        _menuState = _menuState with { OverlayEnabled = settings.Current.OverlayEnabled };
+        _menuState = _menuState with
+        {
+            OverlayEnabled = settings.Current.OverlayEnabled,
+            OverlayDisplay = controller.DisplayLabel(),
+            HasMultipleDisplays = System.Windows.Forms.Screen.AllScreens.Length > 1,
+        };
 
         var watcher = new GameWindowWatcher(
             BundledContracts.GameProfile().Current,
@@ -341,6 +377,9 @@ public partial class App : Application, IDisposable
             case TrayCommand.ToggleOverlay:
                 ToggleSetting(s => s with { OverlayEnabled = !s.OverlayEnabled });
                 break;
+            case TrayCommand.NextOverlayDisplay:
+                MoveOverlayToNextDisplay();
+                break;
             case TrayCommand.CheckForUpdates:
                 CheckForUpdatesNow();
                 break;
@@ -364,7 +403,7 @@ public partial class App : Application, IDisposable
     /// </summary>
     private void ShowWindowOn(bool settings)
     {
-        if (_window is not { } window)
+        if (EnsureWindow() is not { } window)
         {
             return;
         }
@@ -387,6 +426,57 @@ public partial class App : Application, IDisposable
         _menuState = _menuState with { SecondScreenVisible = true };
     }
 
+    /// <summary>
+    /// The one window, built on demand. Every launch that reaches the tray can open Settings,
+    /// including the overlay demo, which previously showed a Settings row that did nothing because
+    /// it returned before the window existed.
+    /// </summary>
+    private AgentWindow? EnsureWindow()
+    {
+        if (_window is { } existing)
+        {
+            return existing;
+        }
+
+        if (_settings is not { } settings)
+        {
+            return null;
+        }
+
+        var window = new AgentWindow(settings, devices: null);
+        window.Closing += OnWindowClosing;
+        _window = window;
+        MainWindow = window;
+        _presenter?.Add(window.BoardView);
+        return window;
+    }
+
+    /// <summary>
+    /// Moves the overlay to the next monitor and says which. One click, because "it is on the
+    /// wrong screen" is a thing somebody notices while the surface is in front of them, not a
+    /// thing they want to go and find a dropdown for.
+    /// </summary>
+    private void MoveOverlayToNextDisplay()
+    {
+        if (_settings is not { } store)
+        {
+            return;
+        }
+
+        var screens = System.Windows.Forms.Screen.AllScreens;
+        if (screens.Length <= 1)
+        {
+            return;
+        }
+
+        var current = store.Current.DisplayDeviceName is { } name
+            ? Array.FindIndex(screens, s => string.Equals(s.DeviceName, name, StringComparison.Ordinal))
+            : Array.FindIndex(screens, s => s.Primary);
+
+        var next = screens[((current < 0 ? 0 : current) + 1) % screens.Length];
+        ToggleSetting(s => s with { DisplayDeviceName = next.DeviceName });
+    }
+
     /// <summary>A tray toggle writes through the same store the settings window does.</summary>
     private void ToggleSetting(Func<AgentSettings, AgentSettings> change)
     {
@@ -402,6 +492,7 @@ public partial class App : Application, IDisposable
             SoundsEnabled = store.Current.Sounds.AllSound,
             OverlayEnabled = store.Current.OverlayEnabled,
             OverlayHint = _overlay?.Hint,
+            OverlayDisplay = _overlay?.DisplayLabel(),
         };
     }
 
