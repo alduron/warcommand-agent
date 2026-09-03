@@ -633,6 +633,14 @@ public partial class App : Application, IDisposable
             InviteCode = _inviteCode,
             MemberCount = _menuState.MatchPeopleCount,
             Roster = _roster,
+
+            // HELP names the keys this player actually bound, not the ones that ship.
+            Keys = new MenuKeys(
+                KeyLabel(BindingAction.Menu),
+                KeyLabel(BindingAction.NavUp),
+                KeyLabel(BindingAction.NavDown),
+                KeyLabel(BindingAction.NavSelect),
+                KeyLabel(BindingAction.NavBack)),
         };
     }
 

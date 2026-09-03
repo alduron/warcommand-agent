@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Fire;
 using WarCommand.Agent.Core.Input;
@@ -25,10 +25,18 @@ public sealed record MenuOptionViewModel(
     public string Caret => IsHighlighted ? ">" : " ";
 
     /// <summary>
-    /// Read-only text draws no digit. Every line on the match page used to carry a 0, which read
-    /// as a key you could press and could not.
+    /// Read-only text draws no digit, and neither does an entry that has none.
     /// </summary>
-    public string DigitDisplay => IsInfo ? string.Empty : Digit;
+    /// <remarks>
+    /// Every line on the match page used to carry a 0, which read as a key you could press and
+    /// could not. Then ARTILLERY, which is reachable by navigating and has no digit to spare,
+    /// printed the sentinel that means "no digit" and the overlay read "-1 ARTILLERY".
+    /// </remarks>
+    public string DigitDisplay => IsInfo || !HasDigit ? string.Empty : Digit;
+
+    /// <summary>False for read-only text and for a control reachable only by navigating to it.</summary>
+    public bool HasDigit =>
+        Digit.Length > 0 && Digit[0] is >= '0' and <= '9';
 }
 
 /// <summary>
@@ -156,7 +164,8 @@ public sealed record MenuViewModel
 
     private static List<MenuOptionViewModel> Project(MenuStateMachine menu) =>
         [.. menu.Options.Select((o, i) => new MenuOptionViewModel(
-            o.Digit.ToString(CultureInfo.InvariantCulture),
+            // The sentinel for "no digit" is negative and is not something to print.
+            o.Digit < 0 ? string.Empty : o.Digit.ToString(CultureInfo.InvariantCulture),
             o.Label,
             o.IsChosen,
             i == menu.Highlight,

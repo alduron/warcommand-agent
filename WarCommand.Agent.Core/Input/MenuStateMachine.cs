@@ -461,6 +461,22 @@ public sealed record MenuContext
 
     /// <summary>Callsigns on the match, for PEOPLE.</summary>
     public IReadOnlyList<string> Roster { get; init; } = [];
+
+    /// <summary>The keys in force, so HELP names the keys this player actually has.</summary>
+    public MenuKeys Keys { get; init; } = MenuKeys.Defaults;
+}
+
+/// <summary>
+/// The bound keys, by their labels, for any page that has to name one.
+/// </summary>
+/// <remarks>
+/// Every one of them is rebindable, so HELP that hardcoded them would be wrong for anybody who
+/// changed one, which is the reader most in need of it.
+/// </remarks>
+public sealed record MenuKeys(string Menu, string Up, string Down, string Select, string Back)
+{
+    /// <summary>What ships. Only used where the real bindings are not to hand.</summary>
+    public static MenuKeys Defaults { get; } = new("CAPS LOCK", "W", "S", "D", "A");
 }
 
 /// <summary>Timings and sizes for the menu. None of them is a fact about the game.</summary>
@@ -598,9 +614,34 @@ public sealed class MenuStateMachine
             }
 
             _level = value;
-            Highlight = 0;
+
+            // The first line you can actually press, never blindly index 0. A level that opens
+            // with the highlight parked on read-only text offers a select key that does nothing,
+            // and the reader has no way to tell that from a broken key.
+            Highlight = FirstSelectable();
         }
     }
+
+    /// <summary>
+    /// The first entry at this level that can be pressed, or -1 when the level is pure reference
+    /// text. Nothing is highlighted in that case, which is the honest drawing of it.
+    /// </summary>
+    private int FirstSelectable()
+    {
+        var options = CurrentOptions();
+        for (var i = 0; i < options.Count; i++)
+        {
+            if (!options[i].IsInfo)
+            {
+                return i;
+            }
+        }
+
+        return NoHighlight;
+    }
+
+    /// <summary>No line is highlighted, because no line at this level can be pressed.</summary>
+    public const int NoHighlight = -1;
 
     /// <summary>The entry currently drilled into, or null at the root.</summary>
     public MenuEntry? Selection => _path.Count > 0 ? _path[^1] : null;
@@ -734,6 +775,14 @@ public sealed class MenuStateMachine
         if (options.Count == 0)
         {
             return MenuOutcome.None;
+        }
+
+        // A level with nothing pressable on it does not move: there is nowhere to move to, and
+        // parking the highlight on reference text would offer a select key that does nothing.
+        if (options.All(o => o.IsInfo))
+        {
+            Highlight = NoHighlight;
+            return new MenuNavigated(Level);
         }
 
         var next = Highlight + notches;
@@ -1331,19 +1380,41 @@ public sealed class MenuStateMachine
     /// HELP used to close the menu and hand the app a panel id nothing handled, so it did nothing
     /// at all. A level costs no new surface and obeys the same rule as the rest: it lives only
     /// while the key is held.
+    /// <para>
+    /// Then it listed the board verbs with their digits, which read as a page of controls where
+    /// every key was dead, and it described the digit-driven flow that navigation replaced: it told
+    /// the reader to press BOARD, which no longer exists. It is read-only text now, every line
+    /// marked so nothing pretends to be pressable, and it names the keys THIS player has bound.
+    /// </para>
     /// </remarks>
-    private IReadOnlyList<MenuEntry> HelpEntries() =>
-    [
-        new MenuEntry { Digit = ZeroDigit, Path = "help.board", Label = "BOARD, THEN A SLOT" },
-        .. BoardVerbs
-            .Where(v => _catalog.CommandVerb(v.VerbId) is not null)
-            .Select(v => new MenuEntry
+    private IReadOnlyList<MenuEntry> HelpEntries()
+    {
+        var keys = _context.Keys;
+        var lines = new (string Id, string Label)[]
+        {
+            ("hold", $"HOLD {keys.Menu} WHILE YOU WORK"),
+            ("move", $"{keys.Up} {keys.Down}   MOVE THE HIGHLIGHT"),
+            ("select", $"{keys.Select}     TAKE THE HIGHLIGHTED LINE"),
+            ("back", $"{keys.Back}     BACK ONE LEVEL"),
+            ("digits", "1-9   JUMP STRAIGHT TO A ROW"),
+            ("more", "0     MORE"),
+            ("row", "ON A ROW: ACCEPT TAKES IT, DONE CLOSES IT"),
+            ("claim", "ACCEPTING STARTS IT. THERE IS NO SECOND STEP"),
+            ("coord", $"ON A COORDINATE: POINT AT THE MAP, {keys.Select} READS IT"),
+            ("release", $"LET GO OF {keys.Menu} TO CLOSE"),
+        };
+
+        return
+        [
+            .. lines.Select(line => new MenuEntry
             {
-                Digit = v.Digit,
-                Path = $"help.{v.VerbId}",
-                Label = $"ON A SLOT: {v.Label}",
+                Digit = NoDigit,
+                Path = $"help.{line.Id}",
+                Label = line.Label,
+                IsInfo = true,
             }),
-    ];
+        ];
+    }
 
     /// <summary>
     /// The request types, and the board underneath them.
