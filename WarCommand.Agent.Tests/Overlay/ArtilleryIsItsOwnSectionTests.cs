@@ -119,6 +119,56 @@ public sealed class ArtilleryIsItsOwnSectionTests
     }
 
     [Fact]
+    public void Clear_takes_the_whole_section_off_the_board()
+    {
+        var menu = WithGunAndTarget(target: true);
+        Assert.NotNull(MenuViewModel.ArtilleryFor(menu));
+
+        // Back out to the artillery page, where CLEAR appears only once there is something to
+        // clear. There was no way to unset a gun at all: reading one put ARTILLERY on the board
+        // permanently, and every bracket it drew was there for the rest of the session.
+        while (menu.Level != MenuLevel.FireTool)
+        {
+            menu.Back(T0);
+        }
+
+        var clear = menu.Options.Single(o => o.Path == "fire.clear");
+        menu.Digit(clear.Digit, T0);
+
+        // Both ends together: a gun position with no target goes stale where it stands, and a
+        // bracket computed from where a gun used to be is worse than no bracket at all.
+        Assert.Null(MenuViewModel.ArtilleryFor(menu));
+        Assert.Null(menu.ToolGun);
+        Assert.Null(menu.ToolTarget);
+
+        // And the entry goes with it, rather than sitting there clearing nothing.
+        Assert.DoesNotContain(menu.Options, o => o.Path == "fire.clear");
+    }
+
+    [Fact]
+    public void Every_digit_the_artillery_page_draws_actually_does_something()
+    {
+        var menu = WithGunAndTarget(target: false);
+        while (menu.Level != MenuLevel.FireTool)
+        {
+            menu.Back(T0);
+        }
+
+        // The page drew 1, 2 and 3 and dispatched none of them: FireTool was missing from the
+        // digit switch entirely, so the only way to work the tool was to navigate onto each line.
+        foreach (var entry in menu.Options)
+        {
+            var fresh = WithGunAndTarget(target: false);
+            while (fresh.Level != MenuLevel.FireTool)
+            {
+                fresh.Back(T0);
+            }
+
+            Assert.IsNotType<MenuNothing>(fresh.Digit(entry.Digit, T0));
+        }
+    }
+
+    [Fact]
     public void The_presenter_carries_it_to_a_surface_that_joins_late()
     {
         var presenter = new BoardPresenter();

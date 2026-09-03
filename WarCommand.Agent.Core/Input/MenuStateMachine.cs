@@ -873,6 +873,11 @@ public sealed class MenuStateMachine
 
         if (Level is MenuLevel.FireTool)
         {
+            if (chosen.Path == "fire.clear")
+            {
+                return ClearFireTool(now);
+            }
+
             _lastInput = now;
             Level = chosen.Path == "fire.gun" ? MenuLevel.GunPosition : MenuLevel.FireTarget;
             return new MenuNavigated(Level);
@@ -1137,6 +1142,10 @@ public sealed class MenuStateMachine
             MenuLevel.Coordinate => TypeCoordinateDigit(digit),
             MenuLevel.Confirm => ToggleModifier(digit),
             MenuLevel.BoardAction => RunBoardVerb(digit),
+
+            // The artillery page drew 1, 2 and 3 and dispatched none of them, so every digit on it
+            // was dead and the only way to work the tool was to navigate onto each line.
+            MenuLevel.FireTool => SelectFireTool(digit, now),
             MenuLevel.More => RunMore(digit),
             MenuLevel.Roles => ToggleRole(digit),
             MenuLevel.Join => TypeJoinDigit(digit),
@@ -1365,7 +1374,50 @@ public sealed class MenuStateMachine
             },
         };
 
+        // Only once there is something to clear. A gun read is what puts ARTILLERY on the board and
+        // there was no way to take it off again: the section, and every bracket it drew, was
+        // permanent for the rest of the session.
+        if (_toolGun is not null || _toolTarget is not null)
+        {
+            entries.Add(new MenuEntry { Digit = 3, Path = "fire.clear", Label = "CLEAR" });
+        }
+
         return entries;
+    }
+
+    /// <summary>Presses one of the artillery page's digits, exactly as selecting it would.</summary>
+    private MenuOutcome SelectFireTool(int digit, DateTimeOffset now)
+    {
+        var entry = FireToolEntries().Find(e => e.Digit == digit);
+        if (entry is null)
+        {
+            return MenuOutcome.None;
+        }
+
+        if (entry.Path == "fire.clear")
+        {
+            return ClearFireTool(now);
+        }
+
+        _lastInput = now;
+        Level = entry.Path == "fire.gun" ? MenuLevel.GunPosition : MenuLevel.FireTarget;
+        return new MenuNavigated(Level);
+    }
+
+    /// <summary>
+    /// Forgets the gun and the target, which takes the ARTILLERY section off the board.
+    /// </summary>
+    /// <remarks>
+    /// Both ends together. Clearing only the target would leave a gun position that goes stale
+    /// where it stands, and a bracket computed from where a gun used to be is worse than no bracket.
+    /// </remarks>
+    private MenuNavigated ClearFireTool(DateTimeOffset now)
+    {
+        _lastInput = now;
+        _toolGun = null;
+        _toolTarget = null;
+        Highlight = FirstSelectable();
+        return new MenuNavigated(Level);
     }
 
     /// <summary>Where the tool believes your gun is. Null until a read sets it.</summary>
