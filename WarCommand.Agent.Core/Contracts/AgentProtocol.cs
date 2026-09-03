@@ -48,7 +48,6 @@ public static class FrameTypes
     public const string DeploymentJoin = "deployment.join";
     public const string Resume = "resume";
     public const string RequestClaim = "request.claim";
-    public const string RequestStart = "request.start";
     public const string RequestRoundsAwayCommand = "request.rounds_away";
     public const string RequestAdjust = "request.adjust";
     public const string RequestComplete = "request.complete";
@@ -597,14 +596,7 @@ public sealed record RequestClaimCommand
     public required int Version { get; init; }
 }
 
-public sealed record RequestStartCommand
-{
-    public required Guid RequestId { get; init; }
-
-    public required int Version { get; init; }
-}
-
-/// <summary>Non-terminal. Performs the optional start first when the request is still claimed.</summary>
+/// <summary>Non-terminal. Starts a row claimed before claim-starts-it on the way through.</summary>
 public sealed record RequestRoundsAwayCommand
 {
     public required Guid RequestId { get; init; }

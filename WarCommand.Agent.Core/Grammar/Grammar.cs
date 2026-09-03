@@ -144,7 +144,6 @@ public sealed class Grammar
     private static readonly Dictionary<string, string[]> VerbSlotRequirement =
         new(StringComparer.Ordinal)
         {
-            ["start"] = ["claimed"],
             ["done"] = ["claimed"],
             ["release"] = ["claimed"],
             ["rounds_away"] = ["started"],

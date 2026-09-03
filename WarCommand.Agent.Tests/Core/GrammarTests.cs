@@ -139,14 +139,17 @@ public class GrammarTests
     }
 
     [Fact]
-    public void No_claimed_rows_means_done_release_and_start_are_not_legal()
+    public void No_claimed_rows_means_done_and_release_are_not_legal()
     {
         var grammar = Grammar.Compile(ContractFixtures.Catalog, new GrammarContext { HasAnyRows = true });
 
         Assert.True(grammar.Contains(PositionClass.Initial, "accept"));
         Assert.False(grammar.Contains(PositionClass.Initial, "done"));
         Assert.False(grammar.Contains(PositionClass.Initial, "release"));
-        Assert.False(grammar.Contains(PositionClass.Initial, "working"));
+
+        // "working" used to belong to a separate start verb. Claiming a request starts it, so it
+        // is an accept alias now and is legal wherever accept is.
+        Assert.True(grammar.Contains(PositionClass.Initial, "working"));
     }
 
     [Fact]

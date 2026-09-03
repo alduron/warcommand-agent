@@ -286,6 +286,25 @@ public class BoardStateTests
     }
 
     [Fact]
+    public void A_frame_from_another_match_never_lands_on_this_board()
+    {
+        var board = NewBoard();
+        board.EnterDeployment(Rows.Deployment, T0, draft: null);
+
+        var mine = Rows.A();
+        var elsewhere = Rows.A() with { DeploymentId = Guid.NewGuid() };
+
+        Assert.NotNull(board.Upsert(mine, T0));
+
+        // The old subscription keeps delivering for a moment after a hop, and every one of those
+        // frames used to be upserted: a request from a finished game holding a bright digit on a
+        // live one, refused by the server the instant anybody pressed it.
+        Assert.Null(board.Upsert(elsewhere, T0));
+        Assert.Null(board.ById(elsewhere.Id));
+        Assert.Equal(1, board.Allocator.Held);
+    }
+
+    [Fact]
     public void Nothing_from_the_old_match_can_reclaim_a_digit()
     {
         var board = NewBoard();

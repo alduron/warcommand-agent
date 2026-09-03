@@ -1309,8 +1309,14 @@
         "taking",
         "got it",
         "mine",
-        "wilco"
-      ]
+        "wilco",
+        "start",
+        "working",
+        "on it",
+        "moving",
+        "en route"
+      ],
+      "note": "Claiming a request starts it. There is no separate start verb: the aliases that used to belong to one ('start', 'on it', 'moving', 'en route', 'working') all mean the same act."
     },
     {
       "id": "pass",
@@ -1322,16 +1328,6 @@
         "cannot"
       ],
       "client_only": true
-    },
-    {
-      "id": "start",
-      "aliases": [
-        "start",
-        "working",
-        "on it",
-        "moving",
-        "en route"
-      ]
     },
     {
       "id": "done",

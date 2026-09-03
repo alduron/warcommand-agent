@@ -202,6 +202,18 @@ public interface IRealtimeObserver
     {
     }
 
+    /// <summary>
+    /// The realtime ticket was refused for a reason retrying cannot fix, and the credentials are
+    /// the reason. The composition root re-registers; the socket keeps backing off meanwhile.
+    /// </summary>
+    /// <remarks>
+    /// The clear-and-re-register recovery existed only at startup. A device whose registration went
+    /// away mid-session backed off forever with an amber dot and no explanation at all.
+    /// </remarks>
+    void OnCredentialsRejected(string code)
+    {
+    }
+
     /// <summary>An unknown type is ignored, never fatal: additive changes stay non-breaking.</summary>
     void OnUnknownFrame(Envelope envelope)
     {

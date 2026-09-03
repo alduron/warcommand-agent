@@ -28,6 +28,9 @@ public static class BundledContracts
     /// <summary>contracts/ballistics.json as shipped.</summary>
     public const string BallisticsResource = "WarCommand.Agent.Core.Bundled.ballistics.json";
 
+    /// <summary>contracts/generated/near-floor-pairs.json as shipped.</summary>
+    public const string NearFloorPairsResource = "WarCommand.Agent.Core.Bundled.near-floor-pairs.json";
+
     /// <summary>Every bundled resource name, in the order the agent loads them.</summary>
     public static IReadOnlyList<string> ResourceNames { get; } =
         [RequestTypesResource, GameProfileResource, BallisticsResource];
@@ -62,6 +65,34 @@ public static class BundledContracts
 
     /// <summary>The firing tables in force, already validated.</summary>
     public static ContractStore<Ballistics> Ballistics() => BallisticsStore.Value;
+
+    /// <summary>
+    /// The alias pairs that cleared the phonetic floor by the smallest margin the rule allows.
+    /// </summary>
+    /// <remarks>
+    /// Generated on every contracts run and shipped to nobody for a long time, so IntentParser fell
+    /// back to Empty and the ambiguous-alias menu could never appear: the recognizer picked one of
+    /// two near-identical words and the speaker was never asked.
+    /// </remarks>
+    public static Grammar.NearFloorPairs NearFloorPairs() => NearFloorStore.Value;
+
+    private static readonly Lazy<Grammar.NearFloorPairs> NearFloorStore = new(
+        () => Grammar.NearFloorPairs.FromJson(TryRead(NearFloorPairsResource)),
+        isThreadSafe: true);
+
+    /// <summary>The raw JSON, or null when the build did not embed it.</summary>
+    public static string? TryRead(string resourceName)
+    {
+        var assembly = typeof(BundledContracts).GetTypeInfo().Assembly;
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+        if (stream is null)
+        {
+            return null;
+        }
+
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
 
     /// <summary>
     /// A fresh store off the bundle, for a caller that must not share the process-wide one.

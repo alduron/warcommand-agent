@@ -121,7 +121,7 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
             var utterance = await engine.RecognizeAsync(buffer, grammar, cancellationToken)
                 .ConfigureAwait(false);
 
-            _onParsed(new IntentParser(grammar).Parse(utterance));
+            _onParsed(new IntentParser(grammar, BundledContracts.NearFloorPairs()).Parse(utterance));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {

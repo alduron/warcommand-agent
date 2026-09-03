@@ -1,4 +1,4 @@
-﻿using System.Drawing;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -40,6 +40,10 @@ public sealed class TrayIconController : ISuspendable, IDisposable
     private readonly Icon _connectedIcon;
     private readonly Icon _reconnectingIcon;
     private readonly Icon _panickedIcon;
+
+    private readonly System.Windows.Threading.Dispatcher _dispatcher =
+        System.Windows.Application.Current?.Dispatcher
+        ?? System.Windows.Threading.Dispatcher.CurrentDispatcher;
 
     private RealtimeConnectionState _lastState = RealtimeConnectionState.Idle;
     private bool _suspended;
@@ -143,17 +147,33 @@ public sealed class TrayIconController : ISuspendable, IDisposable
     }
 
     /// <summary>Panic engaged. Forces grey no matter what the socket is doing.</summary>
-    public void Suspend()
+    /// <remarks>
+    /// Marshalled: Panic is toggled from InputBridge.Handle on the low-level hook pump thread, and
+    /// this touches a NotifyIcon and builds a Bitmap. The icon going grey is the only confirmation
+    /// the kill switch fired, so it must not be the thing that throws.
+    /// </remarks>
+    public void Suspend() => OnUi(() =>
     {
         _suspended = true;
         _notifyIcon.Icon = _panickedIcon;
-    }
+    });
 
     /// <summary>Panic released. Re-derives the icon from the last known connection state.</summary>
-    public void Resume()
+    public void Resume() => OnUi(() =>
     {
         _suspended = false;
         Apply(_lastState);
+    });
+
+    private void OnUi(Action action)
+    {
+        if (_dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        _dispatcher.BeginInvoke(action);
     }
 
     private void OnMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)

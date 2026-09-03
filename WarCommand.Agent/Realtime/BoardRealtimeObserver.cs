@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using WarCommand.Agent.Client.Realtime;
 using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Contracts;
+using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 using WarCommand.Agent.Overlay;
 
@@ -33,6 +34,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     private readonly Func<DateTimeOffset> _serverNow;
     private readonly Action<string?, int?> _onRoster;
     private readonly Action _onDraftAborted;
+    private readonly Action<string> _onCredentialsRejected;
 
     private BoardState? _board;
     private Guid _viewerId;
@@ -51,7 +53,8 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         Action<BoardSnapshot> onRendered,
         Func<DateTimeOffset>? serverNow = null,
         Action<string?, int?>? onRoster = null,
-        Action? onDraftAborted = null)
+        Action? onDraftAborted = null,
+        Action<string>? onCredentialsRejected = null)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(presenter);
@@ -71,6 +74,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         _serverNow = serverNow ?? (() => DateTimeOffset.UtcNow);
         _onRoster = onRoster ?? ((_, _) => { });
         _onDraftAborted = onDraftAborted ?? (() => { });
+        _onCredentialsRejected = onCredentialsRejected ?? (_ => { });
     }
 
     /// <summary>The board the socket is driving, or null before a deployment is known.</summary>
@@ -354,6 +358,13 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// </remarks>
     public void OnPendingDraftAborted(DraftAbortReason reason) => OnUi(_onDraftAborted);
 
+    /// <summary>The credentials on disk are no longer accepted. Say so, and let the root re-register.</summary>
+    public void OnCredentialsRejected(string code) => OnUi(() =>
+    {
+        SetFaultCore("SIGN IN AGAIN");
+        _onCredentialsRejected(code);
+    });
+
     /// <summary>The whole stand-down. The individual cancels are deliberately not sent.</summary>
     public void OnDeploymentClosed(DeploymentClosedPayload payload) => OnUi(() =>
     {
@@ -458,9 +469,23 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         var urgent = overflow.Count(r => r.Priority == Priority.Urgent);
 
         _presenter.RenderBoard(rows, yours, overflow.Count, urgent, board.InProgressCount);
+
+        // Built HERE, on the dispatcher, while nothing else is mutating the board. The menu used to
+        // walk BoardState.Rows from the hook thread while socket frames were writing to it, which
+        // is an InvalidOperationException that kills the hook and takes every hotkey with it.
+        var slots = new Dictionary<int, SlotState>();
+        foreach (var row in board.Rows)
+        {
+            if (row.Slot is { } digit)
+            {
+                slots[digit] = new SlotState(row.State, row.ClaimantParticipantId == _viewerId);
+            }
+        }
+
         _onRendered(new BoardSnapshot(
             rows.Count + yours.Count + overflow.Count,
-            rows.Count(r => r.Accent == RowAccent.Mine)));
+            rows.Count(r => r.Accent == RowAccent.Mine),
+            slots));
     }
 
     /// <summary>Replaces the header's hint cell, which the menu owns while it is open.</summary>
@@ -546,4 +571,12 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
 }
 
 /// <summary>What the tray's counts read after a render.</summary>
-public sealed record BoardSnapshot(int OpenCount, int MineCount);
+/// <param name="OpenCount">Rows drawing a digit right now.</param>
+/// <param name="MineCount">How many of them are the viewer's own.</param>
+/// <param name="Slots">
+/// What each digit holds, built here on the UI thread so the hook thread never walks the board.
+/// </param>
+public sealed record BoardSnapshot(
+    int OpenCount,
+    int MineCount,
+    IReadOnlyDictionary<int, SlotState> Slots);

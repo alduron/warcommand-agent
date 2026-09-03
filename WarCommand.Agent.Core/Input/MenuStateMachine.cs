@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Model;
 
@@ -514,10 +514,13 @@ public sealed class MenuStateMachine
     /// </summary>
     private const int MaxPageEntries = 9;
 
+    /// <remarks>
+    /// 2 stays empty where START was. Taking a job starts it, so the verb had nothing left to do,
+    /// and a digit learned once stays learned rather than sliding up into a freed slot.
+    /// </remarks>
     private static readonly (int Digit, string VerbId, string Label)[] BoardVerbs =
     [
         (1, "accept", "ACCEPT"),
-        (2, "start", "START"),
         (3, "done", "DONE"),
         (4, "pass", "PASS"),
         (5, "release", "RELEASE"),
@@ -1516,8 +1519,7 @@ public sealed class MenuStateMachine
             // Only an unclaimed row can be taken.
             "accept" => open,
 
-            // Only the person holding it can move it along or give it back.
-            "start" => mine && slot.State == RequestState.Claimed,
+            // Only the person holding it can finish it or give it back.
             "done" => mine && working,
             "release" => mine && working,
 

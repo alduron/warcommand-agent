@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Net.WebSockets;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -150,6 +150,14 @@ public sealed class RealtimeClient : IAsyncDisposable
                 }
 
                 _log.Warn($"Realtime ticket failed: {ex.Code}.");
+
+                // 401 or 403 is not something a retry fixes: the credentials on disk are no longer
+                // accepted. Backing off silently forever is the worst answer, because the only
+                // symptom is a dot that never goes green.
+                if (ex.Status is 401 or 403)
+                {
+                    _observer.OnCredentialsRejected(ex.Code);
+                }
             }
             catch (WebSocketException ex)
             {
@@ -205,10 +213,7 @@ public sealed class RealtimeClient : IAsyncDisposable
     public bool Claim(Guid requestId, int version) =>
         Send(FrameTypes.RequestClaim, new RequestClaimCommand { RequestId = requestId, Version = version });
 
-    public bool Start(Guid requestId, int version) =>
-        Send(FrameTypes.RequestStart, new RequestStartCommand { RequestId = requestId, Version = version });
-
-    /// <summary>Non-terminal. The server performs the optional start first if the row is still claimed.</summary>
+    /// <summary>Non-terminal. A row claimed before claim-starts-it is started on the way through.</summary>
     public bool RoundsAway(Guid requestId, int version) =>
         Send(FrameTypes.RequestRoundsAwayCommand, new RequestRoundsAwayCommand { RequestId = requestId, Version = version });
 

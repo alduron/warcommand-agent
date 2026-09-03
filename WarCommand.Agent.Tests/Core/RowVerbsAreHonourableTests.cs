@@ -42,32 +42,41 @@ public sealed class RowVerbsAreHonourableTests
         Assert.Contains("accept", verbs);
         Assert.Contains("pass", verbs);
 
-        // The server refuses every one of these on an open row.
-        Assert.DoesNotContain("start", verbs);
+        // The server refuses both of these on an open row.
         Assert.DoesNotContain("done", verbs);
         Assert.DoesNotContain("release", verbs);
     }
 
     [Fact]
-    public void A_row_you_hold_can_be_advanced_and_finished_but_not_taken_again()
+    public void There_is_no_start_verb_anywhere_on_a_row()
     {
-        var verbs = VerbsOn(RequestState.Claimed, mine: true);
+        // Taking a job starts it. START was a second keypress that meant nothing on its own, and
+        // a claim that never got it was auto-released out from under the person doing the work.
+        foreach (var state in (RequestState[])[RequestState.Open, RequestState.Claimed, RequestState.InProgress])
+        {
+            Assert.DoesNotContain("start", VerbsOn(state, mine: true));
+            Assert.DoesNotContain("start", VerbsOn(state, mine: false));
+        }
+    }
 
-        Assert.Contains("start", verbs);
+    [Fact]
+    public void A_row_you_hold_can_be_finished_or_given_back_but_not_taken_again()
+    {
+        var verbs = VerbsOn(RequestState.InProgress, mine: true);
+
         Assert.Contains("done", verbs);
         Assert.Contains("release", verbs);
         Assert.DoesNotContain("accept", verbs);
     }
 
     [Fact]
-    public void A_row_in_progress_finishes_or_goes_back_but_does_not_start_twice()
+    public void A_row_claimed_before_claim_started_it_still_finishes()
     {
-        var verbs = VerbsOn(RequestState.InProgress, mine: true);
+        // Rows written before claiming started the job are still in the database in Claimed.
+        var verbs = VerbsOn(RequestState.Claimed, mine: true);
 
         Assert.Contains("done", verbs);
         Assert.Contains("release", verbs);
-        Assert.DoesNotContain("start", verbs);
-        Assert.DoesNotContain("accept", verbs);
     }
 
     [Fact]
@@ -87,10 +96,9 @@ public sealed class RowVerbsAreHonourableTests
     [Fact]
     public void The_whole_lifecycle_is_reachable_from_the_menu()
     {
-        // Take it, start it, finish it. If any step stops offering its verb the job cannot be
-        // closed from the overlay at all, which is the failure this file exists to catch.
+        // Take it, finish it. Two presses, and if either step stops offering its verb the job
+        // cannot be closed from the overlay at all, which is the failure this file exists to catch.
         Assert.Contains("accept", VerbsOn(RequestState.Open, mine: false));
-        Assert.Contains("start", VerbsOn(RequestState.Claimed, mine: true));
         Assert.Contains("done", VerbsOn(RequestState.InProgress, mine: true));
     }
 

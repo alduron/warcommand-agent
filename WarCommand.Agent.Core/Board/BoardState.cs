@@ -119,6 +119,14 @@ public sealed class BoardState
     {
         ArgumentNullException.ThrowIfNull(row);
 
+        // A row belongs to one match. Frames for the match just left arrive for as long as the old
+        // subscription takes to drop, and every one of them was upserted onto the new board: a
+        // request from a finished game holding a bright digit on a live one.
+        if (DeploymentId is { } standing && row.DeploymentId != standing)
+        {
+            return null;
+        }
+
         if (row.IsTerminal)
         {
             Remove(row.Id, now);
@@ -174,15 +182,18 @@ public sealed class BoardState
             return null;
         }
 
+        // In progress, not claimed: taking a job starts it, and the server records both in one
+        // move. A row left in Claimed would draw no bar, count as nothing, and offer a START that
+        // no longer exists.
         var claimed = row with
         {
-            State = RequestState.Claimed,
+            State = RequestState.InProgress,
             ClaimantParticipantId = claimantParticipantId,
             ClaimantCallsign = claimantCallsign,
             Version = version,
         };
 
-        // The claimant KEEPS its digit: done, start, release and copy all address a row by it.
+        // The claimant KEEPS its digit: done, release and copy all address a row by it.
         // Nobody else does, including the requester, who has nothing to do to it.
         if (!claimed.IsClaimedBy(ViewerParticipantId))
         {

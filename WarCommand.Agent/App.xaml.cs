@@ -129,6 +129,15 @@ public partial class App : Application, IDisposable
     private LocalPairingListener? _localLink;
     private string? _currentUserId;
     private TokenStore? _tokenStore;
+
+    /// <summary>Kept so the credential recovery can run outside startup. See RecoverCredentials.</summary>
+    private AgentPaths? _paths;
+
+    /// <summary>Kept so the credential recovery can run outside startup. See RecoverCredentials.</summary>
+    private AgentProfile? _profile;
+
+    /// <summary>One recovery at a time, and never one per reconnect attempt.</summary>
+    private bool _recoveringCredentials;
     private SettingsStore? _settings;
     private TrayIconController? _tray;
     private DispatcherTimer? _pollTimer;
@@ -171,6 +180,27 @@ public partial class App : Application, IDisposable
     private IReadOnlyCollection<string> _subscribedRoleIds = [];
     private IReadOnlyList<string> _roster = [];
     private string? _inviteCode;
+
+    /// <summary>
+    /// Submits that did not reach the server, held on disk until the socket comes back.
+    /// </summary>
+    /// <remarks>
+    /// Requests queue and replay; claims never do. It was built, tested, and constructed by
+    /// nothing, so a submit made with the network down was simply lost behind SUBMIT FAILED.
+    /// </remarks>
+    private WarCommand.Agent.Client.Offline.SubmitQueue? _submitQueue;
+
+    /// <summary>
+    /// What each digit holds, as of the last render. Written on the dispatcher, read on the hook
+    /// thread, and replaced wholesale rather than mutated.
+    /// </summary>
+    /// <remarks>
+    /// MenuContextNow used to enumerate BoardState from the hook thread while socket frames were
+    /// writing to it. That is a torn read at best and an InvalidOperationException at worst, thrown
+    /// inside the low-level hook callback, which kills the hook and takes every hotkey with it
+    /// until the agent is restarted.
+    /// </remarks>
+    private volatile IReadOnlyDictionary<int, SlotState> _boardSlots = new Dictionary<int, SlotState>();
     private Composition.VoiceDriver? _voice;
     private RealtimeClient? _realtime;
     private BoardRealtimeObserver? _observer;
@@ -581,27 +611,30 @@ public partial class App : Application, IDisposable
     /// Read once per hold rather than bound: the menu lives only while the key is down, so a page
     /// that changed underneath the reader would be changing while they are choosing from it.
     /// </remarks>
-    private MenuContext MenuContextNow() => new()
+    private MenuContext MenuContextNow()
     {
-        OccupiedSlots = [.. _observer?.Board?.Rows.Where(r => r.Slot is not null).Select(r => r.Slot!.Value) ?? []],
+        // The snapshot the last render left behind, never the live board: this runs on the hook
+        // thread and BoardState belongs to the dispatcher.
+        var slots = _boardSlots;
 
-        // What each slot holds, so the verb list offers only what that row will accept. Without it
-        // an open row shows START and DONE, which the server refuses in silence.
-        Slots = _observer?.Board?.Rows
-            .Where(r => r.Slot is not null)
-            .ToDictionary(
-                r => r.Slot!.Value,
-                r => new SlotState(r.State, r.ClaimantParticipantId == _observer!.Board!.ViewerParticipantId))
-            ?? new Dictionary<int, SlotState>(),
-        CanRestart = _menuState.CanRestartMatch,
-        EnabledRoleIds = _enabledRoleIds,
-        SubscribedRoleIds = _subscribedRoleIds,
-        GroupName = _menuState.GroupName,
-        DeploymentLabel = _menuState.MatchName,
-        InviteCode = _inviteCode,
-        MemberCount = _menuState.MatchPeopleCount,
-        Roster = _roster,
-    };
+        return new MenuContext
+        {
+            // Sorted: the board is always drawn by slot ascending and never re-sorted.
+            OccupiedSlots = [.. slots.Keys.Order()],
+
+            // What each slot holds, so the verb list offers only what that row will accept. Without
+            // it an open row shows DONE and RELEASE, which the server refuses in silence.
+            Slots = slots,
+            CanRestart = _menuState.CanRestartMatch,
+            EnabledRoleIds = _enabledRoleIds,
+            SubscribedRoleIds = _subscribedRoleIds,
+            GroupName = _menuState.GroupName,
+            DeploymentLabel = _menuState.MatchName,
+            InviteCode = _inviteCode,
+            MemberCount = _menuState.MatchPeopleCount,
+            Roster = _roster,
+        };
+    }
 
     /// <summary>
     /// The coordinate at key-down, from the enabled sources in priority order. Null when none
@@ -976,10 +1009,14 @@ public partial class App : Application, IDisposable
             ],
         };
 
+        // One key for the life of this request, reused by every replay: a queued submit that is
+        // sent twice must create one row, not two.
+        var idempotencyKey = Guid.NewGuid().ToString("n");
+
         try
         {
             var result = await client
-                .SubmitRequestAsync(group, Guid.NewGuid().ToString("n"), body, _shutdown.Token)
+                .SubmitRequestAsync(group, idempotencyKey, body, _shutdown.Token)
                 .ConfigureAwait(true);
             log.Info($"Request submitted: {result.Request.TicketCode}.");
             _observer?.SetFault(null);
@@ -989,7 +1026,78 @@ public partial class App : Application, IDisposable
             // The type name alone said nothing. A 422 from a schema rule and a 409 from a stale
             // deployment look identical in a log that only names the exception.
             log.Warn($"Submit failed: {Describe(ex)}");
+
+            if (IsTransient(ex) && _submitQueue is { } queue)
+            {
+                // The network, not the request. Holding it costs nothing and losing it costs the
+                // requester the whole fire mission.
+                foreach (var evicted in queue.Enqueue(new WarCommand.Agent.Client.Offline.QueuedSubmit
+                {
+                    IdempotencyKey = idempotencyKey,
+                    GroupId = group,
+                    Body = body,
+                    QueuedAt = DateTimeOffset.UtcNow,
+                }))
+                {
+                    log.Warn(evicted.Describe(DateTimeOffset.UtcNow));
+                }
+
+                _observer?.SetFault($"QUEUED, {queue.Count.ToString(CultureInfo.InvariantCulture)} WAITING");
+                return;
+            }
+
             _observer?.SetFault("SUBMIT FAILED");
+        }
+    }
+
+    /// <summary>
+    /// True when the failure was the network rather than the request.
+    /// </summary>
+    /// <remarks>
+    /// A refusal replays into the same refusal forever, so only a transport failure or a server
+    /// fault is worth holding. 429 is included: the server asked us to come back, not to give up.
+    /// </remarks>
+    private static bool IsTransient(Exception ex) => ex switch
+    {
+        WarCommandApiException api => api.IsTransient,
+        _ => true,
+    };
+
+    /// <summary>
+    /// Sends whatever the queue is holding, once the socket says the network is back.
+    /// </summary>
+    private async Task DrainSubmitQueueAsync(FileClientLog log)
+    {
+        if (_submitQueue is not { Count: > 0 } queue || _client is not { } client)
+        {
+            return;
+        }
+
+        var result = await queue
+            .ReplayAsync(
+                _standingOn,
+                async (item, ct) =>
+                {
+                    var sent = await client
+                        .SubmitRequestAsync(item.GroupId, item.IdempotencyKey, item.Body, ct)
+                        .ConfigureAwait(false);
+                    return sent.Request;
+                },
+                _shutdown.Token)
+            .ConfigureAwait(true);
+
+        foreach (var dropped in result.Dropped)
+        {
+            // Never silently: a request captured on a match the player has left is named, because
+            // somebody said it out loud and is waiting for it.
+            log.Warn(dropped.Describe(DateTimeOffset.UtcNow));
+            _observer?.SetFault(dropped.Describe(DateTimeOffset.UtcNow));
+        }
+
+        if (result.Sent.Count > 0)
+        {
+            log.Info($"{result.Sent.Count} queued submit(s) replayed.");
+            _observer?.SetFault($"SENT {result.Sent.Count.ToString(CultureInfo.InvariantCulture)} QUEUED");
         }
     }
 
@@ -1016,7 +1124,6 @@ public partial class App : Application, IDisposable
         var sent = action.VerbId switch
         {
             "accept" => realtime.Claim(row.Id, row.Version),
-            "start" => realtime.Start(row.Id, row.Version),
             "done" => realtime.Complete(row.Id, Outcome.Serviced, null, null, row.Version),
             "release" => realtime.Release(row.Id, row.Version),
             "pass" => board.Pass(row.Id, DateTimeOffset.UtcNow),
@@ -1857,6 +1964,8 @@ public partial class App : Application, IDisposable
     {
         var tokenStore = new TokenStore(paths, log: log);
         _tokenStore = tokenStore;
+        _paths = paths;
+        _profile = profile;
         var apiOptions = new ApiClientOptions
         {
             BaseAddress = profile.ApiBaseAddress,
@@ -1873,6 +1982,12 @@ public partial class App : Application, IDisposable
             (refreshToken, ct) => client!.RefreshTokensAsync(refreshToken, ct));
         client = WarCommandApiClient.Create(apiOptions, tokenSource, log);
         _client = client;
+
+        _submitQueue = new WarCommand.Agent.Client.Offline.SubmitQueue(paths, log: log);
+        if (_submitQueue.Count > 0)
+        {
+            log.Info($"{_submitQueue.Count} submit(s) survived the last run and will replay.");
+        }
 
         // Unauthenticated, so it runs before sign-in and keeps running whatever happens below.
         StartUpdateChecks(paths, log);
@@ -2280,10 +2395,17 @@ public partial class App : Application, IDisposable
             OnRealtimeState,
             deployment => OnDeploymentFrame(client, presenter, deployment, log),
             () => OnConfigFrame(client, presenter, log),
-            snapshot => _menuState = _menuState with
+            snapshot =>
             {
-                OpenRequestCount = snapshot.OpenCount,
-                MyRequestCount = snapshot.MineCount,
+                _menuState = _menuState with
+                {
+                    OpenRequestCount = snapshot.OpenCount,
+                    MyRequestCount = snapshot.MineCount,
+                };
+
+                // One reference assignment, on the dispatcher. The hook thread reads it and never
+                // touches BoardState.
+                _boardSlots = snapshot.Slots;
             },
             serverNow: ServerNow,
             // The roster frame is the only correction these two ever get. COPY INVITE read a code
@@ -2296,6 +2418,9 @@ public partial class App : Application, IDisposable
                     _menuState = _menuState with { MatchPeopleCount = people };
                 }
             },
+            // The socket cannot fix credentials. Re-register once, exactly as the startup path
+            // does, rather than backing off forever behind an amber dot.
+            onCredentialsRejected: code => RecoverCredentials(code, presenter, log),
             // Step 0 of the hop. The draft belongs to the match being left, and the frozen slot set
             // names digits the next board has never issued.
             onDraftAborted: () =>
@@ -2360,6 +2485,13 @@ public partial class App : Application, IDisposable
         _sawFrameRecently = true;
         _tray?.SetConnectionState(state);
         _log?.Info($"Realtime socket is {state}.");
+
+        // The socket coming back is the signal that the network is back. Anything held while it was
+        // down goes now, oldest first.
+        if (state == RealtimeConnectionState.Connected && _log is { } log)
+        {
+            _ = DrainSubmitQueueAsync(log);
+        }
     }
 
     /// <summary>
@@ -2503,6 +2635,48 @@ public partial class App : Application, IDisposable
         };
         timer.Start();
         _configTimer = timer;
+    }
+
+    /// <summary>
+    /// The API stopped accepting what is on disk while the agent was running. Register again.
+    /// </summary>
+    /// <remarks>
+    /// The clear-and-re-register recovery existed only on the startup path, so a device whose
+    /// registration went away mid-session backed off forever behind an amber dot with nothing on
+    /// screen saying why. Guarded, because the socket retries on a schedule and every attempt would
+    /// otherwise start another registration.
+    /// </remarks>
+    private async void RecoverCredentials(string code, BoardPresenter presenter, FileClientLog log)
+    {
+        if (_recoveringCredentials
+            || _client is not { } client
+            || _tokenStore is not { } tokenStore
+            || _paths is not { } paths
+            || _profile is not { } profile)
+        {
+            return;
+        }
+
+        _recoveringCredentials = true;
+        try
+        {
+            log.Warn($"The API rejected our credentials ({code}). Registering again.");
+            tokenStore.Clear("the API rejected the stored credentials");
+            var me = await AuthenticateAsync(client, tokenStore, paths, profile, log).ConfigureAwait(true);
+            AdoptAccount(me);
+            await RenderForAsync(client, me, presenter, log).ConfigureAwait(true);
+            _observer?.SetFault(null);
+            log.Info("Credentials recovered.");
+        }
+        catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+        {
+            log.Warn($"Credential recovery failed: {Describe(ex)}");
+            _observer?.SetFault("SIGN IN AGAIN");
+        }
+        finally
+        {
+            _recoveringCredentials = false;
+        }
     }
 
     /// <summary>
