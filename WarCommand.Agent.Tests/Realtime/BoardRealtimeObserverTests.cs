@@ -105,7 +105,7 @@ public class BoardRealtimeObserverTests
     /// in the design, and it is why the four row-returning frames must carry a whole body.
     /// </summary>
     [Fact]
-    public void A_claimed_frame_drops_the_row_and_frees_its_digit()
+    public void A_claimed_frame_frees_its_digit_and_becomes_one_of_the_in_progress_count()
     {
         var h = Build();
         var row = Row("MTR-14");
@@ -119,7 +119,12 @@ public class BoardRealtimeObserverTests
             Version = 2,
         });
 
-        Assert.Null(h.Board.ById(row.Id));
+        // Off the board entirely: no digit, drawn as no row at all. It used to be REMOVED, and the
+        // counter only counts rows that are still here, so IN PROGRESS decayed towards zero while
+        // the work was actually running and a busy board read as an idle one.
+        Assert.DoesNotContain(h.Board.Rows, r => r.Id == row.Id);
+        Assert.Empty(h.Board.Yours);
+        Assert.Equal(1, h.Board.InProgressCount);
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Client.Diagnostics;
+using WarCommand.Agent.Client.Diagnostics;
 using WarCommand.Agent.Game;
 using WarCommand.Agent.Input;
 using WarCommand.Agent.Input.Bindings;
@@ -58,6 +58,8 @@ public sealed class InputComposition : IDisposable
     /// The menu keys and the gate. Null leaves every digit inert, which is the tray-only and
     /// overlay-demo case: there is no board for a verb to act on.
     /// </param>
+    /// <param name="screenCapture">The frame grabber, so Panic stops it. Null on a surface with none.</param>
+    /// <param name="audioCapture">The microphone path, so Panic closes it. Null on a surface with none.</param>
     public static InputComposition Start(
         BindingSet bindings,
         IForegroundProbe foreground,
@@ -65,7 +67,9 @@ public sealed class InputComposition : IDisposable
         TrayIconController? tray,
         Action<BindingAction, bool> onHold,
         IClientLog log,
-        MenuDriver? menu = null)
+        MenuDriver? menu = null,
+        ISuspendable? screenCapture = null,
+        ISuspendable? audioCapture = null)
     {
         ArgumentNullException.ThrowIfNull(bindings);
         ArgumentNullException.ThrowIfNull(foreground);
@@ -92,12 +96,15 @@ public sealed class InputComposition : IDisposable
         }
 
         // Arm() refuses until every subsystem is registered, so a new one cannot silently miss the
-        // kill switch. Capture and audio are not built yet and register as explicit no-ops rather
-        // than being left out, which is the difference between "nothing to suspend" and "forgot".
+        // kill switch. A subsystem that genuinely does not exist on this surface registers as an
+        // explicit no-op, which is the difference between "nothing to suspend" and "forgot".
+        // Capture and audio DO exist now: leaving the placeholders in meant Panic stopped the hooks
+        // and the drawing and left the microphone and the frame grabber running, which is the one
+        // thing binding rule 7 exists to prevent.
         panic.Register(PanicSubsystem.Hotkeys, hooks);
         panic.Register(PanicSubsystem.OverlayDrawing, overlay);
-        panic.Register(PanicSubsystem.ScreenCapture, NotBuiltYet.Instance);
-        panic.Register(PanicSubsystem.AudioCapture, NotBuiltYet.Instance);
+        panic.Register(PanicSubsystem.ScreenCapture, screenCapture ?? NotBuiltYet.Instance);
+        panic.Register(PanicSubsystem.AudioCapture, audioCapture ?? NotBuiltYet.Instance);
         panic.Register(PanicSubsystem.TrayIndicator, (ISuspendable?)tray ?? NotBuiltYet.Instance);
         panic.Arm();
 

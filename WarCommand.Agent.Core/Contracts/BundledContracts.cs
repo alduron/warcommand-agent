@@ -10,6 +10,12 @@ namespace WarCommand.Agent.Core.Contracts;
 /// The files are embedded, not read from disk beside the executable: a fallback a user can delete
 /// or a packager can drop is not a fallback. scripts/contracts.ps1 copies them in and fails
 /// -Check on a stale copy.
+/// <para>
+/// One store per contract for the whole process, built once. Each accessor used to construct a new
+/// store, so every call re-read and re-validated the document: the board render did that per row,
+/// once a second, on the UI thread. It also meant a served document adopted into one store was
+/// invisible to the next caller.
+/// </para>
 /// </remarks>
 public static class BundledContracts
 {
@@ -39,15 +45,28 @@ public static class BundledContracts
         return reader.ReadToEnd();
     }
 
-    /// <summary>The shipped catalog, already validated. Throws when the bundle itself is bad.</summary>
-    public static ContractStore<Catalog> Catalog() =>
-        ContractStore.FromBundledJson<Catalog>(Read(RequestTypesResource));
+    private static readonly Lazy<ContractStore<Catalog>> CatalogStore =
+        new(() => Load<Catalog>(RequestTypesResource), isThreadSafe: true);
 
-    /// <summary>The shipped game profile, already validated.</summary>
-    public static ContractStore<GameProfile> GameProfile() =>
-        ContractStore.FromBundledJson<GameProfile>(Read(GameProfileResource));
+    private static readonly Lazy<ContractStore<GameProfile>> GameProfileStore =
+        new(() => Load<GameProfile>(GameProfileResource), isThreadSafe: true);
 
-    /// <summary>The shipped firing tables, already validated.</summary>
-    public static ContractStore<Ballistics> Ballistics() =>
-        ContractStore.FromBundledJson<Ballistics>(Read(BallisticsResource));
+    private static readonly Lazy<ContractStore<Ballistics>> BallisticsStore =
+        new(() => Load<Ballistics>(BallisticsResource), isThreadSafe: true);
+
+    /// <summary>The catalog in force, already validated. Throws when the bundle itself is bad.</summary>
+    public static ContractStore<Catalog> Catalog() => CatalogStore.Value;
+
+    /// <summary>The game profile in force, already validated.</summary>
+    public static ContractStore<GameProfile> GameProfile() => GameProfileStore.Value;
+
+    /// <summary>The firing tables in force, already validated.</summary>
+    public static ContractStore<Ballistics> Ballistics() => BallisticsStore.Value;
+
+    /// <summary>
+    /// A fresh store off the bundle, for a caller that must not share the process-wide one.
+    /// </summary>
+    public static ContractStore<T> Load<T>(string resourceName)
+        where T : class, IValidatableContract =>
+        ContractStore.FromBundledJson<T>(Read(resourceName));
 }

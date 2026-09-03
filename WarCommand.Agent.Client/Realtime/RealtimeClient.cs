@@ -541,7 +541,15 @@ public sealed class RealtimeClient : IAsyncDisposable
                 break;
 
             case FrameTypes.RequestCompleted:
-                Deliver<RequestCompletedPayload>(envelope, _observer.OnRequestCompleted);
+                // The row on an unable completion arrives FLAT, beside request_id, because the
+                // server does payload.update(request_body(...)). Read the same payload object a
+                // second time as a row so the reopened request can be put back.
+                Deliver<RequestCompletedPayload>(
+                    envelope,
+                    payload => _observer.OnRequestCompleted(
+                        payload.Request is null && payload.ReturnsToOpen
+                            ? payload with { Flat = envelope.PayloadAs<RequestBody>() }
+                            : payload));
                 break;
 
             case FrameTypes.RequestReleased:

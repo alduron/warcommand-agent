@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Net.Http;
@@ -484,7 +484,11 @@ public partial class App : Application, IDisposable
             _tray,
             onHold: (action, held) => OnHold(action, held, settings, log),
             log,
-            _menu);
+            _menu,
+            // Panic really stops these two now. Capture is adapted rather than typed: the Capture
+            // assembly must not take a dependency on the input layer.
+            screenCapture: new Suspendable(readout.Suspend, readout.Resume),
+            audioCapture: _voice);
 
         // One subscription covers both ways settings move: the Overlay tab and the tray toggle
         // both go through Save, so neither can change the overlay without the other seeing it.
@@ -653,6 +657,22 @@ public partial class App : Application, IDisposable
         log.Info("Gun position set from the map.");
     }
 
+    /// <summary>
+    /// The coordinate a hold starts with: none, always.
+    /// </summary>
+    /// <remarks>
+    /// It must stay null. Capture is tens of milliseconds and OnHold runs on the hook thread, so
+    /// reading the screen here starved the hook and Windows dropped keystrokes. The coordinate
+    /// arrives later, from an explicit key press off the UI thread, or from what was spoken.
+    /// </remarks>
+    /// <summary>
+    /// Now, on the server's clock. Every deadline the board holds is server wall clock.
+    /// </summary>
+    /// <remarks>
+    /// Zero skew until the first ready frame, which is the same answer the raw clock gave.
+    /// </remarks>
+    private DateTimeOffset ServerNow() => _clockOffset.ToServer(DateTimeOffset.UtcNow);
+
     private static MapPoint? SnapshotCoordinate() => null;
 
     /// <summary>
@@ -724,7 +744,10 @@ public partial class App : Application, IDisposable
     {
         switch (parsed)
         {
-            case ParsedRequest request when SnapshotCoordinate() is { } point:
+            // The grid the speaker said, which is the only coordinate a spoken request ever has.
+            // This read SnapshotCoordinate(), which is null by contract, so the guard never matched
+            // and every spoken request fell through to NO COORDINATE with the parsed grid in hand.
+            case ParsedRequest request when request.SpokenPoint is { } point:
                 SubmitFromMenu(
                     new MenuRequestReady(
                         request.TypeId,
@@ -742,7 +765,37 @@ public partial class App : Application, IDisposable
                 break;
 
             case ParsedCommand { Slot: { } slot } command:
-                RunBoardVerb(new MenuBoardAction(command.VerbId, slot), log);
+                RunBoardVerb(
+                    new MenuBoardAction(command.VerbId, slot)
+                    {
+                        Direction = command.Direction,
+                        Metres = command.Metres,
+                    },
+                    log);
+                break;
+
+            // The verbs that name no row. clear is the only undo mute has, and BoardState.ClearMutes
+            // was written, tested and called by nothing: a requester muted by mistake stayed muted
+            // for the whole match.
+            case ParsedCommand { VerbId: "clear" }:
+                if (_observer?.Board is { } muted)
+                {
+                    muted.ClearMutes(DateTimeOffset.UtcNow);
+                    _observer.Render();
+                    _observer.SetFault("MUTES CLEARED");
+                }
+
+                break;
+
+            case ParsedCommand command:
+                // Heard, understood, and not something this build does. Silence here read as the
+                // microphone not working at all.
+                log.Info($"Verb '{command.VerbId}' is not supported from voice.");
+                _observer?.SetFault("NOT SUPPORTED");
+                break;
+
+            case ParsedDisambiguation ambiguous:
+                _observer?.SetFault($"'{ambiguous.Alias.ToUpperInvariant()}' AMBIGUOUS, SAY IT ANOTHER WAY");
                 break;
 
             case ParsedRejection rejection:
@@ -956,6 +1009,7 @@ public partial class App : Application, IDisposable
         if (board.BySlot(action.Slot) is not { } row)
         {
             log.Info($"No row on slot {action.Slot.ToString(CultureInfo.InvariantCulture)}.");
+            _observer?.SetFault($"NO ROW ON {action.Slot.ToString(CultureInfo.InvariantCulture)}");
             return;
         }
 
@@ -968,12 +1022,28 @@ public partial class App : Application, IDisposable
             "pass" => board.Pass(row.Id, DateTimeOffset.UtcNow),
             "mute" => board.MuteRequester(row.RequestedByParticipantId, DateTimeOffset.UtcNow) > 0,
             "copy" => CopyPoint(row),
+
+            // These parse from voice and used to fall to the default, so "splash 3", "adjust 3",
+            // "cancel 3" and "recall 3" did nothing but write a log line reading "refused". The
+            // whole spotter correction loop was unreachable, and a requester had no way to cancel
+            // their own request from the agent at all.
+            "rounds_away" => realtime.RoundsAway(row.Id, row.Version),
+            "cancel" or "recall" => realtime.Cancel(row.Id, row.Version),
+            "adjust" when action.Direction is { } direction =>
+                realtime.Adjust(row.Id, direction, action.Metres, row.Version),
             _ => false,
         };
 
         log.Info(sent
             ? $"{action.VerbId} on slot {action.Slot.ToString(CultureInfo.InvariantCulture)}."
             : $"{action.VerbId} refused on slot {action.Slot.ToString(CultureInfo.InvariantCulture)}.");
+
+        if (!sent)
+        {
+            // A refusal that only reaches the log is a dead key to the person pressing it.
+            _observer?.SetFault($"{action.VerbId.ToUpperInvariant().Replace('_', ' ')} REFUSED");
+        }
+
         _observer?.Render();
     }
 
@@ -1059,13 +1129,13 @@ public partial class App : Application, IDisposable
     /// Re-reads the board after the viewer's role subscription changed.
     /// </summary>
     /// <remarks>
-    /// A role just switched on receives new rows from the socket, but every row already open was
-    /// filtered out of the frames sent before the toggle, so only a reseed brings those in.
+    /// Through the PRUNING reseed, not a plain refresh. The seed is authoritative: a role switched
+    /// OFF returns fewer rows, and upserting alone left every row that role used to serve sitting
+    /// on the surface holding a digit for the rest of the session.
     /// </remarks>
-    private async Task ReseedBoardAsync(FileClientLog log)
+    private async Task ReseedAfterRoleChangeAsync(FileClientLog log)
     {
         if (_client is not { } client
-            || _observer?.Board is not { } board
             || _presenter is not { } presenter
             || _standingOn is not { } deployment)
         {
@@ -1074,14 +1144,8 @@ public partial class App : Application, IDisposable
 
         try
         {
-            await RefreshBoardAsync(
-                client,
-                BundledContracts.Catalog().Current,
-                board,
-                deployment,
-                board.ViewerParticipantId,
-                presenter,
-                log).ConfigureAwait(true);
+            await ReseedBoardAsync(client, presenter, deployment, log, _shutdown.Token)
+                .ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
         {
@@ -1110,7 +1174,7 @@ public partial class App : Application, IDisposable
             _observer?.SetRoles(_subscribedRoleIds);
             log.Info("Role toggled from the overlay.");
 
-            await ReseedBoardAsync(log).ConfigureAwait(true);
+            await ReseedAfterRoleChangeAsync(log).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
         {
@@ -1179,7 +1243,7 @@ public partial class App : Application, IDisposable
                 return;
             }
 
-            _ = board.Tick(DateTimeOffset.UtcNow);
+            _ = board.Tick(ServerNow());
             _observer.Render();
         };
         timer.Start();
@@ -1952,9 +2016,28 @@ public partial class App : Application, IDisposable
         // membership id matches nothing and every row of the viewer's own reads as somebody
         // else's. Falls back to the membership id only against an API that does not serve it.
         var viewerId = membership.Deployment.ParticipantId ?? membership.MembershipId;
-        var board = new BoardState(viewerId, catalog.GrammarRules);
         var deploymentId = membership.Deployment.Id;
-        board.EnterDeployment(deploymentId, DateTimeOffset.UtcNow, draft: null);
+
+        // The board this agent already holds, when it is the same board. A config re-read is not a
+        // deployment change: rebuilding here reset the slot allocator and its reissue order and
+        // dropped every pass and mute, so a teammate toggling a role on the web reshuffled every
+        // digit under the viewer and "accept 4" a second later took a different request.
+        var standing = _standingOn == deploymentId
+            && _observer?.Board is { } held
+            && held.ViewerParticipantId == viewerId
+                ? held
+                : null;
+
+        var board = standing ?? new BoardState(viewerId, catalog.GrammarRules);
+        if (standing is null)
+        {
+            board.EnterDeployment(deploymentId, DateTimeOffset.UtcNow, draft: null);
+
+            // A gun position belongs to the match it was read in. Carrying it across a hop draws
+            // azimuth, range and mils from a point on another map.
+            _gunPosition = null;
+            _observer?.SetGunPosition(null);
+        }
 
         // Only the rows this build can honour are filled in. The group, match, map, microphone and
         // push-to-talk fields stay null until their subsystem lands, and TrayMenu.Build leaves the
@@ -2201,6 +2284,28 @@ public partial class App : Application, IDisposable
             {
                 OpenRequestCount = snapshot.OpenCount,
                 MyRequestCount = snapshot.MineCount,
+            },
+            serverNow: ServerNow,
+            // The roster frame is the only correction these two ever get. COPY INVITE read a code
+            // captured at render and handed out dead digits after a rotation.
+            onRoster: (code, count) =>
+            {
+                _inviteCode = code ?? _inviteCode;
+                if (count is { } people)
+                {
+                    _menuState = _menuState with { MatchPeopleCount = people };
+                }
+            },
+            // Step 0 of the hop. The draft belongs to the match being left, and the frozen slot set
+            // names digits the next board has never issued.
+            onDraftAborted: () =>
+            {
+                _menu?.Menu.Escape(DateTimeOffset.UtcNow);
+                if (_menu is { } menu)
+                {
+                    menu.PendingSnapshot = null;
+                    menu.PendingContext = new MenuContext();
+                }
             });
         _observer = observer;
 
@@ -2376,14 +2481,19 @@ public partial class App : Application, IDisposable
                 var me = await client.GetMeAsync(_shutdown.Token).ConfigureAwait(true);
                 var deployment = StandingOn(me)?.Deployment?.Id;
 
-                if (deployment == _standingOn)
+                // The whole payload is adopted, not just a changed deployment id. This used to
+                // return early unless the id moved, throwing away the roles, roster, invite code,
+                // headcount and board that had just been fetched: with the socket down the overlay
+                // froze and only local expiry ever moved a row. RenderForAsync keeps the board it
+                // already has when the deployment did not change, so a re-render is a reseed rather
+                // than a reshuffle.
+                if (deployment != _standingOn)
                 {
-                    return;
+                    log.Info($"Deployment changed to {deployment?.ToString() ?? "none"}. Re-rendering.");
+                    _pollTimer?.Stop();
+                    _pollTimer = null;
                 }
 
-                log.Info($"Deployment changed to {deployment?.ToString() ?? "none"}. Re-rendering.");
-                _pollTimer?.Stop();
-                _pollTimer = null;
                 await RenderForAsync(client, me, presenter, log).ConfigureAwait(true);
             }
             catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)

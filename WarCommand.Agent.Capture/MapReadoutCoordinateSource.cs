@@ -24,6 +24,7 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
 
     private ReadoutReader? _reader;
     private string _readerFor = string.Empty;
+    private bool _suspended;
 
     /// <param name="profile">The live profile. Re-read every call so a served change takes effect.</param>
     /// <param name="gameWindow">The game's window handle, or null when it is not running.</param>
@@ -52,7 +53,23 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
     public int Priority { get; init; }
 
     /// <inheritdoc />
-    public bool IsAvailable => _enabled() && _gameWindow() is not null;
+    public bool IsAvailable => !_suspended && _enabled() && _gameWindow() is not null;
+
+    /// <summary>
+    /// Panic: no frame is grabbed until Resume. Binding rule 7 - one press stops every capture.
+    /// </summary>
+    /// <remarks>
+    /// Registered as the ScreenCapture subsystem. It was a no-op placeholder long after this class
+    /// was built, so Panic left the only capture path in the product running.
+    /// </remarks>
+    public void Suspend()
+    {
+        _suspended = true;
+        LastRefusal = "SUSPENDED";
+    }
+
+    /// <summary>Capture is live again.</summary>
+    public void Resume() => _suspended = false;
 
     /// <summary>
     /// Builds the atlas ahead of the first read, off whatever thread the caller is on.
@@ -86,6 +103,12 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
     /// </remarks>
     public MapPoint? Read()
     {
+        if (_suspended)
+        {
+            LastRefusal = "SUSPENDED";
+            return null;
+        }
+
         var readout = _profile().MapReadout;
         var frames = Math.Max(1, readout.CorroborationFrames);
         var gap = Math.Max(0, readout.CorroborationWindowMs / frames);

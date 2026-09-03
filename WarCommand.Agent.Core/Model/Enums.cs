@@ -83,6 +83,19 @@ public enum DeploymentEnterSource
     Detector,
     Override,
     Invite,
+
+    /// <summary>
+    /// A restarted match replaced the one this device was standing in.
+    /// </summary>
+    /// <remarks>
+    /// The server sends this and the agent's enum did not hold it. JsonStringEnumConverter is
+    /// configured with allowIntegerValues false, so an unknown value THROWS and the whole frame is
+    /// dropped: after a match restart the agent stayed on the closed deployment and never hopped.
+    /// contracts/events.md and 08-api-realtime.md both document 'default' here and omit this,
+    /// which is where the mistake came from.
+    /// </remarks>
+    Supersede,
+
     Default,
 }
 

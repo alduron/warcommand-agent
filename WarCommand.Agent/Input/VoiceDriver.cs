@@ -1,4 +1,5 @@
-﻿using WarCommand.Agent.Client.Diagnostics;
+using WarCommand.Agent.Client.Diagnostics;
+using WarCommand.Agent.Input;
 using WarCommand.Agent.Dev;
 using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Contracts;
@@ -21,7 +22,7 @@ namespace WarCommand.Agent.Composition;
 /// audio anywhere: only the parsed intent leaves this class, per binding rule 8.
 /// </para>
 /// </remarks>
-public sealed class VoiceDriver : IDisposable
+public sealed class VoiceDriver : IDisposable, ISuspendable
 {
     private readonly IAudioCapture _capture;
     private readonly Func<Catalog> _catalog;
@@ -157,6 +158,31 @@ public sealed class VoiceDriver : IDisposable
             _log.Warn($"Speech model unavailable: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Panic: drop the open hold, close the device, zero the buffer. Binding rule 7.
+    /// </summary>
+    /// <remarks>
+    /// Registered as the AudioCapture subsystem, which was a no-op placeholder long after this
+    /// class was built. Nothing is recognized from what was captured before the press: panicking
+    /// mid-sentence means that sentence is discarded, not transcribed.
+    /// </remarks>
+    public void Suspend()
+    {
+        if (_capture.IsHolding)
+        {
+            _capture.EndHold();
+        }
+
+        _holding?.Dispose();
+        _holding = null;
+        _capture.Close();
+    }
+
+    /// <summary>Nothing to re-open: the next hold opens the device again.</summary>
+    public void Resume()
+    {
     }
 
     public void Dispose()

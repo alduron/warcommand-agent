@@ -382,16 +382,30 @@ public sealed record RequestCompletedPayload
     /// <summary>Present on unable only.</summary>
     public string? Reason { get; init; }
 
-    /// <summary>The full row, required whenever the outcome is unable.</summary>
+    /// <summary>
+    /// The full row when the outcome is unable. NESTED form, kept for older servers.
+    /// </summary>
+    /// <remarks>
+    /// The live server flattens it: complete_request does payload.update(request_body(updated)),
+    /// so id, points and state sit BESIDE request_id rather than under a request key. This stayed
+    /// null on every real unable completion and ReopenedRow threw, so the reopened row never
+    /// returned to any board.
+    /// </remarks>
     public RequestBody? Request { get; init; }
+
+
 
     [JsonIgnore]
     public bool ReturnsToOpen => Outcome == Outcome.Unable;
 
-    /// <summary>The row to put back on the board. Throws when the server sent unable without one.</summary>
-    public RequestBody ReopenedRow => Request
+    /// <summary>The row to put back on the board, from whichever shape the server used.</summary>
+    public RequestBody ReopenedRow => Request ?? Flat
         ?? throw new InvalidOperationException(
             $"request.completed outcome {Outcome} for {RequestId} carries no request body to re-render.");
+
+    /// <summary>The flat row the live server sends, filled by the reader when there is one.</summary>
+    [JsonIgnore]
+    public RequestBody? Flat { get; init; }
 }
 
 /// <summary>
@@ -444,7 +458,28 @@ public sealed record RequestExpiredPayload
 /// </summary>
 public sealed record ClaimsReconcilePayload
 {
-    public required IReadOnlyList<RequestBody> Requests { get; init; }
+    /// <summary>
+    /// The rows the database says this participant holds. The wire key is <c>claims</c>.
+    /// </summary>
+    /// <remarks>
+    /// It was <c>requests</c> here and <c>claims</c> on the server, so the required member was
+    /// always absent, deserialization threw and the frame was dropped: a restarted agent never got
+    /// its claims back, which is the one job this frame has. The agent's own test hand-built the
+    /// frame with the agent's spelling, so it agreed with the DTO and never with the server.
+    /// <para>
+    /// Both spellings are accepted. The server is deployed and older builds are in the wild, so the
+    /// reading end is the one that gives.
+    /// </para>
+    /// </remarks>
+    [JsonPropertyName("claims")]
+    public IReadOnlyList<RequestBody> Claims { get; init; } = [];
+
+    [JsonPropertyName("requests")]
+    public IReadOnlyList<RequestBody> Requests { get; init; } = [];
+
+    /// <summary>Whichever the server actually sent.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<RequestBody> Rows => Claims.Count > 0 ? Claims : Requests;
 }
 
 /// <summary>

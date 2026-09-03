@@ -182,23 +182,39 @@ public sealed class BoardState
             Version = version,
         };
 
-        if (!claimed.RendersInYours(ViewerParticipantId))
-        {
-            Remove(requestId, now);
-            return null;
-        }
-
-        // The claimant KEEPS its digit: done, start, release and copy all address a row by it. A
-        // requester watching somebody else work theirs does not need one.
+        // The claimant KEEPS its digit: done, start, release and copy all address a row by it.
+        // Nobody else does, including the requester, who has nothing to do to it.
         if (!claimed.IsClaimedBy(ViewerParticipantId))
         {
             Allocator.Release(requestId, now);
             claimed = claimed.WithoutSlot();
         }
 
+        // KEPT even for a viewer with no part in it. It draws no row, but IN PROGRESS counts rows
+        // that are still here: removing it made the count decay towards zero while the work was
+        // actually running, so a busy board read as an idle one.
         _rows[requestId] = claimed;
         Admit(now);
-        return claimed;
+        return claimed.RendersInYours(ViewerParticipantId) ? claimed : null;
+    }
+
+    /// <summary>
+    /// Moves a row along without changing who holds it: start, rounds away, adjust.
+    /// </summary>
+    /// <remarks>
+    /// The VERSION is the point. Every transition is a conditional update on it, so a row whose
+    /// local version lags the server's rejects every later command with a 409 the user never sees.
+    /// </remarks>
+    public BoardRow? ApplyProgress(Guid requestId, RequestState state, int version)
+    {
+        if (!_rows.TryGetValue(requestId, out var row))
+        {
+            return null;
+        }
+
+        var moved = row with { State = state, Version = version };
+        _rows[requestId] = moved;
+        return moved;
     }
 
     public bool Remove(Guid requestId, DateTimeOffset now)
@@ -280,8 +296,12 @@ public sealed class BoardState
         // the expiry frame never arrived, while the web board showed it long gone. The overlay has
         // the expiry time in its hand; relying on a frame to act on it is trusting a message that
         // may not come.
+        // EVERY row, not just the ones holding a digit. Rows iterates slot holders only, so an
+        // overflow, demoted, passed or muted row past its expiry stayed forever: the overflow count
+        // stayed inflated, and Admit could hand a bright digit to a request that had already
+        // expired, which the server then refuses.
         var expired = new List<BoardRow>();
-        foreach (var row in Rows.Where(r => r.IsOpen && now >= r.ExpiresAt).ToList())
+        foreach (var row in _rows.Values.Where(r => r.IsOpen && now >= r.ExpiresAt).ToList())
         {
             Remove(row.Id, now);
             expired.Add(row);

@@ -112,3 +112,16 @@ public interface ISuspendable
     /// <summary>Start again, re-deriving anything that could have changed while suspended.</summary>
     void Resume();
 }
+
+/// <summary>
+/// An <see cref="ISuspendable"/> built from two calls, for a subsystem that must not take a
+/// dependency on this assembly to be registered with Panic.
+/// </summary>
+public sealed class Suspendable(Action suspend, Action resume) : ISuspendable
+{
+    /// <inheritdoc />
+    public void Suspend() => suspend();
+
+    /// <inheritdoc />
+    public void Resume() => resume();
+}

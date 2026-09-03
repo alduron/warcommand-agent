@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Input.Bindings;
+using WarCommand.Agent.Input.Bindings;
 
 namespace WarCommand.Agent.Input;
 
@@ -167,13 +167,28 @@ public sealed class InputBridge
     }
 
     /// <summary>
-    /// Drops the hold without a key-up. Called on Panic and on losing the game window, both of
-    /// which end the interaction whether or not the button is physically still down.
+    /// Ends the hold when no key-up will arrive. Called on Panic and on losing the game window,
+    /// both of which end the interaction whether or not the button is physically still down.
     /// </summary>
-    public void ReleaseHold()
+    /// <remarks>
+    /// The sink is told, exactly as a real key-up tells it. Clearing the state silently left the
+    /// microphone open with nothing to close it: VoiceDriver stayed holding, every later press
+    /// early-returned, and the menu's orphan guard could never fire because the hold still read as
+    /// down. A hold that ends must end everywhere.
+    /// </remarks>
+    public void ReleaseHold() => ReleaseHold(DateTimeOffset.UtcNow);
+
+    /// <summary>Ends the hold, timestamped by the caller.</summary>
+    public void ReleaseHold(DateTimeOffset at)
     {
+        var wasHolding = _holdSince is not null;
         _holdSince = null;
         Rearm();
+
+        if (wasHolding)
+        {
+            _ptt?.PttUp(at);
+        }
     }
 
     /// <summary>
@@ -328,19 +343,18 @@ public sealed class InputBridge
             return InputDispatch.Ignored(DispatchOutcome.NotBound, action);
         }
 
-        if (_panic.IsSuspended)
-        {
-            return InputDispatch.Ignored(DispatchOutcome.Suspended, action);
-        }
-
         if (_ptt is null)
         {
+            _holdSince = null;
+            Rearm();
             return InputDispatch.Ignored(DispatchOutcome.NoSink, action);
         }
 
-        // A release is delivered whatever the foreground is. Swallowing the key-down and dropping the
-        // key-up leaves the machine holding a key nobody is pressing. Never swallowed, for the same
-        // reason the key-down is not: the hold key belongs to the user's machine too.
+        // A release is delivered whatever the foreground is, and under Panic too. Swallowing the
+        // key-down and dropping the key-up leaves the machine holding a key nobody is pressing:
+        // Panic used to return here, so panicking mid-hold left the microphone open with no edge
+        // left to close it. Never swallowed, for the same reason the key-down is not: the hold key
+        // belongs to the user's machine too.
         LastHoldAction = action;
         _holdSince = null;
         Rearm();

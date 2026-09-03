@@ -49,7 +49,9 @@ public class BundledContractsTests
     [Fact]
     public void An_invalid_served_profile_is_refused_and_the_bundle_stays_in_force()
     {
-        var store = BundledContracts.GameProfile();
+        // Its own store, never the process-wide one: adopting into that would leak into
+        // every other test in the run.
+        var store = BundledContracts.Load<GameProfile>(BundledContracts.GameProfileResource);
         var before = store.Current;
 
         var adoption = store.TryAdopt("""{"version": -1}""", "\"deadbeef\"");
@@ -64,7 +66,7 @@ public class BundledContractsTests
     [Fact]
     public void An_invalid_served_profile_never_unwinds_a_good_served_one()
     {
-        var store = BundledContracts.GameProfile();
+        var store = BundledContracts.Load<GameProfile>(BundledContracts.GameProfileResource);
         Assert.True(store.TryAdopt(BundledContracts.Read(BundledContracts.GameProfileResource), "\"v1\"").Adopted);
         var served = store.Current;
 

@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Windows.Threading;
 using WarCommand.Agent.Client.Realtime;
 using WarCommand.Agent.Core.Board;
@@ -30,6 +30,9 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     private readonly Action<Guid?> _onDeploymentChanged;
     private readonly Action _onConfigChanged;
     private readonly Action<BoardSnapshot> _onRendered;
+    private readonly Func<DateTimeOffset> _serverNow;
+    private readonly Action<string?, int?> _onRoster;
+    private readonly Action _onDraftAborted;
 
     private BoardState? _board;
     private Guid _viewerId;
@@ -45,7 +48,10 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         Action<RealtimeConnectionState> onState,
         Action<Guid?> onDeploymentChanged,
         Action onConfigChanged,
-        Action<BoardSnapshot> onRendered)
+        Action<BoardSnapshot> onRendered,
+        Func<DateTimeOffset>? serverNow = null,
+        Action<string?, int?>? onRoster = null,
+        Action? onDraftAborted = null)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(presenter);
@@ -62,6 +68,9 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         _onDeploymentChanged = onDeploymentChanged;
         _onConfigChanged = onConfigChanged;
         _onRendered = onRendered;
+        _serverNow = serverNow ?? (() => DateTimeOffset.UtcNow);
+        _onRoster = onRoster ?? ((_, _) => { });
+        _onDraftAborted = onDraftAborted ?? (() => { });
     }
 
     /// <summary>The board the socket is driving, or null before a deployment is known.</summary>
@@ -143,11 +152,82 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
                 payload.ClaimedByParticipantId,
                 payload.Callsign,
                 payload.Version,
-                DateTimeOffset.UtcNow);
+                _serverNow());
 
             Render();
         });
     }
+
+    /// <summary>
+    /// START moved the row on. The local VERSION has to move with it.
+    /// </summary>
+    /// <remarks>
+    /// This frame was never handled, so the row kept the version it had before START while the
+    /// server bumped it. Every later DONE, RELEASE or START sent the stale version, the server's
+    /// conditional update matched nothing, and the 409 was swallowed. A provider who pressed START
+    /// could never close the job, and a claimed row never expires, so it sat there until the
+    /// deployment did.
+    /// </remarks>
+    public void OnRequestStarted(RequestStartedPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        OnUi(() =>
+        {
+            _board?.ApplyProgress(payload.RequestId, RequestState.InProgress, payload.Version);
+            Render();
+        });
+    }
+
+    /// <inheritdoc />
+    /// <remarks>Non-terminal: the row stays in progress and only its version moves.</remarks>
+    public void OnRequestRoundsAway(RequestRoundsAwayPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        OnUi(() =>
+        {
+            _board?.ApplyProgress(payload.RequestId, RequestState.InProgress, payload.Version);
+            Render();
+        });
+    }
+
+    /// <inheritdoc />
+    public void OnRequestAdjusted(RequestAdjustedPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        OnUi(() =>
+        {
+            _board?.ApplyProgress(payload.RequestId, RequestState.InProgress, payload.Version);
+            Render();
+        });
+    }
+
+    /// <summary>
+    /// The server refused something. Say so.
+    /// </summary>
+    /// <remarks>
+    /// Every error frame was dropped on the floor. Two providers race for a row and the loser's
+    /// row simply vanished with no word; at the claim cap, accept read as a dead key. A refusal the
+    /// user cannot see is indistinguishable from the product not working.
+    /// </remarks>
+    public void OnErrorFrame(ErrorPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        OnUi(() => SetFaultCore(FaultFor(payload)));
+    }
+
+    private static string FaultFor(ErrorPayload payload) => payload.Code switch
+    {
+        "request_already_claimed" => "ALREADY TAKEN",
+        "version_conflict" => "ROW MOVED ON, TRY AGAIN",
+        "too_many_claims" => "TOO MANY CLAIMS",
+        "rate_limited" => "SLOW DOWN",
+        "forbidden" => "NOT ALLOWED",
+        "request_expired" => "EXPIRED",
+        _ => payload.Code.Replace('_', ' ').ToUpperInvariant(),
+    };
 
     /// <inheritdoc />
     public void OnRequestReleased(RequestReleasedPayload payload) => Upsert(payload);
@@ -205,15 +285,15 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
                 return;
             }
 
-            var now = DateTimeOffset.UtcNow;
-            var keep = payload.Requests.Select(r => r.Id).ToHashSet();
+            var now = _serverNow();
+            var keep = payload.Rows.Select(r => r.Id).ToHashSet();
 
             foreach (var held in ClaimedRequestIds.Where(id => !keep.Contains(id)).ToList())
             {
                 _ = board.Remove(held, now);
             }
 
-            foreach (var row in payload.Requests)
+            foreach (var row in payload.Rows)
             {
                 _ = board.Upsert(row.ToBoardRow(OverlayLabel(row.TypeId)), now);
             }
@@ -244,7 +324,11 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         OnUi(() => _onDeploymentChanged(deployment));
     }
 
-    /// <summary>Header only. Carries the invite code, re-emitted whenever it rotates.</summary>
+    /// <summary>The headcount and the invite code, re-emitted whenever either changes.</summary>
+    /// <remarks>
+    /// It updated the header and nothing else, so after a rotation MORE &gt; COPY INVITE handed out
+    /// six dead digits and the PEOPLE page kept the headcount it was born with.
+    /// </remarks>
     public void OnDeploymentRoster(DeploymentRosterPayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
@@ -257,8 +341,18 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
                 Right = payload.InviteCode,
             };
             RenderHeader();
+            _onRoster(payload.InviteCode, payload.MemberCount);
         });
     }
+
+    /// <summary>
+    /// The hop is starting: whatever was half-composed belongs to the match being left.
+    /// </summary>
+    /// <remarks>
+    /// Unimplemented, so a request composed for one match could be submitted to the next one, and
+    /// the frozen slot set claimed a digit on a board that had never issued it.
+    /// </remarks>
+    public void OnPendingDraftAborted(DraftAbortReason reason) => OnUi(_onDraftAborted);
 
     /// <summary>The whole stand-down. The individual cancels are deliberately not sent.</summary>
     public void OnDeploymentClosed(DeploymentClosedPayload payload) => OnUi(() =>
@@ -316,14 +410,14 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
                 return;
             }
 
-            _ = board.Upsert(row.ToBoardRow(OverlayLabel(row.TypeId)), DateTimeOffset.UtcNow);
+            _ = board.Upsert(row.ToBoardRow(OverlayLabel(row.TypeId)), _serverNow());
             Render();
         });
     }
 
     private void Remove(Guid requestId) => OnUi(() =>
     {
-        if (_board is not { } board || !board.Remove(requestId, DateTimeOffset.UtcNow))
+        if (_board is not { } board || !board.Remove(requestId, _serverNow()))
         {
             return;
         }
@@ -339,15 +433,22 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
             return;
         }
 
-        var now = DateTimeOffset.UtcNow;
+        // Server time, not this machine's. expires_at is the server's wall clock, so a machine two
+        // minutes fast dropped every open row from the overlay two minutes early while the web
+        // board still showed them live. The offset is derived on every ready frame and was read by
+        // nothing at all.
+        var now = _serverNow();
         var glyphs = new RoleGlyphSource(_catalog().Role);
 
         // Served map scale, so a two-point row reads in metres. See RefreshBoardAsync.
         var unitsToMeters = BundledContracts.GameProfile().Current.DefaultUnitsToMeters;
 
+        // Once, not once per row. It is the same context for every row on the board.
+        var fire = FireContextNow();
+
         var rows = board.Rows
             .Select(r => BoardRowViewModel
-                .FromPrimary(r, _viewerId, now, unitsToMeters, FireContextNow())
+                .FromPrimary(r, _viewerId, now, unitsToMeters, fire)
                 .WithGlyph(glyphs))
             .ToList();
         var yours = board.Yours
@@ -392,11 +493,13 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     });
 
     /// <summary>Shows a fault word in the header, or clears it with null.</summary>
-    public void SetFault(string? fault) => OnUi(() =>
+    public void SetFault(string? fault) => OnUi(() => SetFaultCore(fault));
+
+    private void SetFaultCore(string? fault)
     {
         _fault = fault;
         RenderHeader();
-    });
+    }
 
     /// <summary>
     /// The bracket context, or null when the viewer has set no gun position.

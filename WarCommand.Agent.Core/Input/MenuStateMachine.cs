@@ -379,7 +379,18 @@ public sealed record MenuRequestReady(
 public sealed record MenuJoinReady(string InviteCode) : MenuOutcome;
 
 /// <summary>A verb against one slot, executed immediately. Board actions never preview.</summary>
-public sealed record MenuBoardAction(string VerbId, int Slot) : MenuOutcome;
+public sealed record MenuBoardAction(string VerbId, int Slot) : MenuOutcome
+{
+    /// <summary>Which way to walk the rounds, on adjust only.</summary>
+    /// <remarks>
+    /// Carried here because the voice path parses it and the board path needs it. Dropping it made
+    /// "adjust 3 over 50" unroutable, so the whole spotter correction loop was unreachable.
+    /// </remarks>
+    public AdjustDirection? Direction { get; init; }
+
+    /// <summary>How far, on adjust only.</summary>
+    public int? Metres { get; init; }
+}
 
 /// <summary>
 /// A panel off the MORE page: help, roles, match, people, restart, link. The panel owns the digits
