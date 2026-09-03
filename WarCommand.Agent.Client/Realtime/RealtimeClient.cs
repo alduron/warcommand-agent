@@ -339,10 +339,21 @@ public sealed class RealtimeClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Reports presence immediately, then on every interval.
+    /// </summary>
+    /// <remarks>
+    /// The FIRST send has to happen on connect, not one interval later. The stale-claim sweeper
+    /// treats a claim whose device has no device_presence row as a dead device and releases it with
+    /// no grace at all, so a claim made inside the first interval was taken and then dumped back
+    /// into the pool a few seconds later, looking to everyone like the claim had simply failed.
+    /// </remarks>
     private async Task PresenceLoopAsync(CancellationToken cancellationToken)
     {
         try
         {
+            SendPresence();
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 await _delay.WaitAsync(_options.PresenceInterval, cancellationToken).ConfigureAwait(false);

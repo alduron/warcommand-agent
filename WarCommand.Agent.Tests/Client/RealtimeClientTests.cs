@@ -81,9 +81,14 @@ public class RealtimeClientTests
         var run = client.RunAsync(cts.Token);
         Assert.True(observer.ReadySignal.Wait(Timeout));
 
+        // One lands on CONNECT, before any interval elapses. The stale-claim sweeper treats a claim
+        // whose device has no presence row as a dead device, so a claim made in the first interval
+        // was released seconds after it was accepted.
+        await Until(() => channel.SentOfType(FrameTypes.Presence).Count >= 1);
+
         // The agent restarted and holds nothing. The database says it holds one claim.
         Assert.True(client.SendPresence());
-        await Until(() => channel.SentOfType(FrameTypes.Presence).Count == 1);
+        await Until(() => channel.SentOfType(FrameTypes.Presence).Count >= 2);
 
         var held = Guid.NewGuid();
         var deployment = Guid.NewGuid();

@@ -14,11 +14,14 @@ public interface IDraftOwner
 }
 
 /// <summary>What one <see cref="BoardState.Tick"/> changed.</summary>
-public sealed record BoardTick(IReadOnlyList<BoardRow> Demoted, IReadOnlyList<BoardRow> Admitted)
+public sealed record BoardTick(
+    IReadOnlyList<BoardRow> Demoted,
+    IReadOnlyList<BoardRow> Admitted,
+    IReadOnlyList<BoardRow> Expired)
 {
-    public static BoardTick Empty { get; } = new([], []);
+    public static BoardTick Empty { get; } = new([], [], []);
 
-    public bool Changed => Demoted.Count > 0 || Admitted.Count > 0;
+    public bool Changed => Demoted.Count > 0 || Admitted.Count > 0 || Expired.Count > 0;
 }
 
 /// <summary>What the deployment hop did, in the order 10-agent-spec.md requires.</summary>
@@ -147,6 +150,57 @@ public sealed class BoardState
     }
 
     /// <summary>Drops a row and frees its digit. True when the row was there.</summary>
+    /// <summary>
+    /// Applies a claim to a row already on this board. Returns the stored row, or null when it left.
+    /// </summary>
+    /// <remarks>
+    /// request.claimed carries no body, so it cannot be upserted: it is a thin notice that the row
+    /// is taken. For the two people IN the row, the claimant and the requester, it becomes a YOURS
+    /// row and stays. For everyone else it leaves and becomes one of the IN PROGRESS count.
+    /// <para>
+    /// The handler used to Remove for everybody, so a provider watched the job they had just
+    /// accepted vanish off their own overlay.
+    /// </para>
+    /// </remarks>
+    public BoardRow? ApplyClaim(
+        Guid requestId,
+        Guid claimantParticipantId,
+        string claimantCallsign,
+        int version,
+        DateTimeOffset now)
+    {
+        if (!_rows.TryGetValue(requestId, out var row))
+        {
+            return null;
+        }
+
+        var claimed = row with
+        {
+            State = RequestState.Claimed,
+            ClaimantParticipantId = claimantParticipantId,
+            ClaimantCallsign = claimantCallsign,
+            Version = version,
+        };
+
+        if (!claimed.RendersInYours(ViewerParticipantId))
+        {
+            Remove(requestId, now);
+            return null;
+        }
+
+        // The claimant KEEPS its digit: done, start, release and copy all address a row by it. A
+        // requester watching somebody else work theirs does not need one.
+        if (!claimed.IsClaimedBy(ViewerParticipantId))
+        {
+            Allocator.Release(requestId, now);
+            claimed = claimed.WithoutSlot();
+        }
+
+        _rows[requestId] = claimed;
+        Admit(now);
+        return claimed;
+    }
+
     public bool Remove(Guid requestId, DateTimeOffset now)
     {
         if (!_rows.Remove(requestId))
@@ -221,6 +275,18 @@ public sealed class BoardState
     /// </summary>
     public BoardTick Tick(DateTimeOffset now)
     {
+        // A row whose time ran out LEAVES, without waiting to be told. The tick used to handle only
+        // low-priority demotion, so an open row that reached zero sat there at zero forever whenever
+        // the expiry frame never arrived, while the web board showed it long gone. The overlay has
+        // the expiry time in its hand; relying on a frame to act on it is trusting a message that
+        // may not come.
+        var expired = new List<BoardRow>();
+        foreach (var row in Rows.Where(r => r.IsOpen && now >= r.ExpiresAt).ToList())
+        {
+            Remove(row.Id, now);
+            expired.Add(row);
+        }
+
         var demoted = new List<BoardRow>();
         foreach (var row in Rows)
         {
@@ -243,7 +309,9 @@ public sealed class BoardState
         }
 
         var admitted = Admit(now);
-        return demoted.Count == 0 && admitted.Count == 0 ? BoardTick.Empty : new BoardTick(demoted, admitted);
+        return demoted.Count == 0 && admitted.Count == 0 && expired.Count == 0
+            ? BoardTick.Empty
+            : new BoardTick(demoted, admitted, expired);
     }
 
     /// <summary>

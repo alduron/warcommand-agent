@@ -124,10 +124,29 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     public void OnRequestSubmitted(RequestSubmittedPayload payload) => Upsert(payload);
 
     /// <summary>Every non-claimant drops the row. The fastest slot-release path in the design.</summary>
+    /// <summary>
+    /// A claim clears the row from every board except the two people in it.
+    /// </summary>
+    /// <remarks>
+    /// It used to Remove for everyone, so the provider who accepted a job watched it disappear off
+    /// their own overlay instead of dropping into YOURS, and the requester lost sight of the
+    /// request they had just made.
+    /// </remarks>
     public void OnRequestClaimed(RequestClaimedPayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        Remove(payload.RequestId);
+
+        OnUi(() =>
+        {
+            _board?.ApplyClaim(
+                payload.RequestId,
+                payload.ClaimedByParticipantId,
+                payload.Callsign,
+                payload.Version,
+                DateTimeOffset.UtcNow);
+
+            Render();
+        });
     }
 
     /// <inheritdoc />
