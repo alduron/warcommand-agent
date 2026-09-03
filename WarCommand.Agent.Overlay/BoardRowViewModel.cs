@@ -1,4 +1,4 @@
-﻿using System.Collections.Specialized;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -437,6 +437,58 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
         parts.Add(solution.SpotterHint);
         return string.Join("  ", parts);
+    }
+
+    /// <summary>
+    /// The same bracket, split so a section can put the numbers and the caveats on separate lines.
+    /// </summary>
+    /// <remarks>
+    /// One line is right on a board row, where the bracket is a footnote to the request. It is
+    /// wrong in the artillery section, where the numbers are the whole point and running them
+    /// together with ADJUST FROM SPOTTER pushed the elevation off the edge of the panel.
+    /// </remarks>
+    internal static (string Bracket, string Note) BracketParts(FireSolution solution)
+    {
+        ArgumentNullException.ThrowIfNull(solution);
+
+        var notes = new List<string>(3);
+
+        if (solution.Status is FireSolutionStatus.OutOfRange)
+        {
+            notes.Add(solution.Message ?? "OUT OF RANGE");
+            notes.Add(solution.SpotterHint);
+            return (string.Empty, string.Join("  ", notes));
+        }
+
+        var numbers = new List<string>(4)
+        {
+            FormattableString.Invariant($"AZ {solution.AzimuthDegrees:0}"),
+            solution.RangeMeters is { } metres
+                ? FormattableString.Invariant($"{metres:0}m")
+                : FormattableString.Invariant($"{solution.RangeUnits:0.0}u"),
+        };
+
+        if (solution.ElevationMils is { } mils)
+        {
+            numbers.Add(FormattableString.Invariant($"EL {mils}"));
+
+            if (solution.TimeOfFlightS is { } tof)
+            {
+                numbers.Add(FormattableString.Invariant($"TOF {tof:0.0}s"));
+            }
+        }
+        else if (solution.Message is { } withheld)
+        {
+            notes.Add(withheld);
+        }
+
+        if (solution.GunPositionStale)
+        {
+            notes.Add(FireSolution.GunPositionStaleMessage);
+        }
+
+        notes.Add(solution.SpotterHint);
+        return (string.Join("   ", numbers), string.Join("  ", notes));
     }
 
     private static string? Leg(BoardRow row, decimal? unitsToMeters)

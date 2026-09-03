@@ -119,33 +119,52 @@ public sealed record MenuViewModel
     /// </remarks>
     private static string Bracket(MenuStateMachine menu)
     {
-        if (menu.ToolGun is not { } gun)
+        if (menu.ToolGun is null)
         {
             return "SET YOUR GUN FIRST";
         }
 
-        if (menu.ToolTarget is not { } target)
+        if (menu.ToolTarget is null)
         {
             return "NOW SET THE TARGET";
         }
 
-        var ballistics = BundledContracts.Ballistics().Current;
-        var weapon = ballistics.Weapons.Count > 0 ? ballistics.Weapons[0] : null;
-        if (weapon is null)
+        // The numbers themselves live in the ARTILLERY section, which stays on screen with the key
+        // released. This line only says the section below has them.
+        return "BRACKET BELOW";
+    }
+
+    /// <summary>
+    /// The artillery readout for the board's own section, or null when no gun has been read.
+    /// </summary>
+    /// <remarks>
+    /// Computed here rather than in the machine so the machine stays free of ballistics. Always a
+    /// BRACKET and never a firing solution: player-measured tables, no altitude, flat earth.
+    /// </remarks>
+    public static ArtilleryViewModel? ArtilleryFor(MenuStateMachine menu)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+
+        return ArtilleryViewModel.For(menu.ToolGun, menu.ToolTarget, (gun, target) =>
         {
-            return string.Empty;
-        }
+            var ballistics = BundledContracts.Ballistics().Current;
+            var weapon = ballistics.Weapons.Count > 0 ? ballistics.Weapons[0] : null;
+            if (weapon is null)
+            {
+                return (string.Empty, "NO FIRING TABLE");
+            }
 
-        var solution = FireSolutionCalculator.Compute(
-            new GunPosition(weapon.Id, gun, DateTimeOffset.UtcNow),
-            target,
-            weapon,
-            ballistics,
-            BundledContracts.GameProfile().Current,
-            null,
-            DateTimeOffset.UtcNow);
+            var solution = FireSolutionCalculator.Compute(
+                new GunPosition(weapon.Id, gun, DateTimeOffset.UtcNow),
+                target,
+                weapon,
+                ballistics,
+                BundledContracts.GameProfile().Current,
+                null,
+                DateTimeOffset.UtcNow);
 
-        return BoardRowViewModel.BracketLine(solution);
+            return BoardRowViewModel.BracketParts(solution);
+        });
     }
 
     /// <summary>

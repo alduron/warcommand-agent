@@ -26,6 +26,7 @@ public sealed class BoardPresenter
     private BoardHeader? _header;
     private string? _status;
     private MenuViewModel? _menu;
+    private ArtilleryViewModel? _artillery;
 
     /// <summary>
     /// Adds a surface and brings it up to date. The overlay is built after the first render, so
@@ -52,8 +53,20 @@ public sealed class BoardPresenter
             view.RenderMenu(menu);
         }
 
+        view.SetArtillery(_artillery);
+
         _last?.Invoke(view);
     }
+
+    /// <summary>The artillery readout, on every surface. Null takes the section off.</summary>
+    public void SetArtillery(ArtilleryViewModel? artillery)
+    {
+        _artillery = artillery;
+        Each(v => v.SetArtillery(artillery));
+    }
+
+    /// <summary>The artillery readout as last rendered, or null when no gun is set.</summary>
+    public ArtilleryViewModel? Artillery => _artillery;
 
     /// <summary>The header as last rendered, which is what a late surface is caught up with.</summary>
     public BoardHeader? Header => _header;

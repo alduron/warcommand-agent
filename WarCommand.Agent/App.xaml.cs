@@ -529,7 +529,24 @@ public partial class App : Application, IDisposable
         log.Info("Overlay armed. Watching for a game window.");
     }
 
-    /// <summary>Compiles the menu for the current catalog and wires its outcomes.</summary>
+    /// <summary>
+    /// Pushes the artillery readout onto every surface, or takes the section off.
+    /// </summary>
+    /// <remarks>
+    /// It used to be one string in the menu's typed-text field: clipped, and gone the moment the
+    /// key came up, which is exactly when a gun crew is reading the numbers to dial them.
+    /// </remarks>
+    private void RenderArtillery()
+    {
+        if (_presenter is not { } presenter)
+        {
+            return;
+        }
+
+        presenter.SetArtillery(_menu is { } menu ? MenuViewModel.ArtilleryFor(menu.Menu) : null);
+    }
+
+    /// <summary>Compiles the menu for the current catalog and wires its outcomes.</summary>    /// <summary>Compiles the menu for the current catalog and wires its outcomes.</summary>
     private Composition.MenuDriver BuildMenu(BoardPresenter presenter, FileClientLog log)
     {
         var catalog = BundledContracts.Catalog().Current;
@@ -968,6 +985,10 @@ public partial class App : Application, IDisposable
                 ? MenuViewModel.Armed(
                     $"{KeyLabel(BindingAction.NavUp)}/{KeyLabel(BindingAction.NavDown)} MOVE")
                 : MenuViewModel.Closed);
+
+        // Straight away, not on the next tick: reading the map for a gun or a target is the moment
+        // the crew wants the numbers, and a second's wait reads as the key not having worked.
+        RenderArtillery();
         _observer?.SetHint(MenuHint(menu.Menu));
     }
 
@@ -1356,6 +1377,11 @@ public partial class App : Application, IDisposable
             // Before the board guard, for the same reason the menu tick is: with no deployment
             // there is no board to redraw, and that is exactly where a notice got stuck forever.
             _observer?.ExpireNotice(DateTimeOffset.UtcNow);
+
+            // The artillery readout is a section of the board, not a line inside the menu, so it is
+            // redrawn on the tick and survives the key coming up. Also before the guard: a gun
+            // crew standing in no deployment still wants their bracket.
+            RenderArtillery();
 
             if (_observer?.Board is not { } board)
             {

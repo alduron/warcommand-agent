@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -193,6 +193,30 @@ public partial class BoardView : UserControl
 
     /// <summary>The build line at the foot of the window, in the mock's watermark grey.</summary>
     public void SetStatus(string text) => StatusText.Text = text;
+
+    /// <summary>
+    /// The artillery readout, or null to take the section off the board.
+    /// </summary>
+    /// <remarks>
+    /// A section rather than a line in the menu panel, so the numbers stay readable and stay on
+    /// screen while the crew dials them in with the key released.
+    /// </remarks>
+    public void SetArtillery(ArtilleryViewModel? artillery)
+    {
+        if (artillery is null)
+        {
+            ArtillerySection.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        ArtillerySection.Visibility = Visibility.Visible;
+        ArtilleryGun.Text = artillery.Gun;
+        ArtilleryTarget.Text = artillery.Target;
+        ArtilleryBracket.Text = artillery.Bracket;
+        ArtilleryBracket.Visibility = artillery.Bracket.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        ArtilleryNote.Text = artillery.Note;
+        ArtilleryNote.Visibility = artillery.Note.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     /// <summary>Renders the two header lines. Anything null collapses.</summary>
     public void SetHeader(BoardHeader header)
