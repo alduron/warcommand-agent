@@ -1,4 +1,4 @@
-using WarCommand.Agent.Input;
+﻿using WarCommand.Agent.Input;
 using WarCommand.Agent.Input.Bindings;
 
 namespace WarCommand.Agent.Tests.Architecture;
@@ -71,7 +71,7 @@ public class PanicInvariantTests
     }
 
     [Fact]
-    public void Reset_to_defaults_leaves_panic_bound_and_ptt_unchosen()
+    public void Reset_to_defaults_leaves_panic_bound_and_both_hold_keys_bound()
     {
         var bindings = BindingSet.Defaults();
         bindings.Rebind(BindingAction.Ptt, BindingSet.SuggestedPtt);
@@ -80,6 +80,7 @@ public class PanicInvariantTests
         bindings.ResetToDefaults();
 
         Assert.Equal("RightAlt+P", bindings[BindingAction.Panic].Label);
-        Assert.False(bindings.PttChosen);
+        Assert.Equal("V", bindings[BindingAction.Ptt].Label);
+        Assert.Equal("CapsLock", bindings[BindingAction.Menu].Label);
     }
 }

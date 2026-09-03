@@ -6,21 +6,63 @@ namespace WarCommand.Agent.Tests.Input;
 public class BindingTests
 {
     [Fact]
-    public void Defaults_are_two_chords_an_escape_and_no_ptt()
+    public void Defaults_bind_both_hold_keys()
     {
         var bindings = BindingSet.Defaults();
 
-        Assert.False(bindings.PttChosen);
+        // Both ship bound. Nothing on the overlay happens without one of them held, so an unbound
+        // default is a product that does nothing until the user finds a settings page.
+        Assert.True(bindings.PttChosen);
+        Assert.Equal("V", bindings[BindingAction.Ptt].Label);
+        Assert.Equal("CapsLock", bindings[BindingAction.Menu].Label);
         Assert.Equal("RightAlt+B", bindings[BindingAction.Board].Label);
         Assert.Equal("RightAlt+P", bindings[BindingAction.Panic].Label);
         Assert.Equal("Escape", bindings[BindingAction.Escape].Label);
+
+        // Navigation ships on the movement keys, where the left hand already is.
+        Assert.Equal("W", bindings[BindingAction.NavUp].Label);
+        Assert.Equal("S", bindings[BindingAction.NavDown].Label);
+        Assert.Equal("D", bindings[BindingAction.NavSelect].Label);
+        Assert.Equal("A", bindings[BindingAction.NavBack].Label);
     }
 
     [Fact]
-    public void The_whole_hotkey_surface_is_four_bindings()
+    public void The_whole_hotkey_surface_is_nine_bindings()
     {
-        Assert.Equal(4, BindingActions.All.Count);
-        Assert.Equal(4, BindingSet.Defaults().All.Count());
+        // Two hold keys, Escape, two RightAlt chords, and the four navigation keys. Navigation is
+        // bindable because it sits on WASD and anybody who moves those in game must move these.
+        Assert.Equal(9, BindingActions.All.Count);
+        Assert.Equal(9, BindingSet.Defaults().All.Count());
+        Assert.Equal(4, BindingActions.Navigation.Count);
+    }
+
+    [Fact]
+    public void Navigation_keys_are_armed_only_while_a_hold_is_down()
+    {
+        // W walks. Arming it outside a hold would put every step the player takes through the hook,
+        // and swallowing it would stop them moving.
+        var bindings = BindingSet.Defaults();
+
+        var idle = new bool[256];
+        bindings.ArmIn(idle, holdActive: false);
+
+        var held = new bool[256];
+        bindings.ArmIn(held, holdActive: true);
+
+        // BindingKey hides its code on purpose, so the difference between the two tables is the
+        // observable: holding arms exactly the four navigation keys and nothing else.
+        var extra = 0;
+        for (var i = 0; i < idle.Length; i++)
+        {
+            if (held[i] && !idle[i])
+            {
+                extra++;
+            }
+
+            Assert.False(idle[i] && !held[i], "a hold must never disarm anything");
+        }
+
+        Assert.Equal(BindingActions.Navigation.Count, extra);
     }
 
     [Fact]
@@ -88,7 +130,8 @@ public class BindingTests
         Assert.Equal(RebindState.Capturing, session.Tick(start.AddSeconds(4.9)));
         Assert.Equal(RebindState.Aborted, session.Tick(start.AddSeconds(5)));
         Assert.Equal(RebindOutcome.NotCapturing, session.Offer(Chord.Bare("Mouse4"), start.AddSeconds(5)));
-        Assert.False(bindings.PttChosen);
+        // The abort changed nothing: the shipped default is still in place.
+        Assert.Equal("V", bindings[BindingAction.Ptt].Label);
     }
 
     [Fact]
@@ -125,10 +168,9 @@ public class BindingTests
     }
 
     [Fact]
-    public void The_suggested_ptt_is_mouse5_and_is_never_applied_on_its_own()
+    public void The_suggested_ptt_is_mouse5_for_anybody_who_wants_a_mouse_button()
     {
         Assert.Equal("Mouse5", BindingSet.SuggestedPtt.Label);
-        Assert.False(BindingSet.Defaults().PttChosen);
     }
 
     [Theory]

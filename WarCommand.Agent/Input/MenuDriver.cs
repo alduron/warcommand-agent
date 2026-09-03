@@ -20,18 +20,22 @@ namespace WarCommand.Agent.Composition;
 /// each one ends in a render, an HTTP call, or both.
 /// </para>
 /// </remarks>
-public sealed class MenuDriver : IMenuKeySink, IMenuGate
+public sealed class MenuDriver : IMenuKeySink, IMenuGate, IMenuNavSink
 {
     private readonly Dispatcher _dispatcher;
     private readonly MenuStateMachine _menu;
     private readonly Action<MenuOutcome> _onOutcome;
     private readonly Func<DateTimeOffset> _clock;
 
+    // The hold key's state as the bridge reported it. Open sets it, every close clears it, so the
+    // orphan guard only ever sees a menu whose key is genuinely up.
+    private volatile bool _holdKeyDown;
+
     /// <summary>Builds the driver over a compiled menu.</summary>
     /// <param name="dispatcher">The UI dispatcher. Every outcome hops onto it.</param>
     /// <param name="menu">The machine. One per agent, rebuilt when the catalog changes.</param>
     /// <param name="onOutcome">Where a navigation, a request or a board verb goes.</param>
-    /// <param name="clock">Injected so the idle timeout is testable.</param>
+    /// <param name="clock">Injected so the orphan guard is testable.</param>
     public MenuDriver(
         Dispatcher dispatcher,
         MenuStateMachine menu,
@@ -69,14 +73,84 @@ public sealed class MenuDriver : IMenuKeySink, IMenuGate
     public bool MenuIsOpen => _menu.IsOpen;
 
     /// <summary>Push-to-talk went down: open at the root, with the coordinate snapshot if there is one.</summary>
-    public void Open(MapPoint? snapshot, MenuContext context) =>
+    public void Open(MapPoint? snapshot, MenuContext context)
+    {
+        _holdKeyDown = true;
         Raise(_menu.Open(_clock(), snapshot, context));
+    }
+
+    /// <summary>
+    /// The hold key went down. Records it so the orphan guard can tell a held menu from an
+    /// abandoned one, WITHOUT opening anything: the nav key is what opens the menu.
+    /// </summary>
+    /// <remarks>
+    /// This exists because the menu stopped being opened through <see cref="Open"/> when the way in
+    /// moved to a nav key. The flag stayed false, so the guard treated every held menu as orphaned
+    /// and closed it a second and a half after it appeared, mid-interaction, every time.
+    /// </remarks>
+    public void HoldDown() => _holdKeyDown = true;
+
+    /// <summary>The hold key came up. Only now may the orphan guard consider closing.</summary>
+    public void HoldUp() => _holdKeyDown = false;
 
     /// <summary>The game window went away. The menu goes with it.</summary>
-    public void FocusLost() => Raise(_menu.FocusLost(_clock()));
+    public void FocusLost()
+    {
+        _holdKeyDown = false;
+        Raise(_menu.FocusLost(_clock()));
+    }
 
     /// <summary>Push-to-talk came up. A tap latches; a hold commits or discards.</summary>
-    public void KeyUp() => Raise(_menu.KeyUp(_clock()));
+    public void KeyUp()
+    {
+        _holdKeyDown = false;
+        Raise(_menu.KeyUp(_clock()));
+    }
+
+    /// <summary>
+    /// The coordinate snapshot taken on key-down, kept so the menu carries the same point whenever
+    /// it opens. Set by the composition root on every hold.
+    /// </summary>
+    public MapPoint? PendingSnapshot { get; set; }
+
+    /// <summary>The context a wheel-opened menu should carry. Set alongside the snapshot.</summary>
+    public MenuContext PendingContext { get; set; } = new();
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The first up press of a hold opens the menu rather than moving anything: nothing is on
+    /// screen to move through until it is.
+    /// </remarks>
+    public void Scroll(int notches)
+    {
+        if (!_menu.IsOpen)
+        {
+            // From rest, UP is the request menu and DOWN is the board. Two directions, two
+            // surfaces, neither nested in the other.
+            if (notches < 0)
+            {
+                Raise(_menu.Open(_clock(), PendingSnapshot, PendingContext));
+            }
+            else
+            {
+                Raise(_menu.OpenOnBoard(_clock(), PendingContext));
+            }
+
+            return;
+        }
+
+        Raise(_menu.Scroll(notches, _clock()));
+    }
+
+    /// <inheritdoc />
+    public void Commit() => Raise(_menu.Select(_clock()));
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Backing out of the top level leaves the menu closed but the hold still down, so the armed
+    /// prompt comes back and the other surface is one press away.
+    /// </remarks>
+    public void Back() => Raise(_menu.Back(_clock()));
 
     /// <inheritdoc />
     public void Digit(int digit) => Raise(_menu.Digit(digit, _clock()));
@@ -87,8 +161,11 @@ public sealed class MenuDriver : IMenuKeySink, IMenuGate
     /// <inheritdoc />
     public void Backspace() => Raise(_menu.Backspace(_clock()));
 
-    /// <summary>The idle timeout, driven by the same tick that redraws the board.</summary>
-    public void Tick() => Raise(_menu.Tick(_clock()));
+    /// <summary>
+    /// The orphan guard, driven by the same tick that redraws the board. Does nothing at all while
+    /// the hold key is down.
+    /// </summary>
+    public void Tick() => Raise(_menu.Tick(_clock(), _holdKeyDown));
 
     private void Raise(MenuOutcome outcome)
     {

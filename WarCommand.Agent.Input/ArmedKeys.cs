@@ -28,7 +28,7 @@ public sealed class ArmedKeys
     /// The table for the current state. While Panic is engaged nothing but Panic is armed, which is
     /// the hook suspended as far as it can be and still hear the press that resumes it.
     /// </summary>
-    internal static ArmedKeys Build(BindingSet bindings, bool suspended, bool menuOpen)
+    internal static ArmedKeys Build(BindingSet bindings, bool suspended, bool menuOpen, bool holdActive = false)
     {
         var table = new bool[Codes];
 
@@ -38,7 +38,7 @@ public sealed class ArmedKeys
             return new ArmedKeys(table);
         }
 
-        bindings.ArmIn(table);
+        bindings.ArmIn(table, holdActive);
 
         if (menuOpen)
         {

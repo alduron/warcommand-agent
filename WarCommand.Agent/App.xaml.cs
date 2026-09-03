@@ -18,6 +18,7 @@ using WarCommand.Agent.Core.Abstractions;
 using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Dev;
+using WarCommand.Agent.Core.Grammar;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 using WarCommand.Agent.Core.Tray;
@@ -157,6 +158,20 @@ public partial class App : Application, IDisposable
     private DispatcherTimer? _tickTimer;
 
     private Composition.MenuDriver? _menu;
+
+    // Screen capture, opt-in and off by default. One ICoordinateSource among several.
+    private WarCommand.Agent.Capture.MapReadoutCoordinateSource? _mapReadout;
+
+    // The hold key is physically down. Drives the armed prompt on the overlay, which is the only
+    // thing on screen between pressing the hold key and opening the menu with it.
+    private bool _holdHeld;
+
+    /// <summary>What the menu's ROLES, MATCH and PEOPLE pages draw. Refreshed on every render.</summary>
+    private IReadOnlyList<string> _enabledRoleIds = [];
+    private IReadOnlyCollection<string> _subscribedRoleIds = [];
+    private IReadOnlyList<string> _roster = [];
+    private string? _inviteCode;
+    private Composition.VoiceDriver? _voice;
     private RealtimeClient? _realtime;
     private BoardRealtimeObserver? _observer;
     private readonly SystemClockOffset _clockOffset = new();
@@ -368,7 +383,7 @@ public partial class App : Application, IDisposable
             new FixedForegroundProbe(gameForeground: true, gameRunning: true),
             controller,
             _tray,
-            onPtt: held => presenter.SetHeader(OverlayDemo.Header with { Hint = DemoHint(held) }),
+            onHold: (_, held) => presenter.SetHeader(OverlayDemo.Header with { Hint = DemoHint(held) }),
             log);
 
         // The same subscription the real path takes. Without it the demo reads the display, the
@@ -431,6 +446,18 @@ public partial class App : Application, IDisposable
         watcher.Start();
         _gameWatcher = watcher;
 
+        // Screen capture. Opt-in per binding rule 9 and per screenCaptureEnabled in settings, and
+        // one ICoordinateSource among several rather than the mechanism.
+        _mapReadout = new WarCommand.Agent.Capture.MapReadoutCoordinateSource(
+            () => BundledContracts.GameProfile().Current,
+            () => watcher.Tracker.Handle,
+            () => settings.Current.ScreenCaptureEnabled);
+
+        // Off the startup path and off every key press: the atlas is built once, in the background,
+        // so the first read is a capture and a decode rather than a render as well.
+        var readout = _mapReadout;
+        _ = Task.Run(readout.Warm);
+
         // Every binding except Panic is inert unless the game is the foreground window, and Wardogs
         // is not out, so on every machine today that is every binding. The probe answers yes while
         // the overlay is Always on, which is the user saying they run it without the game: the rule
@@ -440,12 +467,22 @@ public partial class App : Application, IDisposable
         // rebuilt by RebuildMenu when a config frame changes it.
         _menu = BuildMenu(presenter, log);
 
+        // Voice. The model, engine, grammar and parser all existed with nothing constructing any
+        // of them, so holding push-to-talk opened the keyboard menu and listened to nothing.
+        _voice = new Composition.VoiceDriver(
+            EnsureAudioDevices() ?? (IAudioCapture)new WasapiAudioCapture(),
+            () => BundledContracts.Catalog().Current,
+            () => _observer?.Board,
+            () => BundledContracts.Catalog().Current.DefaultEnabledRoles,
+            parsed => OnParsedSpeech(parsed, log),
+            log);
+
         _input = Composition.InputComposition.Start(
             _bindings,
             new Composition.ModeAwareForegroundProbe(watcher, () => settings.Current.OverlayMode),
             controller,
             _tray,
-            onPtt: held => OnPtt(held, log),
+            onHold: (action, held) => OnHold(action, held, settings, log),
             log,
             _menu);
 
@@ -477,32 +514,249 @@ public partial class App : Application, IDisposable
     /// The coordinate is snapshotted on key DOWN and handed to the menu here, never sampled later:
     /// people move the mouse while they talk and while they read a menu.
     /// </remarks>
-    private void OnPtt(bool held, FileClientLog log)
+    private async void OnHold(BindingAction action, bool held, SettingsStore settings, FileClientLog log)
+    {
+        // Both hold keys open the menu, so the surface is the same whichever way you came in. Only
+        // push-to-talk opens a microphone, and the menu key must never open one.
+        if (_menu is { } menu)
+        {
+            if (held)
+            {
+                // Holding arms the surface; it does not open it. The first scroll up is the way in,
+                // so a hold that is only ever used for voice never puts a menu on screen at all.
+                // The coordinate is still snapshotted HERE, on key down, because that is the moment
+                // the crosshair meant something.
+                _holdHeld = true;
+
+                // A fault is about the LAST attempt. Carrying it into this one makes every later
+                // press look like it failed too, which is how a stale banner becomes "I can never
+                // submit anything".
+                _observer?.SetFault(null);
+                menu.HoldDown();
+                menu.PendingSnapshot = SnapshotCoordinate();
+                menu.PendingContext = MenuContextNow();
+            }
+            else
+            {
+                _holdHeld = false;
+                menu.HoldUp();
+                menu.KeyUp();
+            }
+
+            // OnHold runs on the HOOK thread. Every outcome the menu raises is already marshalled
+            // for exactly this reason; the armed prompt has to be too, or the first hold throws on
+            // a WPF object from the wrong thread and takes the agent down with it.
+            if (_presenter is { } surface)
+            {
+                _ = Dispatcher.BeginInvoke(() => RenderMenu(surface));
+            }
+        }
+
+        if (action != BindingAction.Ptt || _voice is not { } voice)
+        {
+            return;
+        }
+
+        if (held)
+        {
+            voice.BeginHold(settings.Current.InputDeviceId);
+            return;
+        }
+
+        await voice.EndHoldAsync(_shutdown.Token).ConfigureAwait(true);
+        if (voice.Fault is { } fault)
+        {
+            _observer?.SetFault(fault);
+        }
+    }
+
+    /// <summary>
+    /// Everything the menu's pages draw, read at the moment the key goes down.
+    /// </summary>
+    /// <remarks>
+    /// Read once per hold rather than bound: the menu lives only while the key is down, so a page
+    /// that changed underneath the reader would be changing while they are choosing from it.
+    /// </remarks>
+    private MenuContext MenuContextNow() => new()
+    {
+        OccupiedSlots = [.. _observer?.Board?.Rows.Where(r => r.Slot is not null).Select(r => r.Slot!.Value) ?? []],
+
+        // What each slot holds, so the verb list offers only what that row will accept. Without it
+        // an open row shows START and DONE, which the server refuses in silence.
+        Slots = _observer?.Board?.Rows
+            .Where(r => r.Slot is not null)
+            .ToDictionary(
+                r => r.Slot!.Value,
+                r => new SlotState(r.State, r.ClaimantParticipantId == _observer!.Board!.ViewerParticipantId))
+            ?? new Dictionary<int, SlotState>(),
+        CanRestart = _menuState.CanRestartMatch,
+        EnabledRoleIds = _enabledRoleIds,
+        SubscribedRoleIds = _subscribedRoleIds,
+        GroupName = _menuState.GroupName,
+        DeploymentLabel = _menuState.MatchName,
+        InviteCode = _inviteCode,
+        MemberCount = _menuState.MatchPeopleCount,
+        Roster = _roster,
+    };
+
+    /// <summary>
+    /// The coordinate at key-down, from the enabled sources in priority order. Null when none
+    /// answers, which is every machine until capture or a typed grid provides one.
+    /// </summary>
+    /// <summary>
+    /// The coordinate at the moment the hold key went down. Always null: the map is read on an
+    /// explicit key press, never on the hold.
+    /// </summary>
+    /// <remarks>
+    /// This ran the capture once. It is called from OnHold, which is the HOOK THREAD, so every
+    /// press of the hold key did a full screen grab plus a decode inside the hook callback: input
+    /// lagged and Windows dropped events. It also broke the feature it was meant to serve, because
+    /// a snapshot present at open makes the menu skip the coordinate level, so the read key never
+    /// had a level to act on.
+    /// <para>
+    /// Reading the map is a deliberate act on the coordinate level, off the hook thread, and it can
+    /// refuse and be repeated. See Convention_WarCommandAScreenReadRefusesRatherThanGuesses.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// Whether this participant may restart the match.
+    /// </summary>
+    /// <remarks>
+    /// A restart clears the board and removes every visitor, so it is a member's action and never a
+    /// visitor's. A visitor is on one deployment by invite and has nothing invested in it.
+    /// </remarks>
+    private static bool CanRestartMatch(ConfigMembership membership) =>
+        !string.Equals(membership.ParticipantKind, "visitor", StringComparison.Ordinal)
+        && membership.Deployment is not null;
+
+    /// <summary>
+    /// Where this player's gun is, for the fire solution on every mortar and artillery row.
+    /// </summary>
+    /// <remarks>
+    /// Set from a screen read on MORE > GUN HERE. It goes stale on its own after five minutes,
+    /// because a gun that moved and a bracket computed from where it used to be is worse than no
+    /// bracket at all.
+    /// </remarks>
+    private GunPosition? _gunPosition;
+
+    private void SetGunPosition(MapPoint point, FileClientLog log)
+    {
+        // The weapon is whichever gun role the user subscribes to. Mortar first: it is the common
+        // one, and the two share every field the solution needs.
+        var weaponId = _subscribedRoleIds.Contains("artillery") && !_subscribedRoleIds.Contains("mortar")
+            ? "sph2"
+            : "l81_mortar";
+
+        _gunPosition = new GunPosition(weaponId, point, DateTimeOffset.UtcNow);
+        _observer?.SetGunPosition(_gunPosition);
+        _observer?.SetFault(FormattableString.Invariant($"GUN SET x{point.X:0.00} y{point.Y:0.00}"));
+        log.Info("Gun position set from the map.");
+    }
+
+    private static MapPoint? SnapshotCoordinate() => null;
+
+    /// <summary>
+    /// What actually went wrong, for the log. The exception type alone is not a diagnosis.
+    /// </summary>
+    /// <remarks>
+    /// Every screen-read submit failed for days behind the single line "Submit failed:
+    /// WarCommandApiException". The cause was a 422 from one schema rule, and a 409 from a stale
+    /// deployment would have logged identically.
+    /// </remarks>
+    private static string Describe(Exception ex) => ex switch
+    {
+        WarCommandApiException api =>
+            $"{api.Status} {api.Code} {api.Error.Detail} "
+            + $"[{string.Join(", ", api.Error.Errors.Select(e => $"{e.Field}:{e.Code}"))}] "
+            + $"corr={api.CorrelationId}",
+        _ => ex.GetType().Name,
+    };
+
+    /// <summary>
+    /// The select key on the coordinate level: read the map now.
+    /// </summary>
+    /// <remarks>
+    /// It refuses far more often than it answers, and the surface says so rather than guessing. The
+    /// readout sits wherever the player put it, and on a busy background the outline can weld a
+    /// decimal point to the digit beside it. Another press somewhere clearer costs a second; a
+    /// wrong coordinate costs a fire mission on the wrong grid.
+    /// </remarks>
+    private async void ReadCoordinateFromScreen(BoardPresenter presenter, FileClientLog log)
     {
         if (_menu is not { } menu)
         {
             return;
         }
 
-        if (!held)
+        if (_mapReadout is not { } source)
         {
-            menu.KeyUp();
+            _observer?.SetFault("CAPTURE OFF");
             return;
         }
 
-        log.Info("PTT down.");
-        menu.Open(SnapshotCoordinate(), new MenuContext
+        // Off the UI thread: a full client-rect grab plus a decode is tens of milliseconds and the
+        // surface is mid-render. The hook thread must never see this at all.
+        var point = await Task.Run(source.Read).ConfigureAwait(true);
+        if (point is null)
         {
-            OccupiedSlots = [.. _observer?.Board?.Rows.Where(r => r.Slot is not null).Select(r => r.Slot!.Value) ?? []],
-            CanRestart = _menuState.CanRestartMatch,
-        });
+            // Say which way it failed and leave the level open. The user moves and presses again.
+            // Nothing advances. The level stays open and says so, and the user presses again
+            // somewhere the readout is legible.
+            _observer?.SetFault($"{source.LastRefusal ?? "NO COORDS"}  NOT READ, TRY AGAIN");
+            log.Info($"Screen read refused: {source.LastRefusal}.");
+            RenderMenu(presenter);
+            return;
+        }
+
+        log.Info("Coordinate read from the map.");
+        _observer?.SetFault(null);
+        OnMenuOutcome(menu.Menu.AcceptReadCoordinate(point, DateTimeOffset.UtcNow), presenter, log);
     }
 
     /// <summary>
-    /// The coordinate at key-down, from the enabled sources in priority order. Null when none
-    /// answers, which is every machine until capture or a typed grid provides one.
+    /// What was said, once the recognizer and the parser have had it.
     /// </summary>
-    private static MapPoint? SnapshotCoordinate() => null;
+    /// <remarks>
+    /// Voice and the keyboard end in the same actions on purpose: a spoken request submits through
+    /// the same call the menu submits through, and a spoken verb goes out on the same socket.
+    /// </remarks>
+    private void OnParsedSpeech(ParseResult parsed, FileClientLog log)
+    {
+        switch (parsed)
+        {
+            case ParsedRequest request when SnapshotCoordinate() is { } point:
+                SubmitFromMenu(
+                    new MenuRequestReady(
+                        request.TypeId,
+                        request.SupplyKindId,
+                        request.StructureKindId,
+                        point,
+                        request.Modifiers),
+                    log);
+                break;
+
+            case ParsedRequest:
+                // Heard, and nowhere to put it. Every M1 coordinate is spoken or typed, so a
+                // request with no point is an incomplete utterance rather than a failure.
+                _observer?.SetFault("NO COORDINATE");
+                break;
+
+            case ParsedCommand { Slot: { } slot } command:
+                RunBoardVerb(new MenuBoardAction(command.VerbId, slot), log);
+                break;
+
+            case ParsedRejection rejection:
+                log.Info($"Utterance rejected: {rejection.Reason}.");
+                break;
+
+            case ParsedUnrecognized:
+                _observer?.SetFault("NOT RECOGNIZED");
+                break;
+
+            default:
+                break;
+        }
+    }
 
     /// <summary>Everything the menu can decide, and what the agent does about it.</summary>
     private void OnMenuOutcome(MenuOutcome outcome, BoardPresenter presenter, FileClientLog log)
@@ -521,8 +775,40 @@ public partial class App : Application, IDisposable
                 JoinFromMenu(join.InviteCode, log);
                 break;
 
+            case MenuRoleToggled role:
+                ToggleRoleFromMenu(role.RoleId, log);
+                break;
+
+            case MenuCoordinateReadRequested:
+                ReadCoordinateFromScreen(presenter, log);
+                return;
+
+            case MenuGunPositionSet gun:
+                SetGunPosition(gun.Point, log);
+                break;
+
+            case MenuInviteCopied invite:
+                // Prefixed so a code pasted into game chat is obviously ours and searchable, and
+                // so a bare six digit number cannot be mistaken for a coordinate or a callsign.
+                System.Windows.Clipboard.SetText($"WARCOMMAND:{invite.InviteCode}");
+                _observer?.SetFault($"COPIED WARCOMMAND:{invite.InviteCode}");
+                log.Info("Invite code copied from the match page.");
+                break;
+
+            case MenuPanelRequested panel:
+                RunPanel(panel.PanelId, log);
+                break;
+
             case MenuDiscarded discarded:
                 log.Info($"Menu closed: {discarded.Reason}.");
+
+                // A draft released with no point sends nothing, and that has to be visible: the
+                // menu closing on release otherwise looks exactly like a request going out.
+                if (discarded.Reason == "no_coordinate")
+                {
+                    _observer?.SetFault("NOT SENT: NO COORDINATE");
+                }
+
                 break;
 
             default:
@@ -532,6 +818,48 @@ public partial class App : Application, IDisposable
         RenderMenu(presenter);
     }
 
+    /// <summary>
+    /// The control legend drawn under the menu title, built from the live bindings so a rebound key
+    /// is named correctly the moment it changes.
+    /// </summary>
+    /// <remarks>
+    /// Never a literal key string, for the same reason the header hint is resolved from state:
+    /// every one of these is rebindable, and a legend naming the wrong key is worse than none.
+    /// </remarks>
+    private string MenuLegend()
+    {
+        var up = KeyLabel(BindingAction.NavUp);
+        var down = KeyLabel(BindingAction.NavDown);
+        var select = KeyLabel(BindingAction.NavSelect);
+        var back = KeyLabel(BindingAction.NavBack);
+
+        // These levels have no list to move through: the key that selects reads the map.
+        if (_menu?.Menu.Level is MenuLevel.Coordinate)
+        {
+            return $"OPEN MAP, POINT, {select} READS   OR TYPE   {back} BACK";
+        }
+
+        if (_menu?.Menu.Level is MenuLevel.GunPosition)
+        {
+            return $"OPEN MAP, POINT AT YOUR GUN, {select} READS   {back} BACK";
+        }
+
+        if (_menu?.Menu.Level is MenuLevel.FireTarget)
+        {
+            return $"OPEN MAP, POINT AT THE TARGET, {select} READS   {back} BACK";
+        }
+
+        if (_menu?.Menu.Level is MenuLevel.FireTool)
+        {
+            return $"{up}/{down} PICK   {select} RE-READ IT   {back} BACK";
+        }
+
+        return $"{up}/{down} MOVE   {select} SELECT   {back} BACK";
+    }
+
+    private string KeyLabel(BindingAction action) =>
+        _bindings[action].IsBound ? _bindings[action].Label.ToUpperInvariant() : "UNBOUND";
+
     /// <summary>Pushes the menu's current state onto the surface, closed included.</summary>
     private void RenderMenu(BoardPresenter presenter)
     {
@@ -540,7 +868,12 @@ public partial class App : Application, IDisposable
             return;
         }
 
-        presenter.SetMenu(MenuViewModel.From(menu.Menu));
+        presenter.SetMenu(menu.Menu.IsOpen
+            ? MenuViewModel.From(menu.Menu, MenuLegend())
+            : _holdHeld
+                ? MenuViewModel.Armed(
+                    $"{KeyLabel(BindingAction.NavUp)}/{KeyLabel(BindingAction.NavDown)} MOVE")
+                : MenuViewModel.Closed);
         _observer?.SetHint(MenuHint(menu.Menu));
     }
 
@@ -563,20 +896,30 @@ public partial class App : Application, IDisposable
             TypeId = ready.TypeId,
             CapturedInDeploymentId = deployment,
             Modifiers = ready.Modifiers,
+
+            // The menu captured these and the submit dropped them, so a build request arrived with
+            // the server's default structure and the board said BUILD with nothing to build.
+            SupplyKind = ready.SupplyKindId,
+            StructureKind = ready.StructureKindId,
             Priority = ready.Modifiers.Contains("urgent") ? Priority.Urgent : Priority.Normal,
             ClientSubmittedAt = DateTimeOffset.UtcNow,
+            // EVERY point the type takes, each with its own label. Sending only the first was a
+            // 422 point_count_mismatch on any two-point type, so TRANSPORT, LIFT and ESCORT could
+            // never be submitted at all.
             Points =
             [
-                new PointBody
+                .. ready.Points.Select((point, ordinal) => new PointBody
                 {
-                    Ordinal = 0,
-                    Label = type is { PointLabels.Count: > 0 } ? type.PointLabels[0] : "target",
-                    X = ready.Point.X.ToString(CultureInfo.InvariantCulture),
-                    Y = ready.Point.Y.ToString(CultureInfo.InvariantCulture),
-                    Source = ready.Point.Source,
-                    RawText = ready.Point.RawText,
-                    Confidence = ready.Point.Confidence,
-                },
+                    Ordinal = ordinal,
+                    Label = type is { } known && known.PointLabels.Count > ordinal
+                        ? known.PointLabels[ordinal]
+                        : "target",
+                    X = point.X.ToString(CultureInfo.InvariantCulture),
+                    Y = point.Y.ToString(CultureInfo.InvariantCulture),
+                    Source = point.Source,
+                    RawText = point.RawText,
+                    Confidence = point.Confidence,
+                }),
             ],
         };
 
@@ -586,10 +929,13 @@ public partial class App : Application, IDisposable
                 .SubmitRequestAsync(group, Guid.NewGuid().ToString("n"), body, _shutdown.Token)
                 .ConfigureAwait(true);
             log.Info($"Request submitted: {result.Request.TicketCode}.");
+            _observer?.SetFault(null);
         }
         catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
         {
-            log.Warn($"Submit failed: {ex.GetType().Name}");
+            // The type name alone said nothing. A 422 from a schema rule and a 409 from a stale
+            // deployment look identical in a log that only names the exception.
+            log.Warn($"Submit failed: {Describe(ex)}");
             _observer?.SetFault("SUBMIT FAILED");
         }
     }
@@ -636,6 +982,11 @@ public partial class App : Application, IDisposable
     /// on somebody's behalf is input synthesis, which binding rule 1 forbids outright: the
     /// architecture test greps for the API name, in comments too, which is how this one was caught.
     /// </summary>
+    /// <remarks>
+    /// The TEXT SHAPE comes from coordinate_handoff, never from an interpolation here. It used to
+    /// write "94.70 107.37": no ticket, no axis prefixes, no comma, so pasting it into chat gave
+    /// nobody a clickable pin and named no job. The measured shape is "MED-24 x94.70, y107.25".
+    /// </remarks>
     private static bool CopyPoint(BoardRow row)
     {
         if (row.Points.Count == 0)
@@ -644,8 +995,136 @@ public partial class App : Application, IDisposable
         }
 
         var point = row.Points[0].Point;
-        System.Windows.Clipboard.SetText(FormattableString.Invariant($"{point.X:0.00} {point.Y:0.00}"));
+        var text = CoordinateHandoffText.Render(
+            BundledContracts.GameProfile().Current.CoordinateHandoff,
+            row.TicketCode,
+            point.X,
+            point.Y);
+
+        if (text is null)
+        {
+            return false;
+        }
+
+        System.Windows.Clipboard.SetText(text);
         return true;
+    }
+
+    /// <summary>
+    /// The two MORE entries that are actions rather than pages.
+    /// </summary>
+    /// <remarks>
+    /// Both are offered only when they can be honoured: restart needs admin, and link needs the
+    /// prompt to be showing. Neither is a page, so neither has a level.
+    /// </remarks>
+    private async void RunPanel(string panelId, FileClientLog log)
+    {
+        if (_client is not { } client)
+        {
+            return;
+        }
+
+        try
+        {
+            switch (panelId)
+            {
+                case "restart" when _standingOn is { } deployment:
+                    await client.RestartDeploymentAsync(deployment, _shutdown.Token).ConfigureAwait(true);
+                    log.Info("Deployment restarted from the overlay.");
+                    break;
+
+                case "link":
+                    // The browser finishes it. The agent holds an account already; this is the
+                    // handoff that lets the web bind a provider to it.
+                    var handoff = await client.CreateWebHandoffAsync(_shutdown.Token).ConfigureAwait(true);
+                    OpenInBrowser(handoff.Url?.ToString());
+                    break;
+
+                default:
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+        {
+            log.Warn($"{panelId} failed: {ex.GetType().Name}");
+            _observer?.SetFault(panelId == "restart" ? "RESTART REFUSED" : "LINK FAILED");
+        }
+    }
+
+    /// <summary>
+    /// A role toggled from the overlay. The server decides, and its subscriptions.changed frame is
+    /// what re-renders the header and re-seeds the board.
+    /// </summary>
+    /// <summary>
+    /// Re-reads the board after the viewer's role subscription changed.
+    /// </summary>
+    /// <remarks>
+    /// A role just switched on receives new rows from the socket, but every row already open was
+    /// filtered out of the frames sent before the toggle, so only a reseed brings those in.
+    /// </remarks>
+    private async Task ReseedBoardAsync(FileClientLog log)
+    {
+        if (_client is not { } client
+            || _observer?.Board is not { } board
+            || _presenter is not { } presenter
+            || _standingOn is not { } deployment)
+        {
+            return;
+        }
+
+        try
+        {
+            await RefreshBoardAsync(
+                client,
+                BundledContracts.Catalog().Current,
+                board,
+                deployment,
+                board.ViewerParticipantId,
+                presenter,
+                log).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+        {
+            log.Warn($"Board reseed after a role change failed: {Describe(ex)}");
+        }
+    }
+
+    private async void ToggleRoleFromMenu(string roleId, FileClientLog log)
+    {
+        if (_client is not { } client || _standingOn is not { } deployment)
+        {
+            return;
+        }
+
+        try
+        {
+            var subscribed = await client
+                .ToggleMyRoleAsync(deployment, roleId, _shutdown.Token)
+                .ConfigureAwait(true);
+
+            // Adopt what the SERVER now holds, not what the press implied. Then reseed: the socket
+            // will deliver new rows for a role just switched on, but the ones already waiting were
+            // filtered out of every frame sent before the toggle and only a reseed brings them in.
+            _subscribedRoleIds = subscribed;
+            _menu?.Menu.ReconcileSubscribedRoles(_subscribedRoleIds);
+            _observer?.SetRoles(_subscribedRoleIds);
+            log.Info("Role toggled from the overlay.");
+
+            await ReseedBoardAsync(log).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+        {
+            log.Warn($"Role toggle failed: {ex.GetType().Name}");
+            _observer?.SetFault("ROLE REFUSED");
+
+            // The row already flipped under the finger that pressed it. A refusal has to put it
+            // back, or the overlay keeps claiming a subscription the server never accepted.
+            _menu?.Menu.ReconcileSubscribedRoles(_subscribedRoleIds);
+            if (_presenter is { } presenter)
+            {
+                RenderMenu(presenter);
+            }
+        }
     }
 
     /// <summary>Six digits off the keypad, for anybody with no microphone and no web board open.</summary>
@@ -670,7 +1149,7 @@ public partial class App : Application, IDisposable
 
     private string MenuHint(MenuStateMachine menu) => OverlayHint.Resolve(new HintState
     {
-        PttLabel = _bindings[BindingAction.Ptt].IsBound ? _bindings[BindingAction.Ptt].Label : null,
+        PttLabel = _bindings[BindingAction.Menu].IsBound ? _bindings[BindingAction.Menu].Label : null,
         MenuLevel = menu.Level,
         OnNoDeployment = _standingOn is null,
     });
@@ -688,6 +1167,13 @@ public partial class App : Application, IDisposable
         var timer = new DispatcherTimer { Interval = BoardTickInterval };
         timer.Tick += (_, _) =>
         {
+            // The menu first, and outside the board guard. It used to tick after an early return
+            // taken whenever there was no board, so on an agent standing in no deployment the
+            // orphan guard never ran at all and a menu left open with nothing held stayed open
+            // forever, swallowing the digit row, Escape and Backspace across the whole machine.
+            _menu?.Tick();
+            _input?.Bridge.EnforceHoldLimit();
+
             if (_observer?.Board is not { } board)
             {
                 return;
@@ -695,9 +1181,6 @@ public partial class App : Application, IDisposable
 
             _ = board.Tick(DateTimeOffset.UtcNow);
             _observer.Render();
-            // The menu's own idle timeout rides the same tick, so a latched menu left open closes
-            // itself rather than sitting over the board until somebody presses Escape.
-            _menu?.Tick();
         };
         timer.Start();
         _tickTimer = timer;
@@ -886,7 +1369,11 @@ public partial class App : Application, IDisposable
             return null;
         }
 
-        var window = new AgentWindow(settings, EnsureAudioDevices());
+        // The live BindingSet, not a fresh default one. Without it the keybinds tab listed
+        // defaults, and a rebind wrote settings while the running hook kept the old chord until
+        // the next launch: you bound a key, the overlay disagreed, and neither was wrong.
+        var window = new AgentWindow(settings, EnsureAudioDevices(), _bindings);
+        window.BindingsChanged += (_, _) => OnBindingsChanged();
         window.Closing += OnWindowClosing;
         _window = window;
         MainWindow = window;
@@ -1349,6 +1836,16 @@ public partial class App : Application, IDisposable
         ? "LISTENING"
         : OverlayHint.Resolve(new HintState { PttLabel = _bindings[BindingAction.Ptt].Label });
 
+    /// <summary>
+    /// A chord changed under the running agent: re-arm the hook and re-draw the hint that names it.
+    /// </summary>
+    private void OnBindingsChanged()
+    {
+        _input?.Bridge.Rearm();
+        _observer?.SetHint(HeaderHint(_standingOn is null));
+        _log?.Info("Bindings changed.");
+    }
+
     /// <summary>Adopts the chords held in settings, leaving any the file does not name.</summary>
     private void ApplyStoredBindings(AgentSettings settings)
     {
@@ -1374,7 +1871,7 @@ public partial class App : Application, IDisposable
 
     private string HeaderHint(bool onNoDeployment = false) => OverlayHint.Resolve(new HintState
     {
-        PttLabel = _bindings[BindingAction.Ptt].IsBound ? _bindings[BindingAction.Ptt].Label : null,
+        PttLabel = _bindings[BindingAction.Menu].IsBound ? _bindings[BindingAction.Menu].Label : null,
         OnNoDeployment = onNoDeployment,
     });
 
@@ -1439,6 +1936,10 @@ public partial class App : Application, IDisposable
             };
             _standingOn = null;
             _groupId = null;
+            _enabledRoleIds = [];
+            _subscribedRoleIds = [];
+            _roster = [];
+            _inviteCode = null;
             _observer?.Detach();
             log.Info("No deployment: showing the cold-start empty state.");
             // Standing nowhere is exactly when the tray's switch list is most useful.
@@ -1460,6 +1961,9 @@ public partial class App : Application, IDisposable
         // rows out, so the menu can never offer a click that does nothing.
         _standingOn = deploymentId;
         _groupId = membership.GroupId;
+        _enabledRoleIds = membership.EnabledRoleIds;
+        _subscribedRoleIds = membership.SubscribedRoleIds;
+        _inviteCode = membership.Deployment.InviteCode;
         _menuState = _menuState with
         {
             GroupName = membership.GroupName,
@@ -1469,6 +1973,11 @@ public partial class App : Application, IDisposable
             OpenRequestCount = 0,
             MyRequestCount = 0,
             WebBoardUrl = WebBoardUrl(membership),
+
+            // Never assigned before, so it defaulted to false and NEW MATCH could not appear for
+            // anybody, owner included. Restarting clears the board and drops every visitor, so it
+            // belongs to a MEMBER of the owning group and never to a visitor passing through.
+            CanRestartMatch = CanRestartMatch(membership),
         };
 
         var header = new BoardHeader
@@ -1494,6 +2003,28 @@ public partial class App : Application, IDisposable
         // The switch submenu. Fetched after the board so a slow list never delays the surface, and
         // failure only costs the submenu: the deployment row still names where the agent stands.
         await LoadSwitchableDeploymentsAsync(client, me, deploymentId, log).ConfigureAwait(true);
+
+        // The roster, for the menu's PEOPLE page. deployment.roster carries a headcount and an
+        // invite code and no names, so the page needs this read or it is never offered at all.
+        await LoadRosterAsync(client, deploymentId, log).ConfigureAwait(true);
+    }
+
+    /// <summary>Callsigns on this match, for the menu's PEOPLE page.</summary>
+    private async Task LoadRosterAsync(WarCommandApiClient client, Guid deploymentId, FileClientLog log)
+    {
+        try
+        {
+            var page = await client
+                .GetParticipantsAsync(deploymentId, cursor: null, limit: null, _shutdown.Token)
+                .ConfigureAwait(true);
+            _roster = [.. page.Data.Select(p => p.Callsign)];
+        }
+        catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+        {
+            // Costs the page and nothing else: with no roster it is simply not offered.
+            log.Warn($"Roster read failed: {ex.GetType().Name}");
+            _roster = [];
+        }
     }
 
     /// <summary>How many groups the switch submenu will call for. A tray menu, not a directory.</summary>

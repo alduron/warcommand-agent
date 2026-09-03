@@ -191,6 +191,60 @@
                             </StackPanel>
                         </Border>
 
+                        <!--
+                            The commands themselves. Four bindings is the whole chord surface and
+                            everything else is a digit inside the menu, so a keybinds page that
+                            listed only the four documented almost nothing you can actually press.
+                            Both lists are read from the menu's own tables, never retyped here.
+                        -->
+                        <TextBlock Text="KEYBOARD COMMANDS" Style="{StaticResource SectionHeader}"
+                                   Margin="0,24,0,0" />
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Border Style="{StaticResource FieldRowCompact}">
+                                    <TextBlock x:Name="MenuOpenLine" Style="{StaticResource FieldCaption}"
+                                               TextWrapping="Wrap" />
+                                </Border>
+
+                                <Border Style="{StaticResource FieldRowCompact}">
+                                    <StackPanel>
+                                        <TextBlock Text="On a row" Style="{StaticResource FieldLabel}" />
+                                        <TextBlock Style="{StaticResource FieldCaption}" TextWrapping="Wrap"
+                                                   Text="Open the menu, press 0 for the board, then the slot digit, then:" />
+                                        <ItemsControl x:Name="RowVerbs" Margin="0,6,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Style="{StaticResource FieldCaption}"
+                                                               Text="{Binding}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource FieldRowCompact}">
+                                    <StackPanel>
+                                        <TextBlock Text="Panels" Style="{StaticResource FieldLabel}" />
+                                        <TextBlock Style="{StaticResource FieldCaption}" TextWrapping="Wrap"
+                                                   Text="Open the menu, press 0 twice, then:" />
+                                        <ItemsControl x:Name="MorePages" Margin="0,6,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Style="{StaticResource FieldCaption}"
+                                                               Text="{Binding}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource FieldRow}" BorderThickness="0">
+                                    <TextBlock Style="{StaticResource FieldCaption}" TextWrapping="Wrap"
+                                               Text="Backspace goes up a level. Escape closes. A menu left open closes itself." />
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
                         <Border Style="{StaticResource Notice}">
                             <Grid>
                                 <Grid.ColumnDefinitions>

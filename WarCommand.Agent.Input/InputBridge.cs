@@ -1,4 +1,4 @@
-using WarCommand.Agent.Input.Bindings;
+﻿using WarCommand.Agent.Input.Bindings;
 
 namespace WarCommand.Agent.Input;
 
@@ -55,6 +55,8 @@ public sealed class InputBridge
     private IMenuKeySink? _menu;
     private IChordSink? _chords;
     private IMenuGate? _menuGate;
+    private IMenuNavSink? _menuNav;
+    private DateTimeOffset? _holdSince;
 
     /// <summary>The composition root's constructor.</summary>
     public InputBridge(BindingSet bindings, PanicSwitch panic, IForegroundProbe foreground, IInputLog? log = null)
@@ -70,7 +72,7 @@ public sealed class InputBridge
 
         _bindings.Changed += (_, _) => Rearm();
         _panic.Toggled += (_, _) => Rearm();
-        Armed = ArmedKeys.Build(_bindings, _panic.IsSuspended, MenuIsOpen);
+        Armed = ArmedKeys.Build(_bindings, _panic.IsSuspended, MenuIsOpen, _holdSince is not null);
     }
 
     /// <summary>
@@ -98,20 +100,106 @@ public sealed class InputBridge
     /// <summary>True while a WarCommand menu or panel owns the digits, Escape and Backspace.</summary>
     public bool MenuIsOpen => _menuGate?.MenuIsOpen ?? false;
 
+    /// <summary>
+    /// Which hold key produced the edge the sink is being told about: Ptt or Menu.
+    /// </summary>
+    /// <remarks>
+    /// Both land on one <see cref="IPttSink"/>, and only one of them may open a microphone.
+    /// </remarks>
+    public BindingAction LastHoldAction { get; private set; } = BindingAction.None;
+
+    /// <summary>
+    /// True while a hold key is genuinely down, the game is foreground and Panic is off. Only then
+    /// may the wheel and the left and right buttons be taken from the game.
+    /// </summary>
+    public bool MouseNavActive => NavRefusal() is null;
+
+    /// <summary>
+    /// A diagnostic hook for the navigation path, off by default and deliberately unwired.
+    /// </summary>
+    /// <remarks>
+    /// NOTHING SLOW MAY BE ATTACHED HERE. It is called on the hook thread, once per key, inside the
+    /// low-level hook callback. Pointing it at the file log cost two synchronous disk writes per
+    /// keystroke and Windows started dropping events, which reads as the navigation keys lagging.
+    /// Attach it to an in-memory sink for a session, never to anything that touches IO.
+    /// </remarks>
+    public Action<string>? NavTrace { get; set; }
+
+    /// <summary>Why the mouse may not drive the menu right now, or null when it may.</summary>
+    private string? NavRefusal()
+    {
+        if (_holdSince is not { } since)
+        {
+            return "no hold key down";
+        }
+
+        if (_panic.IsSuspended)
+        {
+            return "panic";
+        }
+
+        if (!_foreground.GameIsForeground)
+        {
+            return "game not foreground";
+        }
+
+        // Deliberately no time limit. A hold ends when the key comes up, Panic fires, or the game
+        // stops being foreground, and at no other moment: a hold that expired under the user's
+        // finger took the menu away mid-action, which is worse than any state it was guarding.
+        _ = since;
+        return null;
+    }
+
     /// <summary>Wires the pure machines. Any of them may be null while a subsystem is off.</summary>
-    public void Connect(IPttSink? ptt, IMenuKeySink? menu, IChordSink? chords, IMenuGate? menuGate)
+    public void Connect(
+        IPttSink? ptt,
+        IMenuKeySink? menu,
+        IChordSink? chords,
+        IMenuGate? menuGate,
+        IMenuNavSink? menuNav = null)
     {
         _ptt = ptt;
         _menu = menu;
         _chords = chords;
         _menuGate = menuGate;
+        _menuNav = menuNav;
         Rearm();
+    }
+
+    /// <summary>
+    /// Drops the hold without a key-up. Called on Panic and on losing the game window, both of
+    /// which end the interaction whether or not the button is physically still down.
+    /// </summary>
+    public void ReleaseHold()
+    {
+        _holdSince = null;
+        Rearm();
+    }
+
+    /// <summary>
+    /// The watchdog, driven by the same tick that redraws the board. Releases a hold that has lost
+    /// the game window, so the navigation keys cannot stay armed after an alt-tab.
+    /// </summary>
+    /// <remarks>
+    /// It never releases on elapsed time. A hold ends when the user ends it.
+    /// </remarks>
+    public void EnforceHoldLimit()
+    {
+        if (_holdSince is null)
+        {
+            return;
+        }
+
+        if (NavRefusal() is not null)
+        {
+            ReleaseHold();
+        }
     }
 
     /// <summary>Rebuilds the arming table. Call after the menu opens or closes.</summary>
     public void Rearm()
     {
-        Armed = ArmedKeys.Build(_bindings, _panic.IsSuspended, MenuIsOpen);
+        Armed = ArmedKeys.Build(_bindings, _panic.IsSuspended, MenuIsOpen, _holdSince is not null);
         ArmedChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -146,15 +234,67 @@ public sealed class InputBridge
             return InputDispatch.Ignored(DispatchOutcome.GameNotForeground, action);
         }
 
-        if (action == BindingAction.Ptt)
+        // Navigation, armed only while a hold is down and ALWAYS swallowed. This is the whole
+        // reason the control surface moved off the mouse: the keyboard hook's swallow is honoured
+        // by the game and the mouse hook's is not. See Insight_WardogsReadsRawInputSoHooksCannotBlockIt.
+        if (BindingActions.IsNavigation(action))
+        {
+            if (_holdSince is null)
+            {
+                return InputDispatch.Ignored(DispatchOutcome.NotBound, action);
+            }
+
+            if (_menuNav is null)
+            {
+                return InputDispatch.Ignored(DispatchOutcome.NoSink, action);
+            }
+
+            switch (action)
+            {
+                case BindingAction.NavUp:
+                    _menuNav.Scroll(-1);
+                    break;
+                case BindingAction.NavDown:
+                    _menuNav.Scroll(1);
+                    break;
+                case BindingAction.NavSelect:
+                    _menuNav.Commit();
+                    break;
+                default:
+                    _menuNav.Back();
+                    break;
+            }
+
+            return InputDispatch.Sent(action, swallow: true);
+        }
+
+        // Two hold keys. Menu opens the overlay's keyboard surface; PTT is voice. Either one
+        // opens the menu, because speaking and pressing digits are two ways through the same tree,
+        // and neither does anything at all once released.
+        if (action is BindingAction.Ptt or BindingAction.Menu)
         {
             if (_ptt is null)
             {
                 return InputDispatch.Ignored(DispatchOutcome.NoSink, action);
             }
 
+            // Never swallowed. Opening the menu is additive: the key still reaches whatever else
+            // wants it, exactly as a modifier does. Swallowing it meant the menu opened on the V
+            // key-down and then ate the V, so the letter could not be typed anywhere on the
+            // machine while the agent ran.
+            LastHoldAction = action;
+            _holdSince = at;
+
+            // WASD is hooked only while the hold is down, so the table has to be rebuilt on both
+            // edges, synchronously, before the next key lands.
+            Rearm();
+
             _ptt.PttDown(at);
-            return InputDispatch.Sent(action, swallow: MenuIsOpen);
+
+            // A toggle key is swallowed; every other hold key is not. Holding CapsLock must not
+            // leave caps on, and it carries no character anybody could want typed. A letter or a
+            // mouse button still passes through, because the key belongs to the user's machine too.
+            return InputDispatch.Sent(action, swallow: IsStatefulToggle(chord));
         }
 
         if (MenuIsOpen && TryMenuKey(chord, action))
@@ -183,7 +323,7 @@ public sealed class InputBridge
     public InputDispatch HandleUp(Chord chord, DateTimeOffset at)
     {
         var action = _bindings.Resolve(chord);
-        if (action != BindingAction.Ptt)
+        if (action is not (BindingAction.Ptt or BindingAction.Menu))
         {
             return InputDispatch.Ignored(DispatchOutcome.NotBound, action);
         }
@@ -199,9 +339,17 @@ public sealed class InputBridge
         }
 
         // A release is delivered whatever the foreground is. Swallowing the key-down and dropping the
-        // key-up leaves the machine holding a key nobody is pressing.
+        // key-up leaves the machine holding a key nobody is pressing. Never swallowed, for the same
+        // reason the key-down is not: the hold key belongs to the user's machine too.
+        LastHoldAction = action;
+        _holdSince = null;
+        Rearm();
         _ptt.PttUp(at);
-        return InputDispatch.Sent(action, swallow: MenuIsOpen);
+
+        // BOTH edges, or the toggle still fires. Swallowing only the key-down left CapsLock latched
+        // on after every hold, which locks the user into capitals until they press it again with
+        // the agent stopped.
+        return InputDispatch.Sent(action, swallow: IsStatefulToggle(chord));
     }
 
     /// <summary>Opens a rebind capture with a five second abort.</summary>
@@ -211,26 +359,50 @@ public sealed class InputBridge
         return new RebindSession(_bindings, action, startedAt);
     }
 
+    /// <summary>
+    /// True for a key whose press changes machine state rather than typing something: CapsLock,
+    /// NumLock, ScrollLock. Held as a hold key, these must be swallowed or the state flips.
+    /// </summary>
+    private static bool IsStatefulToggle(Chord chord)
+    {
+        foreach (var label in (string[])["CapsLock", "NumLock", "ScrollLock"])
+        {
+            if (BindingKey.TryFromLabel(label, out var key) && chord.Key.Equals(key))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private bool TryMenuKey(Chord chord, BindingAction action)
     {
-        if (_menu is null || chord.Modifiers != BindingModifiers.None)
+        // Modifiers are ignored here on purpose. The hold key that opened the menu may itself be a
+        // modifier, RightAlt by default, so every digit pressed while it is down arrives carrying
+        // RightAlt. Demanding a bare chord meant the menu could never be driven by its own key.
+        if (_menu is null)
         {
             return false;
         }
 
-        if (chord.TryDigit(out var digit))
+        // Keyed on the KEY, never the whole chord. The hold key may be a modifier, so while it is
+        // down every one of these arrives as RightAlt+digit, RightAlt+Escape, RightAlt+Backspace.
+        // Chord.TryDigit refuses outright once any modifier is set, which is correct for deciding
+        // whether a BINDING is a bare digit and wrong for reading a key the menu is waiting on.
+        if (chord.Key.TryDigit(out var digit))
         {
             _menu.Digit(digit);
             return true;
         }
 
-        if (action == BindingAction.Escape || chord == Chord.Bare("Escape"))
+        if (action == BindingAction.Escape || chord.Key == Chord.Bare("Escape").Key)
         {
             _menu.Escape();
             return true;
         }
 
-        if (chord == Chord.Bare("Backspace"))
+        if (chord.Key == Chord.Bare("Backspace").Key)
         {
             _menu.Backspace();
             return true;

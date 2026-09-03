@@ -1,4 +1,4 @@
-namespace WarCommand.Agent.Input.Bindings;
+﻿namespace WarCommand.Agent.Input.Bindings;
 
 /// <summary>Why a rebind was accepted or refused.</summary>
 public enum RebindStatus
@@ -45,8 +45,9 @@ public sealed class BindingSet
     public event EventHandler? Changed;
 
     /// <summary>
-    /// The RightAlt chord set with PTT unchosen. There is no shipped PTT default: naming a key the
-    /// user did not pick is worse than naming nothing, so first run forces an explicit choice.
+    /// V to speak, RightAlt for the menu, Escape, and the two RightAlt chords. Both hold keys ship
+    /// bound: the overlay does nothing at all without one of them held, so an unbound default was a
+    /// product that did nothing until the user found a settings page to fix it.
     /// </summary>
     public static BindingSet Defaults() => new();
 
@@ -152,13 +153,22 @@ public sealed class BindingSet
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Marks every bound chord's key, and RightAlt, in a hook arming table.</summary>
-    internal void ArmIn(bool[] table)
+    /// <summary>
+    /// Marks every bound chord's key, and RightAlt, in a hook arming table. The four navigation
+    /// keys are EXCLUDED unless a hold key is down: they sit on WASD, and arming them outside a
+    /// hold would put the movement keys through the hook on every step the player takes.
+    /// </summary>
+    internal void ArmIn(bool[] table, bool holdActive = false)
     {
         var wantsRightAlt = false;
-        foreach (var chord in _chords.Values)
+        foreach (var (action, chord) in _chords)
         {
             if (!chord.IsBound)
+            {
+                continue;
+            }
+
+            if (!holdActive && BindingActions.IsNavigation(action))
             {
                 continue;
             }
@@ -188,8 +198,20 @@ public sealed class BindingSet
     {
         _chords.Clear();
 
-        // No shipped PTT default. First run makes the user pick.
-        _chords[BindingAction.Ptt] = Chord.Unbound;
+        // Two hold keys, both shipped bound and both rebindable. Nothing on the overlay happens
+        // without one of them down, so shipping them unbound shipped a product that does nothing.
+        _chords[BindingAction.Ptt] = Chord.Bare("V");
+
+        // CapsLock: reachable by the left hand without leaving WASD, and a key no game binds. It is
+        // swallowed on the way through, so holding it never toggles caps.
+        _chords[BindingAction.Menu] = Chord.Bare("CapsLock");
+
+        // Navigation sits on the fingers already on the movement keys, and is armed only while a
+        // hold key is down. Rebindable like everything else.
+        _chords[BindingAction.NavUp] = Chord.Bare("W");
+        _chords[BindingAction.NavDown] = Chord.Bare("S");
+        _chords[BindingAction.NavSelect] = Chord.Bare("D");
+        _chords[BindingAction.NavBack] = Chord.Bare("A");
 
         _chords[BindingAction.Escape] = Chord.Bare("Escape");
         _chords[BindingAction.Board] = Chord.RightAlt("B");

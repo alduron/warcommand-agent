@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using WarCommand.Agent.Input.Bindings;
 
 namespace WarCommand.Agent.Input;
@@ -36,6 +36,31 @@ public interface IMenuKeySink
 
     /// <summary>Backspace.</summary>
     void Backspace();
+}
+
+/// <summary>
+/// Navigating an open menu while a hold key is down. Bound to WASD by default: up, down, select
+/// and back, all rebindable.
+/// </summary>
+/// <remarks>
+/// Called on the hook thread. Must return immediately. Every event delivered here is also
+/// SWALLOWED, and it has to be: these keys are the movement keys, so a nav key that reached the
+/// game would walk the player while they read the board.
+/// <para>
+/// This is keyboard only. The mouse cannot do this job: Wardogs reads Raw Input, so a low-level
+/// mouse hook's swallow is ignored and a left click bound here would fire the weapon.
+/// </para>
+/// </remarks>
+public interface IMenuNavSink
+{
+    /// <summary>Wheel notches. Negative is up the list, positive is down.</summary>
+    void Scroll(int notches);
+
+    /// <summary>Left click. Commits the highlighted option.</summary>
+    void Commit();
+
+    /// <summary>Right click. Up one level.</summary>
+    void Back();
 }
 
 /// <summary>A chord fired. Everything that is not PTT and not a menu key arrives here.</summary>

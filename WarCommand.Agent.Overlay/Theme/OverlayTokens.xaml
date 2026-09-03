@@ -14,6 +14,10 @@
     <SolidColorBrush x:Key="Dim" Color="#A9ACAF" />
     <SolidColorBrush x:Key="Urgent" Color="#E2685C" />
     <SolidColorBrush x:Key="Yours" Color="#7BCB5A" />
+
+    <!-- The ground behind the highlighted menu row. Reads as a selection at a glance, and stays
+         under the text rather than replacing its colour, which has to remain categorical. -->
+    <SolidColorBrush x:Key="HighlightGround" Color="#7BCB5A" Opacity="0.22" />
     <SolidColorBrush x:Key="Warn" Color="#E3AC43" />
     <SolidColorBrush x:Key="Squad" Color="#D9A840" />
 

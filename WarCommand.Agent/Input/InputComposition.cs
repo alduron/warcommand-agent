@@ -50,7 +50,10 @@ public sealed class InputComposition : IDisposable
     /// </param>
     /// <param name="overlay">Registered as the drawing subsystem and driven by the Board chord.</param>
     /// <param name="tray">Registered as the indicator subsystem so it greys on panic.</param>
-    /// <param name="onPtt">Push-to-talk edges. Down is where a coordinate is snapshotted.</param>
+    /// <param name="onHold">
+    /// Hold-key edges, with the action so the two can be told apart: PTT opens the microphone and
+    /// Menu does not. Down is where a coordinate is snapshotted, for both.
+    /// </param>
     /// <param name="menu">
     /// The menu keys and the gate. Null leaves every digit inert, which is the tray-only and
     /// overlay-demo case: there is no board for a verb to act on.
@@ -60,14 +63,14 @@ public sealed class InputComposition : IDisposable
         IForegroundProbe foreground,
         OverlayController overlay,
         TrayIconController? tray,
-        Action<bool> onPtt,
+        Action<BindingAction, bool> onHold,
         IClientLog log,
         MenuDriver? menu = null)
     {
         ArgumentNullException.ThrowIfNull(bindings);
         ArgumentNullException.ThrowIfNull(foreground);
         ArgumentNullException.ThrowIfNull(overlay);
-        ArgumentNullException.ThrowIfNull(onPtt);
+        ArgumentNullException.ThrowIfNull(onHold);
         ArgumentNullException.ThrowIfNull(log);
 
         var panic = new PanicSwitch();
@@ -79,7 +82,8 @@ public sealed class InputComposition : IDisposable
         // The menu, and the gate that decides whether bare digits are hooked at all. Passing null
         // for both is what made every digit inert: the machine, its tree and its outcomes were all
         // written and tested with nothing on the other end of them.
-        bridge.Connect(new PttRouter(onPtt), menu, chords, menuGate: menu);
+        bridge.Connect(new PttRouter(bridge, onHold), menu, chords, menuGate: menu, menuNav: menu);
+
         if (menu is not null)
         {
             // Bare digits are hooked only while the menu is open, so every state change has to
@@ -99,7 +103,7 @@ public sealed class InputComposition : IDisposable
 
         hooks.Start();
         log.Info(hooks.IsRunning
-            ? $"Input armed. PTT {Label(bindings, BindingAction.Ptt)}, board {Label(bindings, BindingAction.Board)}, panic {Label(bindings, BindingAction.Panic)}."
+            ? $"Input armed. Menu {Label(bindings, BindingAction.Menu)}, PTT {Label(bindings, BindingAction.Ptt)}, board {Label(bindings, BindingAction.Board)}, panic {Label(bindings, BindingAction.Panic)}."
             : "Input did NOT arm: the low-level hook is not installed.");
 
         return new InputComposition(bridge, panic, hooks, log);
@@ -120,12 +124,18 @@ public sealed class InputComposition : IDisposable
         _log.Info("Input disarmed.");
     }
 
-    /// <summary>Carries the two PTT edges out to whoever is listening. No key code, ever.</summary>
-    private sealed class PttRouter(Action<bool> onPtt) : IPttSink
+    /// <summary>
+    /// Carries the hold-key edges out, naming which key it was. No key code, ever.
+    /// </summary>
+    /// <remarks>
+    /// Both hold keys land on this one sink, so the action is read back from the bridge: PTT wants
+    /// a microphone opened and Menu must never open one.
+    /// </remarks>
+    private sealed class PttRouter(InputBridge bridge, Action<BindingAction, bool> onHold) : IPttSink
     {
-        public void PttDown(DateTimeOffset at) => onPtt(true);
+        public void PttDown(DateTimeOffset at) => onHold(bridge.LastHoldAction, true);
 
-        public void PttUp(DateTimeOffset at) => onPtt(false);
+        public void PttUp(DateTimeOffset at) => onHold(bridge.LastHoldAction, false);
     }
 
     /// <summary>Board cycles the surface, Panic toggles the kill switch. Nothing else is a chord.</summary>

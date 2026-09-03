@@ -103,6 +103,18 @@ public sealed record RequestTypeDef
     /// <summary>category.slot leaves. A type may sit at more than one leaf.</summary>
     public IReadOnlyList<string> MenuPaths { get; init; } = [];
 
+    /// <summary>
+    /// What a BRANCH is called when this type sits on more than one, keyed by path. Absent means
+    /// the branch renders <see cref="OverlayLabel"/>.
+    /// </summary>
+    /// <remarks>
+    /// fortify sits at build.2 and build.3, so BUILD appeared twice under BUILD with nothing to
+    /// tell you which held walls and which held defenses. The branch names itself; the leaves under
+    /// it still name the structure.
+    /// </remarks>
+    public IReadOnlyDictionary<string, string> MenuPathLabels { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
     [JsonIgnore]
     public bool TakesPoint => Arity > 0;
 

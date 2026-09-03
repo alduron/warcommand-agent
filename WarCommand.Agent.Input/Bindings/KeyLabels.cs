@@ -1,4 +1,4 @@
-namespace WarCommand.Agent.Input.Bindings;
+﻿namespace WarCommand.Agent.Input.Bindings;
 
 /// <summary>
 /// The fixed set of labels a key may wear, and the only place a virtual-key code and a string sit in
@@ -64,6 +64,11 @@ internal static class KeyLabels
         table[0x6D] = "NumpadSubtract";
         table[0x6E] = "NumpadDecimal";
         table[0x6F] = "NumpadDivide";
+
+        // RightAlt is both a modifier and, on its own, a bindable key: it is the default hold key
+        // for the overlay menu. Distinct from Left Alt, which games bind, and a chord it modifies
+        // (RightAlt+B) still resolves separately because that carries a key as well.
+        table[0xA5] = "RightAlt";
 
         table[0x08] = "Backspace";
         table[0x09] = "Tab";

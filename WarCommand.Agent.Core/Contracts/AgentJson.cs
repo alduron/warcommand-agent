@@ -28,6 +28,12 @@ public static class AgentJson
             AllowTrailingCommas = true,
         };
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false));
+
+        // The server sends confidence as a number over HTTP and as a string over the socket. A
+        // strict decimal? discards the whole frame over that, so a created request never reaches
+        // the board. Read either; always write a number.
+        options.Converters.Add(new LenientDecimalConverter());
+        options.Converters.Add(new LenientNullableDecimalConverter());
         options.MakeReadOnly(populateMissingResolver: true);
         return options;
     }

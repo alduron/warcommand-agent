@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Data;
@@ -21,8 +21,44 @@ public sealed class RoleBrushConverter : IValueConverter
 
     private static readonly SolidColorBrush Fallback = Frozen(0xB4, 0xB6, 0xB8);
 
-    private static readonly Lazy<IReadOnlyDictionary<string, Brush>> Tokens =
-        new(LoadTokens, isThreadSafe: true);
+    private static readonly object Gate = new();
+    private static IReadOnlyDictionary<string, Brush>? _tokens;
+
+    /// <summary>
+    /// The role hues, loaded once and only once they actually load.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not a Lazy. The pack URI needs WPF's resource plumbing to be up, so the first
+    /// caller in a process can legitimately come away with nothing, and a Lazy caches that empty
+    /// answer for the life of the process: every role then paints the fallback grey forever, and
+    /// which test ran first decides it. An empty load is not cached, so the next caller retries.
+    /// </remarks>
+    private static IReadOnlyDictionary<string, Brush> Tokens
+    {
+        get
+        {
+            if (_tokens is { Count: > 0 } cached)
+            {
+                return cached;
+            }
+
+            lock (Gate)
+            {
+                if (_tokens is { Count: > 0 } inner)
+                {
+                    return inner;
+                }
+
+                var loaded = LoadTokens();
+                if (loaded.Count > 0)
+                {
+                    _tokens = loaded;
+                }
+
+                return loaded;
+            }
+        }
+    }
 
     private static SolidColorBrush Frozen(byte r, byte g, byte b)
     {
@@ -45,7 +81,7 @@ public sealed class RoleBrushConverter : IValueConverter
             return found;
         }
 
-        return Tokens.Value.TryGetValue(key, out var token) ? token : Fallback;
+        return Tokens.TryGetValue(key, out var token) ? token : Fallback;
     }
 
     /// <summary>
@@ -68,9 +104,11 @@ public sealed class RoleBrushConverter : IValueConverter
                 }
             }
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
-            // No dictionary means the fallback hue, which is what an unknown key gets anyway.
+            // Every failure, not just IOException: a pack URI resolved before WPF's resource
+            // plumbing is up throws several other things, and catching one of them was the
+            // difference between a retry and a process that paints grey from then on.
         }
 
         return frozen;

@@ -95,6 +95,7 @@ public sealed class GameWindowTracker
     private bool _foreground;
     private bool _exclusiveFullscreen;
     private ScreenRect _clientRect;
+    private nint _handle;
 
     /// <summary>Creates a tracker.</summary>
     public GameWindowTracker(IGameWindowSink sink, OverlayFocusBehavior behavior = OverlayFocusBehavior.Hide)
@@ -116,6 +117,9 @@ public sealed class GameWindowTracker
     /// <summary>The last client rect seen, or <see cref="ScreenRect.Empty"/>.</summary>
     public ScreenRect ClientRect => _clientRect;
 
+    /// <summary>The game window, or null when none is running. Read by screen capture.</summary>
+    public nint? Handle => _running && _handle != nint.Zero ? _handle : null;
+
     /// <summary>Applies a settings change and re-raises the visibility it implies.</summary>
     public void SetBehavior(OverlayFocusBehavior behavior)
     {
@@ -131,6 +135,8 @@ public sealed class GameWindowTracker
 
         if (scan is { } window)
         {
+            _handle = window.Handle;
+
             OnPresent(window, first);
         }
         else
@@ -196,6 +202,7 @@ public sealed class GameWindowTracker
         _foreground = false;
         _exclusiveFullscreen = false;
         _clientRect = ScreenRect.Empty;
+        _handle = nint.Zero;
 
         if (wasRunning)
         {

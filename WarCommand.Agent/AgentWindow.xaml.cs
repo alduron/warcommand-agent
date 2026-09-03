@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using WarCommand.Agent.Client.Storage;
+using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Settings;
 using WarCommand.Agent.Input.Bindings;
 using WarCommand.Agent.Game;
@@ -54,6 +55,12 @@ public partial class AgentWindow : Window
     private RebindSession? _capture;
     private bool _loading;
 
+    /// <summary>
+    /// A chord was rebound or reset. The composition root re-arms the hook and redraws the hint;
+    /// the window holds the live BindingSet and cannot do either itself.
+    /// </summary>
+    public event EventHandler? BindingsChanged;
+
     public AgentWindow(SettingsStore store, IAudioDeviceCatalog? devices, BindingSet? bindings = null)
     {
         ArgumentNullException.ThrowIfNull(store);
@@ -64,6 +71,7 @@ public partial class AgentWindow : Window
         LoadDevices(devices);
         LoadChoices();
         LoadBindings();
+        LoadCommands();
         LoadFrom(store.Current);
     }
 
@@ -120,6 +128,27 @@ public partial class AgentWindow : Window
         RecognizerName.Text = "Vosk small en-us";
     }
 
+    /// <summary>
+    /// The command reference, read from the menu's own tables so it cannot drift from what the
+    /// digits actually do.
+    /// </summary>
+    private void LoadCommands()
+    {
+        var menu = _bindings[BindingAction.Menu];
+        var ptt = _bindings[BindingAction.Ptt];
+        MenuOpenLine.Text = menu.IsBound
+            ? $"Hold {menu.Label} and press the digits below. Release and nothing is listening. Hold {(ptt.IsBound ? ptt.Label : "the push to talk key")} instead to speak."
+            : "No overlay menu key is bound. Click its chord above and press any key.";
+
+        RowVerbs.ItemsSource = MenuStateMachine.BoardVerbList
+            .Select(v => $"{v.Digit.ToString(CultureInfo.InvariantCulture)}  {v.Label}")
+            .ToList();
+
+        MorePages.ItemsSource = MenuStateMachine.MoreList
+            .Select(e => $"{e.Digit.ToString(CultureInfo.InvariantCulture)}  {e.Label}")
+            .ToList();
+    }
+
     private void LoadBindings(BindingAction? capturing = null) =>
         Bindings.ItemsSource = BindingActions.All
             .Select(action => new BindingRow
@@ -130,7 +159,13 @@ public partial class AgentWindow : Window
                     ? "Press a key"
                     : _bindings[action].IsBound ? _bindings[action].ToString() : "Not set",
                 IsBound = _bindings[action].IsBound,
-                Note = action == BindingAction.Panic ? "Rebindable, cannot be unbound" : null,
+                Note = action switch
+                {
+                    BindingAction.Panic => "Rebindable, cannot be unbound",
+                    BindingAction.Ptt => "Hold to speak",
+                    BindingAction.Menu => "Hold to work the overlay. Released, nothing is listening.",
+                    _ => null,
+                },
             })
             .ToList();
 
@@ -280,8 +315,12 @@ public partial class AgentWindow : Window
     }
 
     /// <summary>Writes the chords through the store, the same way every other control does.</summary>
-    private void SaveBindings() =>
+    private void SaveBindings()
+    {
         _store.Save(_store.Current with { Bindings = App.StoredBindings(_bindings) });
+        LoadCommands();
+        BindingsChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
     {

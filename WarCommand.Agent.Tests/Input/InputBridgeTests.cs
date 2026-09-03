@@ -1,4 +1,4 @@
-using WarCommand.Agent.Input;
+﻿using WarCommand.Agent.Input;
 using WarCommand.Agent.Input.Bindings;
 
 namespace WarCommand.Agent.Tests.Input;
@@ -55,7 +55,9 @@ public class InputBridgeTests
 
         foreach (var (action, chord) in harness.Bindings.All)
         {
-            if (action == BindingAction.Panic || !chord.IsBound)
+            // Navigation is covered separately: it does nothing at all unless a hold is down, which
+            // is the whole point of it living on the movement keys.
+            if (action == BindingAction.Panic || BindingActions.IsNavigation(action) || !chord.IsBound)
             {
                 continue;
             }
@@ -63,9 +65,56 @@ public class InputBridgeTests
             Assert.True(harness.Bridge.Handle(chord).Dispatched, action.ToString());
         }
 
-        Assert.Equal(1, harness.Ptt.Downs);
+        // Two hold keys, one sink: voice and keyboard are two ways into the same menu.
+        Assert.Equal(2, harness.Ptt.Downs);
         Assert.Contains(BindingAction.Board, harness.Chords.Invoked);
         Assert.Contains(BindingAction.Escape, harness.Chords.Invoked);
+    }
+
+    [Fact]
+    public void A_navigation_key_is_inert_until_a_hold_key_is_down()
+    {
+        var harness = new Harness(gameForeground: true, gameRunning: true);
+        var nav = new CountingNav();
+        harness.Bridge.Connect(harness.Ptt, null, harness.Chords, null, nav);
+
+        var up = harness.Bindings[BindingAction.NavUp];
+
+        // W walks the player. Outside a hold it must reach the game untouched.
+        var idle = harness.Bridge.Handle(up);
+        Assert.False(idle.Dispatched);
+        Assert.False(idle.Swallow);
+        Assert.Equal(0, nav.Ups);
+
+        harness.Bridge.Handle(harness.Bindings[BindingAction.Menu]);
+
+        // Under a hold it drives the menu and is ALWAYS swallowed, or the player walks while
+        // reading the board.
+        var held = harness.Bridge.Handle(up);
+        Assert.True(held.Dispatched);
+        Assert.True(held.Swallow);
+        Assert.Equal(1, nav.Ups);
+    }
+
+    private sealed class CountingNav : IMenuNavSink
+    {
+        public int Ups { get; private set; }
+
+        public int Commits { get; private set; }
+
+        public void Scroll(int notches)
+        {
+            if (notches < 0)
+            {
+                Ups++;
+            }
+        }
+
+        public void Commit() => Commits++;
+
+        public void Back()
+        {
+        }
     }
 
     [Fact]
@@ -94,7 +143,7 @@ public class InputBridgeTests
     }
 
     [Fact]
-    public void A_menu_swallows_only_digits_escape_backspace_and_ptt()
+    public void A_menu_swallows_only_digits_escape_and_backspace()
     {
         var harness = new Harness(gameForeground: true, gameRunning: true);
         harness.Menu.MenuIsOpen = true;
@@ -103,7 +152,12 @@ public class InputBridgeTests
         Assert.True(harness.Bridge.Handle(Chord.Bare("4")).Swallow);
         Assert.True(harness.Bridge.Handle(Chord.Bare("Escape")).Swallow);
         Assert.True(harness.Bridge.Handle(Chord.Bare("Backspace")).Swallow);
-        Assert.True(harness.Bridge.Handle(BindingSet.SuggestedPtt).Swallow);
+
+        // The hold key never is. Opening the menu is additive, exactly like a modifier: swallowing
+        // it meant the key that opens the menu could not be typed anywhere on the machine.
+        var hold = harness.Bridge.Handle(BindingSet.SuggestedPtt);
+        Assert.True(hold.Dispatched);
+        Assert.False(hold.Swallow);
 
         // W would get somebody killed.
         var w = harness.Bridge.Handle(Chord.Bare("W"));
@@ -154,6 +208,27 @@ public class InputBridgeTests
         harness.Bridge.Handle(Chord.Bare("Escape"));
         Assert.Equal(1, harness.MenuKeys.Escapes);
     }
+
+    [Fact]
+    public void A_digit_reaches_the_menu_while_a_modifier_hold_key_is_down()
+    {
+        var harness = new Harness(gameForeground: true, gameRunning: true);
+        harness.Menu.MenuIsOpen = true;
+
+        // RightAlt is the default menu hold key, so every key pressed while it is held arrives
+        // carrying the RightAlt modifier. Reading these off the whole chord meant holding the menu
+        // key open and then pressing 1 did nothing at all.
+        harness.Bridge.Handle(new Chord(BindingModifiers.RightAlt, KeyOf("1")));
+        harness.Bridge.Handle(new Chord(BindingModifiers.RightAlt, KeyOf("Escape")));
+        harness.Bridge.Handle(new Chord(BindingModifiers.RightAlt, KeyOf("Backspace")));
+
+        Assert.Equal([1], harness.MenuKeys.Digits);
+        Assert.Equal(1, harness.MenuKeys.Escapes);
+        Assert.Equal(1, harness.MenuKeys.Backspaces);
+    }
+
+    private static BindingKey KeyOf(string label) =>
+        BindingKey.TryFromLabel(label, out var key) ? key : throw new InvalidOperationException(label);
 
     private sealed class Harness
     {

@@ -8,7 +8,7 @@ namespace WarCommand.Agent.Core.Input;
 /// </summary>
 public sealed record HintState
 {
-    /// <summary>The push-to-talk key's label, or null before the user has chosen one.</summary>
+    /// <summary>The key held to work the overlay, which is the Menu key, not push-to-talk.</summary>
     public string? PttLabel { get; init; }
 
     /// <summary>Panic is engaged. Nothing draws in game, but the window still renders.</summary>
@@ -41,7 +41,7 @@ public sealed record HintState
 public static class OverlayHint
 {
     /// <summary>Drawn while no key has been chosen. The product does nothing until one is.</summary>
-    public const string NoPttKey = "NO PTT KEY  TRAY > SETTINGS";
+    public const string NoPttKey = "NO MENU KEY  TRAY > SETTINGS";
 
     /// <summary>The steady state, and the only route anybody has to learn.</summary>
     public const string HelpMarker = "?";
@@ -100,10 +100,7 @@ public static class OverlayHint
             return $"SAME MATCH?  {Route(ptt, "match")}";
         }
 
-        // TAP, not HOLD. A tap latches the menu open and every digit below it is a keyboard
-        // control; holding is the voice path. Naming the hold taught the one route that needs a
-        // microphone and hid the one that does not.
-        return $"TAP {ptt}  {HelpMarker}";
+        return $"HOLD {ptt}  {HelpMarker}";
     }
 
     /// <summary>

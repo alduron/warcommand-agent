@@ -154,6 +154,8 @@ public sealed record AgentSettings
     /// <summary>Opt-in, off by default. Binding rule 9.</summary>
     public bool ScreenCaptureEnabled { get; init; }
 
+
+
     /// <summary>
     /// The chosen chord per binding action, keyed by the action's name and holding a chord label.
     /// Empty takes the defaults, which is a first run.

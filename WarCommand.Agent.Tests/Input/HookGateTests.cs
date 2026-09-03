@@ -1,4 +1,4 @@
-using WarCommand.Agent.Input;
+﻿using WarCommand.Agent.Input;
 using WarCommand.Agent.Input.Bindings;
 using WarCommand.Agent.Input.Hooks;
 
@@ -57,6 +57,43 @@ public class HookGateTests
 
         // The same key with no modifier held is not a binding.
         Assert.Equal(HookVerdict.PassThrough, hook.Evaluate(0x42, KeyTransition.Down));
+    }
+
+    [Fact]
+    public void The_menu_key_fires_even_though_it_is_a_modifier()
+    {
+        var bridge = Bridge(gameForeground: true, gameRunning: true);
+        bridge.Bindings.Rebind(BindingAction.Menu, Chord.Bare("RightAlt"));
+        var ptt = new CountingPtt();
+        bridge.Connect(ptt, null, new NullChords(), null);
+        bridge.Rearm();
+        var hook = new LowLevelKeyboardHook(bridge);
+
+        // A modifier is a legal hold key. The hook used to record it as a modifier and return
+        // before dispatching anything, so the key did nothing at all while a plain letter bound to
+        // the same action worked.
+        Assert.Equal(HookVerdict.PassThrough, hook.Evaluate(0xA5, KeyTransition.Down));
+        Assert.Equal(1, ptt.Downs);
+
+        // And it still reaches the game, which is the reason a non-toggle hold key is never
+        // swallowed.
+        Assert.Equal(HookVerdict.PassThrough, hook.Evaluate(0xA5, KeyTransition.Up));
+    }
+
+    [Fact]
+    public void The_capslock_hold_key_is_swallowed_so_caps_never_toggles()
+    {
+        var bridge = Bridge(gameForeground: true, gameRunning: true);
+        var ptt = new CountingPtt();
+        bridge.Connect(ptt, null, new NullChords(), null);
+        var hook = new LowLevelKeyboardHook(bridge);
+
+        // CapsLock is the default hold key, and BOTH edges have to be eaten. Swallowing only the
+        // key-down still left caps latched on, which locks the user into capitals everywhere until
+        // they press it again with the agent stopped.
+        Assert.Equal(HookVerdict.Swallow, hook.Evaluate(0x14, KeyTransition.Down));
+        Assert.Equal(1, ptt.Downs);
+        Assert.Equal(HookVerdict.Swallow, hook.Evaluate(0x14, KeyTransition.Up));
     }
 
     [Fact]

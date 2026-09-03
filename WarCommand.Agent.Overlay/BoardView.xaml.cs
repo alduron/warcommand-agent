@@ -107,6 +107,12 @@ public partial class BoardView : UserControl
     /// </summary>
     private static readonly Duration ExitDuration = new(TimeSpan.FromMilliseconds(160));
 
+    // Bound once and reconciled in place. Reassigning ItemsSource makes WPF tear down and rebuild
+    // every item container, and the menu re-renders on EVERY navigation key: that rebuild is what
+    // the input lag actually was. Same rule as the board rows.
+    private readonly ObservableCollection<MenuOptionViewModel> _menuOptions = [];
+    private readonly ObservableCollection<MenuOptionViewModel> _menuTrailing = [];
+
     private readonly ObservableCollection<BoardRowViewModel> _rows = [];
     private readonly ObservableCollection<BoardRowViewModel> _secondary = [];
     private readonly HashSet<BoardRowViewModel> _retiring = [];
@@ -119,6 +125,8 @@ public partial class BoardView : UserControl
         // which is the difference between a poll updating one age and a poll rebuilding the board.
         RowsList.ItemsSource = _rows;
         SecondaryList.ItemsSource = _secondary;
+        MenuOptions.ItemsSource = _menuOptions;
+        MenuTrailing.ItemsSource = _menuTrailing;
 
         // Establishes PanelGround and PanelTextEffect. Without it the DynamicResource lookups find
         // nothing and the panel paints transparent inside the window.
@@ -311,17 +319,45 @@ public partial class BoardView : UserControl
     {
         ArgumentNullException.ThrowIfNull(menu);
 
-        MenuPanel.Visibility = menu.IsOpen ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var row in AllRows())
+        {
+            row.IsHighlighted = menu.HighlightedSlot is { } slot
+                && row.SlotDisplay == slot.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        MenuPanel.Visibility = menu.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+        Sync(_menuTrailing, menu.Trailing);
+        MenuFooter.Visibility = _menuTrailing.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!menu.IsVisible)
+        {
+            _menuOptions.Clear();
+            _menuTrailing.Clear();
+            MenuFooter.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        // Armed but not open: the title and the one line telling you how to get in, and no list,
+        // because there is nothing to choose from yet.
         if (!menu.IsOpen)
         {
-            MenuOptions.ItemsSource = null;
+            MenuTitle.Text = menu.Title;
+            _menuOptions.Clear();
+            MenuTyped.Visibility = Visibility.Collapsed;
+            MenuLegend.Text = menu.Legend;
+            MenuLegend.Visibility = Visibility.Visible;
             return;
         }
 
         MenuTitle.Text = menu.Title;
-        MenuOptions.ItemsSource = menu.Options;
+
+        Sync(_menuOptions, menu.Options);
         MenuTyped.Text = menu.Typed ?? string.Empty;
         MenuTyped.Visibility = menu.Typed is null ? Visibility.Collapsed : Visibility.Visible;
+
+        // Remap aware: the legend is built from the live bindings, never written down here.
+        MenuLegend.Text = menu.Legend;
+        MenuLegend.Visibility = string.IsNullOrEmpty(menu.Legend) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void Reconcile(
@@ -374,6 +410,39 @@ public partial class BoardView : UserControl
     }
 
     /// <summary>The index of a live row that is not on its way out, or -1.</summary>
+    /// <summary>
+    /// Brings a bound collection in line with the next one, touching only what changed.
+    /// </summary>
+    /// <remarks>
+    /// The menu redraws on every navigation key. Replacing the collection each time rebuilds every
+    /// container WPF has already realised, which is expensive enough to feel like the keys are
+    /// lagging behind the hand.
+    /// </remarks>
+    private static void Sync(
+        ObservableCollection<MenuOptionViewModel> live,
+        IReadOnlyList<MenuOptionViewModel> next)
+    {
+        while (live.Count > next.Count)
+        {
+            live.RemoveAt(live.Count - 1);
+        }
+
+        for (var i = 0; i < next.Count; i++)
+        {
+            if (i >= live.Count)
+            {
+                live.Add(next[i]);
+            }
+            else if (!live[i].Equals(next[i]))
+            {
+                live[i] = next[i];
+            }
+        }
+    }
+
+    /// <summary>Every row on the surface, both lists, for anything that applies to all of them.</summary>
+    private IEnumerable<BoardRowViewModel> AllRows() => _rows.Concat(_secondary);
+
     private int IndexOfLive(ObservableCollection<BoardRowViewModel> live, string ticketCode)
     {
         for (var i = 0; i < live.Count; i++)

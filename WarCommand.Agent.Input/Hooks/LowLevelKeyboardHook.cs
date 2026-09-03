@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using WarCommand.Agent.Input.Bindings;
 
 namespace WarCommand.Agent.Input.Hooks;
@@ -128,7 +128,17 @@ public sealed class LowLevelKeyboardHook : IDisposable
             var modifier = ModifierKeys.Of(virtualKey);
             _modifiers = transition == KeyTransition.Down ? _modifiers | modifier : _modifiers & ~modifier;
 
-            // A modifier is never a binding on its own and is never swallowed: the game may want it.
+            // A modifier CAN be a binding on its own: the overlay menu key is RightAlt by default.
+            // It is dispatched bare, because the modifier flags describe what is held alongside a
+            // key and a key is not held alongside itself.
+            if (BindingKey.TryFromVirtualKey(virtualKey, out var modifierKey))
+            {
+                var bare = Chord.Of(modifierKey);
+                _ = transition == KeyTransition.Down ? _bridge.Handle(bare) : _bridge.HandleUp(bare);
+            }
+
+            // Never swallowed whatever the dispatch said. The game may want the modifier, and
+            // eating Alt out from under it is not a trade a hold key gets to make.
             return HookVerdict.PassThrough;
         }
 

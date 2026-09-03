@@ -24,6 +24,14 @@ internal static class NativeMethods
     internal const int WmXButtonDown = 0x020B;
     internal const int WmXButtonUp = 0x020C;
 
+    // Taken from the game only while a hold key is down. Never bindable: see
+    // Convention_WarCommandNeverBindsLeftOrRightMouse and the hold gate in InputBridge.
+    internal const int WmLeftButtonDown = 0x0201;
+    internal const int WmLeftButtonUp = 0x0202;
+    internal const int WmRightButtonDown = 0x0204;
+    internal const int WmRightButtonUp = 0x0205;
+    internal const int WmMouseWheel = 0x020A;
+
     internal const int GwlStyle = -16;
     internal const long WsCaption = 0x00C00000L;
     internal const long WsThickFrame = 0x00040000L;

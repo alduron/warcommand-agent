@@ -35,6 +35,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     private Guid _viewerId;
     private BoardHeader _header = new() { Title = "WarCommand" };
     private string? _fault;
+    private GunPosition? _gunPosition;
 
     /// <summary>Creates the observer. The board is attached once a deployment is known.</summary>
     public BoardRealtimeObserver(
@@ -326,7 +327,9 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         var unitsToMeters = BundledContracts.GameProfile().Current.DefaultUnitsToMeters;
 
         var rows = board.Rows
-            .Select(r => BoardRowViewModel.FromPrimary(r, _viewerId, now, unitsToMeters).WithGlyph(glyphs))
+            .Select(r => BoardRowViewModel
+                .FromPrimary(r, _viewerId, now, unitsToMeters, FireContextNow())
+                .WithGlyph(glyphs))
             .ToList();
         var yours = board.Yours
             .Select(r => BoardRowViewModel.FromSecondary(r, now, unitsToMeters, _viewerId).WithGlyph(glyphs))
@@ -347,12 +350,61 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         RenderHeader();
     });
 
+    /// <summary>
+    /// Where the viewer's gun is. Every subsequent render draws a bracket on that role's rows.
+    /// </summary>
+    /// <remarks>
+    /// Null until MORE > GUN HERE reads the map, which is the normal state for anybody not on a
+    /// gun. Rendering immediately, because the point of setting it is to see the brackets appear.
+    /// </remarks>
+    public void SetGunPosition(GunPosition? gun) => OnUi(() =>
+    {
+        _gunPosition = gun;
+        Render();
+    });
+
+    /// <summary>
+    /// The roles the header draws, after a toggle changed what this participant receives.
+    /// </summary>
+    public void SetRoles(IReadOnlyCollection<string> roleIds) => OnUi(() =>
+    {
+        _header = _header with { RoleIds = [.. roleIds] };
+        RenderHeader();
+    });
+
     /// <summary>Shows a fault word in the header, or clears it with null.</summary>
     public void SetFault(string? fault) => OnUi(() =>
     {
         _fault = fault;
         RenderHeader();
     });
+
+    /// <summary>
+    /// The bracket context, or null when the viewer has set no gun position.
+    /// </summary>
+    /// <remarks>
+    /// The weapon's role decides which rows draw a bracket, so a mortarman sees one on mortar rows
+    /// and on nothing else.
+    /// </remarks>
+    private FireContext? FireContextNow()
+    {
+        if (_gunPosition is not { } gun)
+        {
+            return null;
+        }
+
+        var ballistics = BundledContracts.Ballistics().Current;
+        var weapon = ballistics.Weapon(gun.WeaponId);
+
+        return weapon is null
+            ? null
+            : new FireContext(
+                gun,
+                weapon.Role,
+                ballistics,
+                BundledContracts.GameProfile().Current,
+                null);
+    }
 
     private void RenderHeader() => _presenter.SetHeader(_header with { Fault = _fault });
 

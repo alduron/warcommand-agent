@@ -11,7 +11,7 @@ public class OverlayHintTests
     [Fact]
     public void The_steady_state_names_the_users_own_key_and_the_help_marker()
     {
-        Assert.Equal("TAP Mouse5  ?", OverlayHint.Resolve(new HintState { PttLabel = "Mouse5" }));
+        Assert.Equal("HOLD Mouse5  ?", OverlayHint.Resolve(new HintState { PttLabel = "Mouse5" }));
     }
 
     [Fact]

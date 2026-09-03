@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using WarCommand.Agent.Core.Fire;
+using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 
 namespace WarCommand.Agent.Overlay;
@@ -55,6 +56,35 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     }
 
     private string _slotDisplay = string.Empty;
+
+    /// <summary>
+    /// The navigation highlight is sitting on this row. Notifying, because the highlight moves
+    /// under a held key and the board is reconciled rather than rebuilt.
+    /// </summary>
+    public bool IsHighlighted
+    {
+        get => _isHighlighted;
+        set => Set(ref _isHighlighted, value);
+    }
+
+    private bool _isHighlighted;
+
+    /// <summary>
+    /// The opening bracket for this row, when the viewer has set a gun position and the row is a
+    /// gun's job. Empty otherwise, which is every row for anybody who is not on a gun.
+    /// </summary>
+    /// <remarks>
+    /// Always a BRACKET, never a firing solution: the tables are player-measured and there is no
+    /// altitude, so the answer is flat-earth and wrong on slopes. The row carries ADJUST FROM
+    /// SPOTTER for the same reason.
+    /// </remarks>
+    public string SolutionDisplay
+    {
+        get => _solutionDisplay;
+        set => Set(ref _solutionDisplay, value);
+    }
+
+    private string _solutionDisplay = string.Empty;
 
     /// <summary>The lead target role's id. Empty when the row names none.</summary>
     public string RoleId { get; set; } = string.Empty;
@@ -243,6 +273,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         RoleGlyphSecond = other.RoleGlyphSecond;
         RoleBrushKey = other.RoleBrushKey;
         TypeAndQualifier = other.TypeAndQualifier;
+        SolutionDisplay = other.SolutionDisplay;
         CoordinatesDisplay = other.CoordinatesDisplay;
         SecondPointDisplay = other.SecondPointDisplay;
         LegDisplay = other.LegDisplay;
@@ -273,15 +304,16 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     /// arrive as catalog modifier ids on the wire; this dev viewer has no catalog metadata to tell
     /// them apart from a plain count, so it renders the first modifier, then quantity, in that
     /// order. The full precedence in 06-overlay-ux.md needs the request-types catalog wired in.</summary>
-    private static string Qualifier(BoardRow row)
-    {
-        if (row.Modifiers.Count > 0)
-        {
-            return row.Modifiers[0].ToUpperInvariant();
-        }
-
-        return row.QuantityRequested is { } qty ? $"x{qty.ToString(CultureInfo.InvariantCulture)}" : string.Empty;
-    }
+    /// <summary>
+    /// Every modifier on the row and the quantity, through the one derivation the menu uses.
+    /// </summary>
+    /// <remarks>
+    /// It used to take Modifiers[0] and uppercase the raw id, so a request made with danger close
+    /// AND he read as DANGER_CLOSE: the wrong spelling, and a claim about the row that was not
+    /// true. Quantity used to be an else, so a modified request never showed how many were wanted.
+    /// </remarks>
+    private static string Qualifier(BoardRow row) =>
+        ModifierLabels.Line(row.Modifiers, row.QuantityRequested);
 
     private static string FormatCoordinate(MapPoint point) =>
         FormattableString.Invariant($"x{point.X:0.00} y{point.Y:0.00}");
@@ -323,6 +355,90 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     /// binding rule 5 and never a constant here. Map units when it does not, because a wrong
     /// distance is worse than an honest unitless one.
     /// </remarks>
+    /// <summary>
+    /// The bracket line, or empty when this row is not a gun's job or no gun position is set.
+    /// </summary>
+    /// <remarks>
+    /// The calculator was written and tested long before anything called it: no surface ever
+    /// rendered a bracket, so a mortarman got a grid and did the arithmetic himself.
+    /// </remarks>
+    private static string Solution(BoardRow row, FireContext? fire, DateTimeOffset now)
+    {
+        if (fire is null || row.Points.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (!row.TargetRoleIds.Contains(fire.RoleId, StringComparer.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        var weapon = fire.Ballistics.Weapon(fire.Gun.WeaponId);
+        if (weapon is null)
+        {
+            return string.Empty;
+        }
+
+        var solution = FireSolutionCalculator.Compute(
+            fire.Gun,
+            row.Points[0].Point,
+            weapon,
+            fire.Ballistics,
+            fire.Profile,
+            fire.MapId,
+            now);
+
+        return BracketLine(solution);
+    }
+
+    /// <summary>
+    /// The bracket as one line, and only the halves that are safe to show.
+    /// </summary>
+    /// <remarks>
+    /// Geometry and elevation block on different things, so a placeholder table withholds the mils
+    /// and the time of flight while azimuth and range still render. Calling the whole thing blocked
+    /// hid the two thirds that worked. Every line carries the spotter hint.
+    /// </remarks>
+    internal static string BracketLine(FireSolution solution)
+    {
+        var parts = new List<string>(5) { FireSolution.BracketLabel };
+
+        if (solution.Status is FireSolutionStatus.OutOfRange)
+        {
+            parts.Add(solution.Message ?? "OUT OF RANGE");
+            return string.Join("  ", parts);
+        }
+
+        parts.Add(FormattableString.Invariant($"AZ {solution.AzimuthDegrees:0}"));
+
+        parts.Add(solution.RangeMeters is { } metres
+            ? FormattableString.Invariant($"{metres:0}m")
+            : FormattableString.Invariant($"{solution.RangeUnits:0.0}u"));
+
+        if (solution.ElevationMils is { } mils)
+        {
+            parts.Add(FormattableString.Invariant($"EL {mils}"));
+
+            if (solution.TimeOfFlightS is { } tof)
+            {
+                parts.Add(FormattableString.Invariant($"TOF {tof:0.0}s"));
+            }
+        }
+        else if (solution.Message is { } withheld)
+        {
+            parts.Add(withheld);
+        }
+
+        if (solution.GunPositionStale)
+        {
+            parts.Add(FireSolution.GunPositionStaleMessage);
+        }
+
+        parts.Add(solution.SpotterHint);
+        return string.Join("  ", parts);
+    }
+
     private static string? Leg(BoardRow row, decimal? unitsToMeters)
     {
         if (row.Points.Count != 2)
@@ -400,7 +516,8 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         BoardRow row,
         Guid viewerParticipantId,
         DateTimeOffset now,
-        decimal? unitsToMeters = null)
+        decimal? unitsToMeters = null,
+        FireContext? fire = null)
     {
         ArgumentNullException.ThrowIfNull(row);
 
@@ -434,6 +551,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
             SecondPointDisplay = second,
             SecondPointLabel = PointLabel(row, 1),
             LegDisplay = Leg(row, unitsToMeters),
+            SolutionDisplay = Solution(row, fire, now),
             Requester = requester,
             AgeDisplay = FormatAge(now - row.CreatedAt),
             MetaExtra = row.ReleaseCount > 0

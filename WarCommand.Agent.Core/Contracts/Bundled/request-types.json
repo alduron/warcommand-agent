@@ -837,8 +837,8 @@
         "build here",
         "dig in here"
       ],
-      "requires_structure_kind": false,
-      "default_structure_kind": null,
+      "requires_structure_kind": true,
+      "default_structure_kind": "sandbags",
       "kind_shortcut_aliases": true,
       "modifiers": [
         "urgent"
@@ -848,7 +848,13 @@
       "menu_paths": [
         "build.2",
         "build.3"
-      ]
+      ],
+      "menu_path_labels": {
+        "build.2": "WALLS",
+        "build.3": "DEFENSES"
+      },
+      "menu_path_labels_note": "A type on two branches renders overlay_label on both, so BUILD appeared twice under BUILD with no way to tell which held walls and which held defenses. A branch names itself here; the leaves under it still name the structure.",
+      "kind_note": "A build request MUST name what to build. It was requires_structure_kind false, so the server discarded the structure the requester picked and every fortify row on every board read BUILD with nothing to build: the provider who accepted it could not act on it. The default is sandbags, the cheapest thing, so an unqualified 'build' is a small commitment rather than a guess at an expensive one."
     },
     {
       "id": "demolition",

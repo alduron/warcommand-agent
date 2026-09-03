@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -259,6 +259,71 @@ public sealed class WarCommandApiClient : IWarCommandApiClient, IDisposable
             Auth.Agent(),
             cancellationToken: cancellationToken).ConfigureAwait(false);
         return rotated.InviteCode;
+    }
+
+    /// <inheritdoc />
+    public Task RestartDeploymentAsync(Guid deploymentId, CancellationToken cancellationToken) =>
+        SendJsonAsync<CloseResult>(
+            HttpMethod.Post,
+            $"v1/deployments/{deploymentId}/close",
+            new CloseBody { Supersede = true },
+            Auth.Agent(),
+            cancellationToken: cancellationToken);
+
+    private sealed record CloseBody
+    {
+        public required bool Supersede { get; init; }
+    }
+
+    private sealed record CloseResult
+    {
+        public int RequestsStoodDown { get; init; }
+    }
+
+    /// <inheritdoc />
+    public Task<Page<ParticipantInfo>> GetParticipantsAsync(
+        Guid deploymentId, string? cursor, int? limit, CancellationToken cancellationToken)
+    {
+        var query = new QueryString()
+            .Add("cursor", cursor)
+            .Add("limit", limit);
+        return SendJsonAsync<Page<ParticipantInfo>>(
+            HttpMethod.Get,
+            $"v1/deployments/{deploymentId}/participants{query}",
+            body: null,
+            Auth.Agent(),
+            cancellationToken: cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> ToggleMyRoleAsync(
+        Guid deploymentId,
+        string roleId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(roleId);
+
+        // The new subscription list, RETURNED. It used to be discarded, so the agent never learned
+        // what it now receives: the roles panel reverted on reopen and the board was never reseeded,
+        // so switching a role on showed none of the rows already waiting for it.
+        var roles = await SendJsonAsync<ParticipantRoles>(
+            HttpMethod.Post,
+            $"v1/deployments/{deploymentId}/participants/me/roles",
+            new ToggleRoleBody { RoleId = roleId },
+            Auth.Agent(),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return roles?.SubscribedRoleIds ?? [];
+    }
+
+    private sealed record ToggleRoleBody
+    {
+        public required string RoleId { get; init; }
+    }
+
+    private sealed record ParticipantRoles
+    {
+        public IReadOnlyList<string> SubscribedRoleIds { get; init; } = [];
     }
 
     // -----------------------------------------------------------------------

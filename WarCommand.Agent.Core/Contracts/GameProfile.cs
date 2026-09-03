@@ -48,7 +48,39 @@ public sealed record MapReadoutSection
     /// <summary>All channels at or above this value count as readout text.</summary>
     public required int NearWhiteThreshold { get; init; }
 
+    /// <summary>
+    /// Widest gap between two characters still treated as one run. Too small and a readout arrives
+    /// at the decoder in fragments; the decoder cannot recover from that.
+    /// </summary>
+    public int GlyphGapPx { get; init; } = 12;
+
+    /// <summary>
+    /// Largest coordinate any map can produce. A decode above it is a misread, not a point.
+    /// </summary>
+    public decimal CoordinateSanityMax { get; init; } = 400m;
+
     public required int ExpectedMatchesPerFrame { get; init; }
+
+    /// <summary>
+    /// How far from the crosshair the readout may sit, and the half-size of the captured region.
+    /// </summary>
+    /// <remarks>
+    /// Anchored to the CURSOR, never to the screen. A fixed centre panel clipped the readout
+    /// whenever the cursor neared the edge of the map, so plainly readable numbers were never
+    /// captured at all.
+    /// </remarks>
+    public int SearchRadiusPx { get; init; } = 420;
+
+    /// <summary>
+    /// Thresholds to try in order until a complete pair decodes. Empty falls back to the single
+    /// <see cref="NearWhiteThreshold"/>.
+    /// </summary>
+    /// <remarks>
+    /// The readout dims near the edges of the map, so one fixed threshold reads the middle and goes
+    /// blind at the border on text a human finds perfectly legible. The black outline around the
+    /// glyphs is what makes dropping the threshold safe.
+    /// </remarks>
+    public IReadOnlyList<int> NearWhiteLadder { get; init; } = [];
 
     /// <summary>'scan_panel_for_pattern'. Never a fixed rectangle.</summary>
     public string ScanStrategy { get; init; } = "scan_panel_for_pattern";
@@ -71,8 +103,62 @@ public sealed record MapReadoutSection
     /// <summary>The glyph atlas is pre-rendered at each of these.</summary>
     public required IReadOnlyList<decimal> UiScales { get; init; }
 
+    /// <summary>How the atlas is rendered before matching. The typeface is a fact about the game.</summary>
+    public AtlasSection Atlas { get; init; } = new();
+
     /// <summary>Null means nobody has established it. The agent must not assume either way.</summary>
     public bool? ZoomIndependent { get; init; }
+}
+
+/// <summary>
+/// The typeface the atlas renders before it is matched against a captured run. A candidate list
+/// rather than one name: the reader renders each, scores it, and keeps the best.
+/// </summary>
+public sealed record AtlasSection
+{
+    public IReadOnlyList<string> FontCandidates { get; init; } = [];
+
+    public bool FontBold { get; init; }
+
+    /// <summary>
+    /// What one more character must earn before the solver accepts it. Near the typical per-glyph
+    /// match score: too low and a run splits into extra thin glyphs, too high and real ones vanish.
+    /// </summary>
+    public double GlyphCost { get; init; } = 0.72;
+
+    /// <summary>
+    /// Character advance as a fraction of the line height, smallest and largest. A split implying a
+    /// pitch outside this is not a reading of this font, whatever it scores.
+    /// </summary>
+    public double PitchRatioMin { get; init; } = 0.52;
+
+    public double PitchRatioMax { get; init; } = 0.74;
+
+    /// <summary>
+    /// The game's own glyph shapes, keyed by character, each as a near-white mask one string per
+    /// row. Present means match against these and ignore the font candidates entirely.
+    /// </summary>
+    /// <remarks>
+    /// Wardogs ships its own typeface. No installed face reproduces the readout, so rendering an
+    /// approximation picked wrong digits however the solver was tuned. These are cut from runs
+    /// whose text a human read off the screen, so they match the real thing exactly.
+    /// </remarks>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> Learned { get; init; } =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
+    public string? Confidence { get; init; }
+}
+
+/// <summary>A region of the client rect, as fractions of its width and height.</summary>
+public sealed record PanelRect
+{
+    public double X { get; init; }
+
+    public double Y { get; init; }
+
+    public double Width { get; init; } = 1;
+
+    public double Height { get; init; } = 1;
 }
 
 /// <summary>The two thresholds that make request_points.confidence mean something.</summary>

@@ -371,6 +371,24 @@ public sealed record SubmitRequestBody
     /// <summary>Null on a type with no takes_quantity.</summary>
     public int? QuantityRequested { get; init; }
 
+    /// <summary>
+    /// Which supply, on a type that takes one. Null lets the server stamp the type's default.
+    /// </summary>
+    /// <remarks>
+    /// SUPPLY AMMO and SUPPLY FUEL are different jobs. A row that says only SUPPLY cannot be
+    /// fulfilled by whoever accepts it.
+    /// </remarks>
+    public string? SupplyKind { get; init; }
+
+    /// <summary>
+    /// What to build, on a type that takes one. Null lets the server stamp the type's default.
+    /// </summary>
+    /// <remarks>
+    /// The menu captured 'trench' and the submit dropped it, so the server stamped a default and
+    /// the board read BUILD with nothing saying what to build.
+    /// </remarks>
+    public string? StructureKind { get; init; }
+
     /// <summary>Exactly the type's arity, in ordinal order. Coordinates are strings, never floats.</summary>
     public required IReadOnlyList<PointBody> Points { get; init; }
 

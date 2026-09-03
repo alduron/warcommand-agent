@@ -26,7 +26,19 @@
                         <TranslateTransform x:Name="EntranceSlide" X="10" />
                     </Border.RenderTransform>
                 <Border x:Name="RowRoot" BorderThickness="0,0,0,1" BorderBrush="{StaticResource RowDivider}"
-                        Padding="0,4,9,4" Opacity="{Binding RowOpacity}" Background="{StaticResource Transparent}">
+                        Padding="0,4,9,4" Opacity="{Binding RowOpacity}">
+                    <!-- The navigation highlight lands on the REAL row. The board is not redrawn
+                         inside a menu panel, so what you move through is what you are looking at. -->
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{StaticResource Transparent}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                    <Setter Property="Background" Value="{StaticResource HighlightGround}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                   <Grid>
                     <!--
                         The auto-cancel countdown, as a wash across the whole row rather than a bar
@@ -159,6 +171,25 @@
                                 <TextBlock Grid.Column="4" Style="{StaticResource DimMono}"
                                            HorizontalAlignment="Right" Text="{Binding TicketCode}" />
                             </Grid>
+
+                            <!-- The opening bracket, on a gunner's own rows only. Its own line
+                                 because it is the longest thing a row can say and it must not push
+                                 the grid off the edge. Empty for everybody not on a gun. -->
+                            <TextBlock x:Name="SolutionLine"
+                                       Foreground="{StaticResource Squad}"
+                                       Text="{Binding SolutionDisplay}"
+                                       TextTrimming="CharacterEllipsis">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DimMono}">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SolutionDisplay}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
 
                         </StackPanel>
                     </DockPanel>
@@ -424,24 +455,58 @@
                                            FontSize="{StaticResource SlotSize}"
                                            Foreground="{StaticResource Yours}" Margin="0,2,0,0"
                                            Visibility="Collapsed" />
+                                <TextBlock x:Name="MenuLegend" Style="{StaticResource Up}"
+                                           FontSize="{StaticResource LabelSize}"
+                                           Foreground="{StaticResource Dim}"
+                                           Margin="0,2,0,0" TextWrapping="Wrap"
+                                           Visibility="Collapsed" />
                                 <ItemsControl x:Name="MenuOptions" Margin="0,4,0,0">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Grid Margin="0,1,0,1">
+                                                <!-- The whole row carries the highlight. A caret
+                                                     alone was too small to find under fire. -->
+                                                <Grid.Style>
+                                                    <Style TargetType="Grid">
+                                                        <Setter Property="Background" Value="Transparent" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                                                <Setter Property="Background" Value="{StaticResource HighlightGround}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Grid.Style>
                                                 <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="12" />
                                                     <ColumnDefinition Width="22" />
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
+                                                <!-- The wheel's position. Fixed column so the eye
+                                                     finds it in the same place on every level. -->
                                                 <TextBlock Grid.Column="0" Style="{StaticResource Up}"
                                                            FontSize="{StaticResource LabelSize}"
                                                            FontWeight="Bold"
-                                                           Foreground="{StaticResource Squad}"
-                                                           Text="{Binding Digit}" />
+                                                           Foreground="{StaticResource Yours}"
+                                                           Text="{Binding Caret}" />
                                                 <TextBlock Grid.Column="1" Style="{StaticResource Up}"
                                                            FontSize="{StaticResource LabelSize}"
-                                                           Foreground="{StaticResource Ink}"
-                                                           Text="{Binding Label}"
-                                                           TextTrimming="CharacterEllipsis" />
+                                                           FontWeight="Bold"
+                                                           Foreground="{StaticResource Squad}"
+                                                           Text="{Binding DigitDisplay}" />
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                    <TextBlock Style="{StaticResource Up}"
+                                                               FontSize="{StaticResource LabelSize}"
+                                                               Foreground="{StaticResource Ink}"
+                                                               Text="{Binding Label}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <!-- Toggled on. Several chosen must read as
+                                                         several, not as the first one. -->
+                                                    <TextBlock Style="{StaticResource Up}"
+                                                               FontSize="{StaticResource LabelSize}"
+                                                               Foreground="{StaticResource Yours}"
+                                                               Margin="6,0,0,0"
+                                                               Text="{Binding Mark}" />
+                                                </StackPanel>
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
@@ -450,6 +515,14 @@
                         </Border>
 
                         <ItemsControl x:Name="RowsList" ItemTemplate="{StaticResource RowTemplate}" />
+
+                        <!-- The tail of the home list, which is MORE. It sits UNDER the rows
+                             because that is where it is in the list: the order on screen has to be
+                             the order the highlight moves through, or moving reads as teleporting. -->
+                        <Border x:Name="MenuFooter" Padding="9,5" Visibility="Collapsed">
+                            <ItemsControl x:Name="MenuTrailing"
+                                          ItemTemplate="{Binding ItemTemplate, ElementName=MenuOptions}" />
+                        </Border>
 
                         <Border x:Name="OverflowRow" Padding="9,5" Visibility="Collapsed">
                             <StackPanel Orientation="Horizontal">

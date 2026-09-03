@@ -1,17 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\WarCommand.Agent.Core\WarCommand.Agent.Core.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="System.Drawing.Common" Version="8.0.*" />
+    <ProjectReference Include="..\WarCommand.Agent.Capture\WarCommand.Agent.Capture.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RootNamespace>WarCommand.Agent.CaptureProbe</RootNamespace>
+    <AssemblyName>WarCommand.CaptureProbe</AssemblyName>
   </PropertyGroup>
 
 </Project>
