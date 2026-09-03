@@ -1345,6 +1345,10 @@ public partial class App : Application, IDisposable
             _menu?.Tick();
             _input?.Bridge.EnforceHoldLimit();
 
+            // Before the board guard, for the same reason the menu tick is: with no deployment
+            // there is no board to redraw, and that is exactly where a notice got stuck forever.
+            _observer?.ExpireNotice(DateTimeOffset.UtcNow);
+
             if (_observer?.Board is not { } board)
             {
                 return;

@@ -1,4 +1,4 @@
-﻿namespace WarCommand.Agent.Overlay;
+namespace WarCommand.Agent.Overlay;
 
 /// <summary>
 /// Fans one board render out to every surface drawing it: the window's Board tab and, when it is
@@ -55,6 +55,18 @@ public sealed class BoardPresenter
         _last?.Invoke(view);
     }
 
+    /// <summary>The header as last rendered, which is what a late surface is caught up with.</summary>
+    public BoardHeader? Header => _header;
+
+    /// <summary>The menu as last rendered, or null while none is open.</summary>
+    public MenuViewModel? Menu => _menu;
+
+    /// <summary>The rows as last rendered, in the order they are drawn.</summary>
+    public IReadOnlyList<BoardRowViewModel> Rows { get; private set; } = [];
+
+    /// <summary>The YOURS rows as last rendered.</summary>
+    public IReadOnlyList<BoardRowViewModel> Yours { get; private set; } = [];
+
     /// <summary>Renders the two header lines on every surface.</summary>
     public void SetHeader(BoardHeader header)
     {
@@ -93,9 +105,19 @@ public sealed class BoardPresenter
         int overflowUrgentCount,
         int inProgressCount = 0)
     {
+        Rows = rows;
+        Yours = yours;
+        OverflowCount = overflowCount;
+        InProgressCount = inProgressCount;
         _last = v => v.RenderBoard(rows, yours, overflowCount, overflowUrgentCount, inProgressCount);
         Each(_last);
     }
+
+    /// <summary>Rows off the bottom of the board, as last rendered.</summary>
+    public int OverflowCount { get; private set; }
+
+    /// <summary>Work under way elsewhere, as last rendered.</summary>
+    public int InProgressCount { get; private set; }
 
     private void Each(Action<BoardView> action)
     {

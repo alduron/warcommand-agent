@@ -39,7 +39,24 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     private BoardState? _board;
     private Guid _viewerId;
     private BoardHeader _header = new() { Title = "WarCommand" };
-    private string? _fault;
+    /// <summary>
+    /// A one-off notice: a refusal, a failed read, a confirmation. It clears itself.
+    /// </summary>
+    /// <remarks>
+    /// It used to be cleared by exactly one thing, a hold opening, and a hold needs the game to be
+    /// the foreground window. So "NO GAME WINDOW  NOT READ, TRY AGAIN" could never be cleared by
+    /// definition: the one condition that removed it was the one the message said was absent. Every
+    /// notice now has a deadline, because a status that outlives what it describes is a lie about
+    /// the current state.
+    /// </remarks>
+    private string? _notice;
+
+    private DateTimeOffset _noticeUntil;
+
+    /// <summary>
+    /// A standing condition, shown while it holds and cleared by its own signal, never by time.
+    /// </summary>
+    private string? _condition;
     private GunPosition? _gunPosition;
 
     /// <summary>Creates the observer. The board is attached once a deployment is known.</summary>
@@ -116,7 +133,8 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         // root decides what to seed from; this only clears any stale amber word.
         OnUi(() =>
         {
-            _fault = null;
+            _notice = null;
+            _condition = null;
             RenderHeader();
         });
     }
@@ -127,7 +145,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// </summary>
     public void OnBoardStalenessChanged(bool stale, double drainAgeSeconds) => OnUi(() =>
     {
-        _fault = stale ? "BOARD MAY BE STALE" : null;
+        _condition = stale ? "BOARD MAY BE STALE" : null;
         RenderHeader();
     });
 
@@ -404,7 +422,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// <summary>Another live session holds the same participant, so the digits differ per device.</summary>
     public void OnAnotherDeviceOnBoard(bool present) => OnUi(() =>
     {
-        _fault = present ? "ANOTHER DEVICE ON BOARD" : null;
+        _condition = present ? "ANOTHER DEVICE ON BOARD" : null;
         RenderHeader();
     });
 
@@ -473,8 +491,12 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         // Built HERE, on the dispatcher, while nothing else is mutating the board. The menu used to
         // walk BoardState.Rows from the hook thread while socket frames were writing to it, which
         // is an InvalidOperationException that kills the hook and takes every hotkey with it.
+        // EVERY row holding a digit, from both halves. Rows excludes anything that renders in
+        // YOURS, and a job you have claimed is exactly that: it keeps its digit and moves down. So
+        // the menu had no entry for the one row you actually have work to do on, and DONE could not
+        // be pressed on the job you were doing.
         var slots = new Dictionary<int, SlotState>();
-        foreach (var row in board.Rows)
+        foreach (var row in board.Rows.Concat(board.Yours))
         {
             if (row.Slot is { } digit)
             {
@@ -520,11 +542,39 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// <summary>Shows a fault word in the header, or clears it with null.</summary>
     public void SetFault(string? fault) => OnUi(() => SetFaultCore(fault));
 
+    /// <summary>
+    /// How long a notice stays on the header before it takes itself off.
+    /// </summary>
+    /// <remarks>
+    /// Long enough to read a short line, short enough that it cannot be mistaken for the state of
+    /// the system a minute later.
+    /// </remarks>
+    private static readonly TimeSpan NoticeLifetime = TimeSpan.FromSeconds(6);
+
     private void SetFaultCore(string? fault)
     {
-        _fault = fault;
+        _notice = fault;
+        _noticeUntil = fault is null ? default : DateTimeOffset.UtcNow + NoticeLifetime;
         RenderHeader();
     }
+
+    /// <summary>
+    /// Takes an expired notice off the header. Driven by the board tick, and by nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Called before the tick's board guard: an agent standing in no deployment is exactly where a
+    /// notice was most likely to be stuck, because there is no board there to redraw over it.
+    /// </remarks>
+    public void ExpireNotice(DateTimeOffset now) => OnUi(() =>
+    {
+        if (_notice is null || now < _noticeUntil)
+        {
+            return;
+        }
+
+        _notice = null;
+        RenderHeader();
+    });
 
     /// <summary>
     /// The bracket context, or null when the viewer has set no gun position.
@@ -553,7 +603,8 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
                 null);
     }
 
-    private void RenderHeader() => _presenter.SetHeader(_header with { Fault = _fault });
+    // The notice wins while it lives, then the standing condition shows through again.
+    private void RenderHeader() => _presenter.SetHeader(_header with { Fault = _notice ?? _condition });
 
     private string OverlayLabel(string typeId) =>
         _catalog().RequestType(typeId)?.OverlayLabel ?? typeId.ToUpperInvariant();
