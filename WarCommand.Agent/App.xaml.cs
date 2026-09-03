@@ -898,6 +898,16 @@ public partial class App : Application, IDisposable
                 SetGunPosition(gun.Point, log);
                 break;
 
+            case MenuGunPositionCleared:
+                // The same gun the ARTILLERY section ranges from is the one every mortar row draws
+                // its bracket from. Clearing one without the other leaves rows ranging from a
+                // position the tool has forgotten.
+                _gunPosition = null;
+                _observer?.SetGunPosition(null);
+                _observer?.SetFault("GUN CLEARED");
+                log.Info("Gun position cleared.");
+                break;
+
             case MenuInviteCopied invite:
                 // Prefixed so a code pasted into game chat is obviously ours and searchable, and
                 // so a bare six digit number cannot be mistaken for a coordinate or a callsign.

@@ -687,7 +687,11 @@ public class MenuStateMachineTests
         // nothing, which is the one click this product refuses to offer anywhere.
         var offered = menu.Options.Select(o => o.VerbId).ToList();
         Assert.Contains("help", offered);
-        Assert.Contains("gun", offered);
+
+        // GUN HERE is gone from this page. It set the same gun position the ARTILLERY tool sets,
+        // by a second route with its own way back out, so backing out of a gun read landed you
+        // somewhere different depending on which entry you came in through.
+        Assert.DoesNotContain("gun", offered);
         Assert.Contains("join", offered);
         Assert.DoesNotContain("roles", offered);
         Assert.DoesNotContain("match", offered);
@@ -697,15 +701,58 @@ public class MenuStateMachineTests
     }
 
     [Fact]
-    public void Gun_here_commits_the_key_down_snapshot()
+    public void There_is_one_gun_position_and_one_route_to_it()
     {
         var menu = Machine();
-        menu.Open(T0, Snapshot);
-        menu.Digit(0, T0);
-        menu.Digit(0, T0);
+        menu.Open(T0, Snapshot, new MenuContext { OccupiedSlots = [1] });
 
-        Assert.Equal(Snapshot, Assert.IsType<MenuGunPositionSet>(menu.Digit(5, T0)).Point);
-        Assert.False(menu.IsOpen);
+        // Not on the TOOLS page. There were two entry points to the same value, and backing out of
+        // a gun read went to whichever one the code assumed rather than the one you used.
+        menu.Digit(0, T0);
+        Assert.DoesNotContain(menu.Options, o => o.VerbId == "gun");
+
+        // The one route is ARTILLERY on the home list, and backing out of it returns HOME.
+        menu.Back(T0);
+        while (menu.Options[menu.Highlight].Path != "home.fire")
+        {
+            menu.Scroll(-1, T0);
+        }
+
+        menu.Select(T0);
+        Assert.Equal(MenuLevel.FireTool, menu.Level);
+
+        menu.Back(T0);
+        Assert.Equal(MenuLevel.Root, menu.Level);
+    }
+
+    [Fact]
+    public void Reading_a_gun_feeds_the_row_brackets_as_well_as_the_tool()
+    {
+        var menu = Machine();
+        menu.OpenOnBoard(T0, new MenuContext());
+        while (menu.Options[menu.Highlight].Path != "home.fire")
+        {
+            menu.Scroll(-1, T0);
+        }
+
+        menu.Select(T0);
+        menu.Select(T0);
+        Assert.Equal(MenuLevel.GunPosition, menu.Level);
+
+        // One read, both consumers: the ARTILLERY section ranges from it and every mortar row
+        // draws its bracket from it.
+        var set = Assert.IsType<MenuGunPositionSet>(menu.AcceptReadCoordinate(Snapshot, T0));
+        Assert.Equal(Snapshot, set.Point);
+        Assert.Equal(Snapshot, menu.ToolGun);
+
+        // And clearing says so, so the rows stop ranging from a gun the tool has forgotten.
+        while (menu.Options[menu.Highlight].Path != "fire.clear")
+        {
+            menu.Scroll(1, T0);
+        }
+
+        Assert.IsType<MenuGunPositionCleared>(menu.Select(T0));
+        Assert.Null(menu.ToolGun);
     }
 
     [Fact]

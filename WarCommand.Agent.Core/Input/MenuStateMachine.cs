@@ -410,8 +410,13 @@ public sealed record MenuCoordinateReadRequested : MenuOutcome;
 /// <summary>The invite code was taken from the match page. The app puts it on the clipboard.</summary>
 public sealed record MenuInviteCopied(string InviteCode) : MenuOutcome;
 
-/// <summary>MORE > GUN HERE. The key-down snapshot, committed with no confirm step.</summary>
+/// <summary>ARTILLERY > GUN. Where the viewer's gun is, for the tool and for every row bracket.</summary>
 public sealed record MenuGunPositionSet(MapPoint Point) : MenuOutcome;
+
+/// <summary>
+/// ARTILLERY > CLEAR. The gun is forgotten, so no row may draw a bracket from it either.
+/// </summary>
+public sealed record MenuGunPositionCleared : MenuOutcome;
 
 /// <summary>
 /// What the MORE page is allowed to offer this person right now. Its digits are fixed: an entry
@@ -583,7 +588,9 @@ public sealed class MenuStateMachine
         (2, "roles", "ROLES"),
         (3, "match", "MATCH"),
         (4, "people", "PEOPLE"),
-        (5, "gun", "GUN HERE"),
+        // 5 stays empty where GUN HERE was. It set the same gun position the ARTILLERY tool sets,
+        // by a second route with its own way back out, so backing out of a gun read landed you
+        // somewhere different depending on which entry you had come in through.
         (6, "join", "JOIN CODE"),
         // 7 stays empty where RESTART was. A digit learned once stays learned, so LINK ACCOUNT
         // keeps the 8 it has always had rather than sliding up into a freed slot.
@@ -1174,8 +1181,15 @@ public sealed class MenuStateMachine
                 return new MenuNavigated(Level);
 
             case MenuLevel.Join or MenuLevel.Help or MenuLevel.Roles
-                or MenuLevel.Match or MenuLevel.People or MenuLevel.FireTool:
+                or MenuLevel.Match or MenuLevel.People:
                 Level = MenuLevel.More;
+                return new MenuNavigated(Level);
+
+            // Home, not TOOLS. ARTILLERY is an entry on the home list and has been since it stopped
+            // being a page inside MORE; backing out of it into TOOLS put you somewhere you had
+            // never been.
+            case MenuLevel.FireTool:
+                Level = MenuLevel.Root;
                 return new MenuNavigated(Level);
 
             case MenuLevel.Confirm:
@@ -1411,13 +1425,17 @@ public sealed class MenuStateMachine
     /// Both ends together. Clearing only the target would leave a gun position that goes stale
     /// where it stands, and a bracket computed from where a gun used to be is worse than no bracket.
     /// </remarks>
-    private MenuNavigated ClearFireTool(DateTimeOffset now)
+    private MenuGunPositionCleared ClearFireTool(DateTimeOffset now)
     {
         _lastInput = now;
         _toolGun = null;
         _toolTarget = null;
         Highlight = FirstSelectable();
-        return new MenuNavigated(Level);
+
+        // The app hears it too: the gun that draws a bracket on every mortar row is the same gun,
+        // so clearing here has to stop those as well or the rows keep ranging from a gun the tool
+        // has forgotten.
+        return new MenuGunPositionCleared();
     }
 
     /// <summary>Where the tool believes your gun is. Null until a read sets it.</summary>
