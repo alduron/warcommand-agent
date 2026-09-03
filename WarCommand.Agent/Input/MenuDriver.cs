@@ -1,4 +1,4 @@
-﻿using System.Windows.Threading;
+using System.Windows.Threading;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
@@ -133,7 +133,7 @@ public sealed class MenuDriver : IMenuKeySink, IMenuGate, IMenuNavSink
             }
             else
             {
-                Raise(_menu.OpenOnBoard(_clock(), PendingContext));
+                Raise(_menu.OpenOnBoard(_clock(), PendingContext, PendingSnapshot));
             }
 
             return;

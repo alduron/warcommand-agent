@@ -1,4 +1,4 @@
-﻿namespace WarCommand.Agent.Input.Bindings;
+namespace WarCommand.Agent.Input.Bindings;
 
 /// <summary>Why a rebind was accepted or refused.</summary>
 public enum RebindStatus
@@ -45,7 +45,7 @@ public sealed class BindingSet
     public event EventHandler? Changed;
 
     /// <summary>
-    /// V to speak, RightAlt for the menu, Escape, and the two RightAlt chords. Both hold keys ship
+    /// V to speak, CapsLock for the menu, and the two RightAlt chords. Both hold keys ship
     /// bound: the overlay does nothing at all without one of them held, so an unbound default was a
     /// product that did nothing until the user found a settings page to fix it.
     /// </summary>
@@ -213,7 +213,6 @@ public sealed class BindingSet
         _chords[BindingAction.NavSelect] = Chord.Bare("D");
         _chords[BindingAction.NavBack] = Chord.Bare("A");
 
-        _chords[BindingAction.Escape] = Chord.Bare("Escape");
         _chords[BindingAction.Board] = Chord.RightAlt("B");
         _chords[BindingAction.Panic] = Chord.RightAlt("P");
     }

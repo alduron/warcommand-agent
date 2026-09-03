@@ -84,13 +84,29 @@ public readonly struct BindingKey : IEquatable<BindingKey>
         return false;
     }
 
-    /// <summary>True when this key is the digit <paramref name="digit"/>. Read off the label, never the code.</summary>
+    /// <summary>
+    /// True when this key is the digit <paramref name="digit"/>. Read off the label, never the code.
+    /// </summary>
+    /// <remarks>
+    /// The numpad counts. Its keys are labelled Numpad0 to Numpad9, which is eight characters, so
+    /// the single-character test refused every one of them: an invite code or a typed grid could
+    /// only be entered on the number row, and the numpad did nothing at all.
+    /// </remarks>
     public bool TryDigit(out int digit)
     {
         var label = Label;
         if (label.Length == 1 && label[0] is >= '0' and <= '9')
         {
             digit = label[0] - '0';
+            return true;
+        }
+
+        const string numpad = "Numpad";
+        if (label.Length == numpad.Length + 1
+            && label.StartsWith(numpad, StringComparison.Ordinal)
+            && label[^1] is >= '0' and <= '9')
+        {
+            digit = label[^1] - '0';
             return true;
         }
 

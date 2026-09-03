@@ -55,19 +55,27 @@ public sealed class ArmedKeys
     }
 
     /// <summary>
-    /// The only keys a menu is allowed to swallow: the digits, Escape and Backspace. The PTT key is
-    /// already armed as a binding. Everything else passes to the game, because a menu that ate W for
-    /// a second and a half would get somebody killed.
+    /// The only keys a menu is allowed to swallow: the digits, on the number row and the numpad. The
+    /// PTT key is already armed as a binding. Everything else passes to the game, because a menu
+    /// that ate W for a second and a half would get somebody killed.
+    ///
+    /// Escape and Backspace used to be here and are gone. Escape discarded and closed, which is
+    /// exactly what letting go of the hold key does, so it bought nothing and cost the game its own
+    /// Escape key for as long as the menu was open. Backspace deleted one typed digit, which the
+    /// back key already does.
     /// </summary>
     private static IEnumerable<string> MenuKeyLabels
     {
         get
         {
-            yield return "Escape";
-            yield return "Backspace";
             for (var d = 0; d <= 9; d++)
             {
-                yield return d.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var digit = d.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+                // Both, always. The numpad is where a hand types six digits, and arming only the
+                // number row meant an invite code could not be entered on it at all.
+                yield return digit;
+                yield return $"Numpad{digit}";
             }
         }
     }

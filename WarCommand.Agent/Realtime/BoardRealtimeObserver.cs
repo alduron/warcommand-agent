@@ -500,7 +500,10 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         {
             if (row.Slot is { } digit)
             {
-                slots[digit] = new SlotState(row.State, row.ClaimantParticipantId == _viewerId);
+                slots[digit] = new SlotState(
+                    row.State,
+                    row.ClaimantParticipantId == _viewerId,
+                    row.RequestedByParticipantId == _viewerId);
             }
         }
 

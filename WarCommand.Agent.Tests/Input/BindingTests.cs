@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Input.Bindings;
+using WarCommand.Agent.Input.Bindings;
 
 namespace WarCommand.Agent.Tests.Input;
 
@@ -17,7 +17,6 @@ public class BindingTests
         Assert.Equal("CapsLock", bindings[BindingAction.Menu].Label);
         Assert.Equal("RightAlt+B", bindings[BindingAction.Board].Label);
         Assert.Equal("RightAlt+P", bindings[BindingAction.Panic].Label);
-        Assert.Equal("Escape", bindings[BindingAction.Escape].Label);
 
         // Navigation ships on the movement keys, where the left hand already is.
         Assert.Equal("W", bindings[BindingAction.NavUp].Label);
@@ -27,12 +26,15 @@ public class BindingTests
     }
 
     [Fact]
-    public void The_whole_hotkey_surface_is_nine_bindings()
+    public void The_whole_hotkey_surface_is_eight_bindings()
     {
-        // Two hold keys, Escape, two RightAlt chords, and the four navigation keys. Navigation is
-        // bindable because it sits on WASD and anybody who moves those in game must move these.
-        Assert.Equal(9, BindingActions.All.Count);
-        Assert.Equal(9, BindingSet.Defaults().All.Count());
+        // Two hold keys, two RightAlt chords, and the four navigation keys. Navigation is bindable
+        // because it sits on WASD and anybody who moves those in game must move these.
+        //
+        // Escape was the ninth and is gone: it discarded and closed, which is what letting go of
+        // the hold key already does, and holding a binding on it took the game's own Escape.
+        Assert.Equal(8, BindingActions.All.Count);
+        Assert.Equal(8, BindingSet.Defaults().All.Count());
         Assert.Equal(4, BindingActions.Navigation.Count);
     }
 

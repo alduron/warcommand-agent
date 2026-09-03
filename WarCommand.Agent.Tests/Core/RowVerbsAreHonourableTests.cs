@@ -103,30 +103,57 @@ public sealed class RowVerbsAreHonourableTests
     }
 
     [Fact]
-    public void A_digit_keeps_its_verb_wherever_the_verb_appears()
+    public void Every_verb_a_row_offers_is_within_reach_of_the_hand_holding_the_key()
     {
-        var menu = Machine();
-        menu.OpenOnBoard(T0, new MenuContext
+        foreach (var state in (RequestState[])[RequestState.Open, RequestState.Claimed, RequestState.InProgress])
         {
-            OccupiedSlots = [4],
-            Slots = new Dictionary<int, SlotState> { [4] = new(RequestState.Claimed, true) },
-        });
-        menu.Select(T0);
+            foreach (var mine in (bool[])[true, false])
+            {
+                var menu = Machine();
+                menu.OpenOnBoard(T0, new MenuContext
+                {
+                    OccupiedSlots = [4],
+                    Slots = new Dictionary<int, SlotState> { [4] = new(state, mine, true) },
+                });
+                menu.Select(T0);
 
-        // Filtering removes entries; it must never renumber the survivors. A digit learned once
-        // stays learned.
-        var done = menu.Options.Single(o => o.VerbId == "done");
-        Assert.Equal(3, done.Digit);
+                // A hand with its pinky on CapsLock covers 1 to 5 on the number row and nothing
+                // past it. MUTE sat on 6 and COPY on 7, so both were unpressable one-handed.
+                foreach (var option in menu.Options)
+                {
+                    Assert.InRange(option.Digit, 1, 5);
+                }
+
+                // And they are numbered from one with no gaps, because the number is a position in
+                // what THIS row offers rather than a fixed identity for the verb.
+                Assert.Equal(
+                    Enumerable.Range(1, menu.Options.Count),
+                    menu.Options.Select(o => o.Digit));
+            }
+        }
     }
 
     [Fact]
-    public void With_no_slot_state_known_every_verb_is_still_offered()
+    public void The_first_verb_on_a_row_is_the_one_you_came_for()
     {
-        // A caller that has not filled Slots in must not lose the board entirely.
+        // Learned once and stable, because the states are disjoint: on an open row 1 is always
+        // ACCEPT, and on a row you hold 1 is always DONE.
+        Assert.Equal("accept", VerbsOn(RequestState.Open, mine: false)[0]);
+        Assert.Equal("done", VerbsOn(RequestState.InProgress, mine: true)[0]);
+    }
+
+    [Fact]
+    public void With_no_slot_state_known_the_row_still_offers_something_reachable()
+    {
+        // A caller that has not filled Slots in must not lose the board entirely. It cannot know
+        // which verbs the row will honour, so it offers the most important ones and still stops at
+        // five, because the sixth would be a key the hand cannot reach anyway.
         var menu = Machine();
         menu.OpenOnBoard(T0, new MenuContext { OccupiedSlots = [4] });
         menu.Select(T0);
 
+        Assert.NotEmpty(menu.Options);
+        Assert.True(menu.Options.Count <= 5);
         Assert.Contains(menu.Options, o => o.VerbId == "accept");
         Assert.Contains(menu.Options, o => o.VerbId == "done");
     }

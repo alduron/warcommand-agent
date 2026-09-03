@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Input;
+using WarCommand.Agent.Input;
 using WarCommand.Agent.Input.Bindings;
 
 namespace WarCommand.Agent.Tests.Input;
@@ -68,7 +68,6 @@ public class InputBridgeTests
         // Two hold keys, one sink: voice and keyboard are two ways into the same menu.
         Assert.Equal(2, harness.Ptt.Downs);
         Assert.Contains(BindingAction.Board, harness.Chords.Invoked);
-        Assert.Contains(BindingAction.Escape, harness.Chords.Invoked);
     }
 
     [Fact]
@@ -143,15 +142,20 @@ public class InputBridgeTests
     }
 
     [Fact]
-    public void A_menu_swallows_only_digits_escape_and_backspace()
+    public void A_menu_swallows_digits_and_nothing_else()
     {
         var harness = new Harness(gameForeground: true, gameRunning: true);
         harness.Menu.MenuIsOpen = true;
         harness.Bridge.Rearm();
 
+        // Both rows. The numpad is where a hand goes to type an invite code.
         Assert.True(harness.Bridge.Handle(Chord.Bare("4")).Swallow);
-        Assert.True(harness.Bridge.Handle(Chord.Bare("Escape")).Swallow);
-        Assert.True(harness.Bridge.Handle(Chord.Bare("Backspace")).Swallow);
+        Assert.True(harness.Bridge.Handle(Chord.Bare("Numpad4")).Swallow);
+
+        // The game keeps these. Escape closed the menu, which releasing the hold key already does,
+        // and Backspace deleted a digit, which the back key does.
+        Assert.False(harness.Bridge.Handle(Chord.Bare("Escape")).Swallow);
+        Assert.False(harness.Bridge.Handle(Chord.Bare("Backspace")).Swallow);
 
         // The hold key never is. Opening the menu is additive, exactly like a modifier: swallowing
         // it meant the key that opens the menu could not be typed anywhere on the machine.
@@ -164,9 +168,10 @@ public class InputBridgeTests
         Assert.False(w.Swallow);
         Assert.False(w.Dispatched);
 
-        Assert.Equal([4], harness.MenuKeys.Digits);
-        Assert.Equal(1, harness.MenuKeys.Escapes);
-        Assert.Equal(1, harness.MenuKeys.Backspaces);
+        // Both fours reached the menu and nothing else did.
+        Assert.Equal([4, 4], harness.MenuKeys.Digits);
+        Assert.Equal(0, harness.MenuKeys.Escapes);
+        Assert.Equal(0, harness.MenuKeys.Backspaces);
     }
 
     [Fact]
@@ -195,18 +200,18 @@ public class InputBridgeTests
     }
 
     [Fact]
-    public void Escape_routes_to_the_menu_while_one_is_open_and_to_the_chord_sink_otherwise()
+    public void The_game_keeps_its_own_escape_key_even_with_a_menu_open()
     {
         var harness = new Harness(gameForeground: true, gameRunning: true);
-
-        harness.Bridge.Handle(Chord.Bare("Escape"));
-        Assert.Contains(BindingAction.Escape, harness.Chords.Invoked);
-        Assert.Equal(0, harness.MenuKeys.Escapes);
-
         harness.Menu.MenuIsOpen = true;
         harness.Bridge.Rearm();
-        harness.Bridge.Handle(Chord.Bare("Escape"));
-        Assert.Equal(1, harness.MenuKeys.Escapes);
+
+        var dispatch = harness.Bridge.Handle(Chord.Bare("Escape"));
+
+        // Escape discarded and closed, which is exactly what letting go of the hold key does. It
+        // bought nothing and it took the game's own Escape for as long as the menu was open.
+        Assert.False(dispatch.Swallow);
+        Assert.Equal(0, harness.MenuKeys.Escapes);
     }
 
     [Fact]
@@ -219,12 +224,9 @@ public class InputBridgeTests
         // carrying the RightAlt modifier. Reading these off the whole chord meant holding the menu
         // key open and then pressing 1 did nothing at all.
         harness.Bridge.Handle(new Chord(BindingModifiers.RightAlt, KeyOf("1")));
-        harness.Bridge.Handle(new Chord(BindingModifiers.RightAlt, KeyOf("Escape")));
-        harness.Bridge.Handle(new Chord(BindingModifiers.RightAlt, KeyOf("Backspace")));
+        harness.Bridge.Handle(new Chord(BindingModifiers.RightAlt, KeyOf("Numpad2")));
 
-        Assert.Equal([1], harness.MenuKeys.Digits);
-        Assert.Equal(1, harness.MenuKeys.Escapes);
-        Assert.Equal(1, harness.MenuKeys.Backspaces);
+        Assert.Equal([1, 2], harness.MenuKeys.Digits);
     }
 
     private static BindingKey KeyOf(string label) =>

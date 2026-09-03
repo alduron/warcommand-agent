@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 
@@ -218,7 +218,7 @@ public class MenuStateMachineTests
     }
 
     [Fact]
-    public void The_home_list_is_requests_then_rows_then_more_in_that_order()
+    public void The_home_list_is_tools_then_requests_then_rows_in_that_order()
     {
         var menu = Machine();
         menu.Open(T0, Snapshot, new MenuContext { OccupiedSlots = [2, 5] });
@@ -228,10 +228,16 @@ public class MenuStateMachineTests
         // joined by a crossover edge, with MORE hanging off the end of it. One list, no modes.
         var paths = menu.Options.Select(o => o.Path).ToList();
         var firstRow = paths.FindIndex(p => p.StartsWith("board.", StringComparison.Ordinal));
-        var more = paths.IndexOf("home.more");
+        var tools = paths.IndexOf("home.more");
+        var artillery = paths.IndexOf("home.fire");
 
-        Assert.True(firstRow > 0, "requests come first");
-        Assert.Equal(paths.Count - 1, more);
+        // Everything that is not a row sits ABOVE the rows, so walking UP off a row reaches the
+        // request categories and then the tools, and walking DOWN reaches the rows. Neither
+        // direction crosses the board to get to the other group, which is what made it confusing.
+        Assert.True(artillery >= 0 && tools >= 0);
+        Assert.True(tools < firstRow, "tools sit above the rows");
+        Assert.True(artillery < firstRow, "artillery sits above the rows");
+        Assert.Equal(paths.Count - 1, paths.FindLastIndex(p => p.StartsWith("board.", StringComparison.Ordinal)));
         Assert.Equal(2, paths.Count(p => p.StartsWith("board.", StringComparison.Ordinal)));
         Assert.DoesNotContain(menu.Options, o => o.Label == "BOARD");
     }
@@ -255,16 +261,18 @@ public class MenuStateMachineTests
     }
 
     [Fact]
-    public void Back_at_the_root_returns_to_rest_rather_than_doing_nothing()
+    public void Back_at_the_root_returns_to_rest_and_never_closes()
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
 
-        // Back at the top level used to do nothing, which stranded anybody who opened the request
-        // menu and wanted the board: the only way across was to release the hold and start again.
-        // It is still BACK and not Escape; it leaves the level, it does not end the interaction.
-        Assert.IsType<MenuDiscarded>(menu.Back(T0));
-        Assert.Equal(MenuLevel.Closed, menu.Level);
+        // Back means one thing everywhere: leave the level you are on. At the top that is a return
+        // to rest, with the key still held and the board still on screen. It used to CLOSE, so the
+        // key that means "I did not mean that" also ended the interaction and the only way back in
+        // was to let go and start again.
+        Assert.IsType<MenuNavigated>(menu.Back(T0));
+        Assert.Equal(MenuLevel.Root, menu.Level);
+        Assert.Equal(MenuStateMachine.NoHighlight, menu.Highlight);
     }
 
     [Fact]
@@ -704,10 +712,17 @@ public class MenuStateMachineTests
     public void Copy_is_a_row_verb_now_that_the_chord_is_gone()
     {
         var menu = Machine();
-        menu.OpenOnBoard(T0, Slots(3));
+        menu.OpenOnBoard(T0, new MenuContext
+        {
+            OccupiedSlots = [3],
+            Slots = new Dictionary<int, SlotState> { [3] = new(RequestState.Open, false) },
+        });
         menu.Select(T0);
 
-        var action = Assert.IsType<MenuBoardAction>(menu.Digit(7, T0));
+        // Its digit is a position in what this row offers, not a fixed identity, so the test asks
+        // the menu where COPY landed rather than assuming a number that a hand may not reach.
+        var copy = menu.Options.Single(o => o.VerbId == "copy");
+        var action = Assert.IsType<MenuBoardAction>(menu.Digit(copy.Digit, T0));
 
         Assert.Equal("copy", action.VerbId);
         Assert.Equal(3, action.Slot);

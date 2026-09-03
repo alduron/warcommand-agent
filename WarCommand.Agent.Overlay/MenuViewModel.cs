@@ -155,8 +155,12 @@ public sealed record MenuViewModel
     /// Anything not listed here and not a board row is drawn above, so a new trailing entry that
     /// forgets to register lands in neither list and is invisible while still being selectable.
     /// </remarks>
-    private static bool IsTrailing(string path) =>
-        path is "home.fire" or "home.more";
+    /// <summary>
+    /// Nothing trails the board any more. ARTILLERY and TOOLS draw above it with the request
+    /// categories, so UP off a row walks into the menu and DOWN walks into the rows, and neither
+    /// direction ever crosses the board to reach the other group.
+    /// </summary>
+    private static bool IsTrailing(string path) => false;
 
     /// <summary>A board row, which draws itself on the surface rather than in the panel.</summary>
     private static bool IsRow(string path) =>
@@ -183,14 +187,11 @@ public sealed record MenuViewModel
             return all;
         }
 
-        // The request list is drawn only while the highlight is IN it. Drawing it always made DOWN
-        // from rest look exactly like UP: the board was highlighted underneath, but the categories
-        // filled the panel above it and the surface read as the request menu either way.
-        if (!menu.HighlightIsARequest)
-        {
-            return [];
-        }
-
+        // Always drawn, whether or not the highlight is in it. It used to vanish the moment the
+        // highlight moved onto a row, so walking DOWN made the block above you disappear and
+        // walking back UP made it reappear with the highlight already inside it: the panel moved
+        // under the finger and there was no way to see what was above you before going there.
+        //
         // A FILTER, not a prefix. Taking everything before the first row assumed an ordering, and
         // an entry that fell outside both this and the trailing list was drawn nowhere while still
         // being selectable: the highlight landed on something invisible.
@@ -321,9 +322,8 @@ public sealed record MenuViewModel
         MenuLevel.FireTarget => "TARGET",
         MenuLevel.GunPosition => "GUN POSITION",
         MenuLevel.Confirm => menu.SelectedTypeId is { } type ? type.ToUpperInvariant() : "CONFIRM",
-        MenuLevel.Board => "BOARD",
         MenuLevel.BoardAction => "SLOT  PICK A VERB",
-        MenuLevel.More => "MORE",
+        MenuLevel.More => "TOOLS",
         MenuLevel.Join => "JOIN CODE",
         MenuLevel.Help => "HELP",
         MenuLevel.Roles => "ROLES  A DIGIT TOGGLES ONE",

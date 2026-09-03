@@ -1,7 +1,7 @@
-﻿namespace WarCommand.Agent.Input.Bindings;
+namespace WarCommand.Agent.Input.Bindings;
 
 /// <summary>
-/// Every hotkey WarCommand holds. Five bindings: two hold keys, Escape, and two RightAlt chords.
+/// Every hotkey WarCommand holds: two hold keys and two RightAlt chords, plus navigation.
 /// Nothing outside this enum is bindable.
 /// </summary>
 /// <remarks>
@@ -25,9 +25,6 @@ public enum BindingAction
 
     /// <summary>Hold to work the overlay with the keyboard. Released, nothing is listening.</summary>
     Menu,
-
-    /// <summary>Discard a draft or close a panel. Never closes the overlay.</summary>
-    Escape,
 
     /// <summary>Cycle the board: full, dim, off. One key for what was a toggle and an opacity cycle.</summary>
     Board,
@@ -56,7 +53,6 @@ public static class BindingActions
     [
         BindingAction.Ptt,
         BindingAction.Menu,
-        BindingAction.Escape,
         BindingAction.Board,
         BindingAction.Panic,
         BindingAction.NavUp,
@@ -85,7 +81,6 @@ public static class BindingActions
     {
         BindingAction.Ptt => "Push to talk (hold)",
         BindingAction.Menu => "Overlay menu (hold)",
-        BindingAction.Escape => "Discard or close",
         BindingAction.Board => "Board: full, dim, off",
         BindingAction.Panic => "Panic",
         BindingAction.NavUp => "Menu: up",

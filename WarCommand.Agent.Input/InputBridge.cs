@@ -401,7 +401,7 @@ public sealed class InputBridge
         }
 
         // Keyed on the KEY, never the whole chord. The hold key may be a modifier, so while it is
-        // down every one of these arrives as RightAlt+digit, RightAlt+Escape, RightAlt+Backspace.
+        // down every one of these arrives as the hold key plus the digit.
         // Chord.TryDigit refuses outright once any modifier is set, which is correct for deciding
         // whether a BINDING is a bare digit and wrong for reading a key the menu is waiting on.
         if (chord.Key.TryDigit(out var digit))
@@ -410,18 +410,10 @@ public sealed class InputBridge
             return true;
         }
 
-        if (action == BindingAction.Escape || chord.Key == Chord.Bare("Escape").Key)
-        {
-            _menu.Escape();
-            return true;
-        }
-
-        if (chord.Key == Chord.Bare("Backspace").Key)
-        {
-            _menu.Backspace();
-            return true;
-        }
-
+        // Escape and Backspace are deliberately absent. Escape discarded and closed, which is what
+        // letting go of the hold key already does, so it bought nothing and took the game's own
+        // Escape key for as long as the menu was open. Backspace deleted one typed digit, which the
+        // back key does, and it is out of reach of a hand holding CapsLock anyway.
         return false;
     }
 

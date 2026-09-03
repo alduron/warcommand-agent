@@ -31,7 +31,10 @@ public enum MenuLevel
 {
     Closed,
 
-    /// <summary>The nine request categories, plus 0 BOARD.</summary>
+    /// <summary>
+    /// Everything at once: the request categories and TOOLS above the board, the board's own rows
+    /// below them. A digit here is a row; 0 is TOOLS.
+    /// </summary>
     Root,
 
     /// <summary>A compiled category or sub-category.</summary>
@@ -42,9 +45,6 @@ public enum MenuLevel
 
     /// <summary>Modifiers, and the only level a release commits from.</summary>
     Confirm,
-
-    /// <summary>0 BOARD. Hand authored: its entries are slots, and 0 for everything else.</summary>
-    Board,
 
     /// <summary>The verbs available against one selected row.</summary>
     BoardAction,
@@ -420,7 +420,11 @@ public sealed record MenuGunPositionSet(MapPoint Point) : MenuOutcome;
 /// <summary>What one board slot holds, for deciding which verbs it can honour.</summary>
 /// <param name="State">The row's state.</param>
 /// <param name="ClaimedByViewer">True when the viewer is the one holding it.</param>
-public readonly record struct SlotState(RequestState State, bool ClaimedByViewer);
+/// <param name="RequestedByViewer">True when the viewer is the one who asked for it.</param>
+public readonly record struct SlotState(
+    RequestState State,
+    bool ClaimedByViewer,
+    bool RequestedByViewer = false);
 
 public sealed record MenuContext
 {
@@ -534,15 +538,40 @@ public sealed class MenuStateMachine
     /// 2 stays empty where START was. Taking a job starts it, so the verb had nothing left to do,
     /// and a digit learned once stays learned rather than sliding up into a freed slot.
     /// </remarks>
-    private static readonly (int Digit, string VerbId, string Label)[] BoardVerbs =
+    /// <summary>
+    /// Every row verb, in the order they are offered. The digit is assigned at render, from the
+    /// position in the FILTERED list, so what a row can honour always lands on 1 upward.
+    /// </summary>
+    /// <remarks>
+    /// They used to carry fixed digits so a verb kept its number everywhere, which is the better
+    /// rule when every number is reachable. They are not: a hand holding CapsLock covers 1 to 5 on
+    /// the number row and nothing past it, so MUTE on 6 and COPY on 7 were dead keys. The lists are
+    /// filtered by row state and the states are disjoint, so ordering by what that state needs most
+    /// keeps every offer inside five and keeps it stable: on an open row 1 is always ACCEPT, on a
+    /// row you hold 1 is always DONE.
+    /// <para>
+    /// ADJUST is absent on purpose. It carries a direction and a distance that this surface has no
+    /// way to ask for, so offering it here would be a press that always refuses. It stays a voice
+    /// verb until the menu can collect a direction.
+    /// </para>
+    /// </remarks>
+    private static readonly (string VerbId, string Label)[] BoardVerbs =
     [
-        (1, "accept", "ACCEPT"),
-        (3, "done", "DONE"),
-        (4, "pass", "PASS"),
-        (5, "release", "RELEASE"),
-        (6, "mute", "MUTE"),
-        (7, "copy", "COPY"),
+        ("accept", "ACCEPT"),
+        ("done", "DONE"),
+        ("cancel", "CANCEL"),
+        ("rounds_away", "ROUNDS AWAY"),
+        ("release", "RELEASE"),
+        ("pass", "PASS"),
+        ("copy", "COPY"),
+        ("mute", "MUTE"),
     ];
+
+    /// <summary>
+    /// How many verbs a row may offer. Five, because that is how far a left hand reaches while its
+    /// pinky is holding the menu key open.
+    /// </summary>
+    private const int MaxRowVerbs = 5;
 
     /// <summary>
     /// The MORE page. Fixed digits, hand authored, and the only route to every panel now that the
@@ -698,11 +727,12 @@ public sealed class MenuStateMachine
         MoreEntries.ToDictionary(e => e.Id, e => e.Digit, StringComparer.Ordinal);
 
     /// <summary>
-    /// The row verbs as digit and label, for a screen that documents the keyboard rather than
-    /// running it. Read from the same table the menu dispatches on, so the two cannot drift.
+    /// Every row verb, in offer order, for a screen that documents the keyboard rather than running
+    /// it. Read from the same table the menu dispatches on, so the two cannot drift. There is no
+    /// digit here: a row's verbs are numbered from what that row can honour.
     /// </summary>
-    public static IReadOnlyList<(int Digit, string Label)> BoardVerbList { get; } =
-        [.. BoardVerbs.Select(v => (v.Digit, v.Label))];
+    public static IReadOnlyList<string> BoardVerbList { get; } =
+        [.. BoardVerbs.Select(v => v.Label)];
 
     /// <summary>The MORE page, same rule as <see cref="BoardVerbList"/>.</summary>
     public static IReadOnlyList<(int Digit, string Label)> MoreList { get; } =
@@ -899,9 +929,12 @@ public sealed class MenuStateMachine
     /// Opens with the board's first row highlighted. This is what DOWN does from rest: taking a
     /// job is the common case and it must not go through the request menu to get there.
     /// </summary>
-    public MenuOutcome OpenOnBoard(DateTimeOffset now, MenuContext? context = null)
+    public MenuOutcome OpenOnBoard(DateTimeOffset now, MenuContext? context = null, MapPoint? snapshot = null)
     {
-        var opened = Open(now, snapshot: null, context);
+        // The SAME snapshot the upward open carries. Passing null here meant the direction of your
+        // first keypress decided whether a request you built afterwards already had its coordinate:
+        // opening down then walking up asked you to type a grid that opening up had in hand.
+        var opened = Open(now, snapshot, context);
         if (opened is MenuDiscarded)
         {
             return opened;
@@ -1038,16 +1071,23 @@ public sealed class MenuStateMachine
     /// nothing, so the other surface is one press away without releasing the key.
     /// </summary>
     /// <remarks>
-    /// This is BACK, not Escape. Escape discards a draft and ends the interaction; back just
-    /// leaves the level you are on. At the root there is no level above, and doing nothing there
-    /// stranded anybody who opened the request menu and wanted the board: the only way across was
-    /// to let go of the hold key and start again.
+    /// Back means one thing everywhere: leave the level you are on. At the top level that is a
+    /// return to rest, with the key still held and the board still on screen, and it discards
+    /// nothing. It used to CLOSE the whole menu there, so the key that means "I did not mean that"
+    /// also ended the interaction, and the only way back in was to let go and start again.
+    /// <para>
+    /// While digits are being typed it deletes the last one. That is the same act, one level down:
+    /// take back the thing I just did. It is also why the Backspace key is gone; a hand holding
+    /// CapsLock cannot reach it.
+    /// </para>
     /// </remarks>
     public MenuOutcome Back(DateTimeOffset now)
     {
         if (Level is MenuLevel.Root)
         {
-            return Close("backed_out");
+            _lastInput = now;
+            Highlight = NoHighlight;
+            return new MenuNavigated(Level);
         }
 
         return Backspace(now);
@@ -1077,13 +1117,25 @@ public sealed class MenuStateMachine
         }
 
         _lastInput = now;
+        // 0 is TOOLS from anywhere with a list on it. It is never a slot and never a category, so
+        // it collides with nothing, and it means the artillery tool and the invite code are one
+        // press away from wherever you happen to be standing.
+        if (digit == ZeroDigit && Level is not (MenuLevel.Root or MenuLevel.More
+            or MenuLevel.Coordinate or MenuLevel.Join or MenuLevel.Confirm or MenuLevel.Roles))
+        {
+            return EnterMore();
+        }
+
         return Level switch
         {
+            // A digit at HOME is a request CATEGORY, and 0 is TOOLS. Rows carry the same numbers,
+            // but they are reached by walking down onto them and selecting, which is what the keys
+            // are for; the number on a row is its identity, the thing voice says and the eye finds,
+            // not a second keyboard route that would collide with this one.
             MenuLevel.Root => digit == ZeroDigit ? EnterMore() : Descend(_tree.Root, digit),
             MenuLevel.Branch => Descend(Selection!.Children, digit),
             MenuLevel.Coordinate => TypeCoordinateDigit(digit),
             MenuLevel.Confirm => ToggleModifier(digit),
-            MenuLevel.Board => SelectRow(digit),
             MenuLevel.BoardAction => RunBoardVerb(digit),
             MenuLevel.More => RunMore(digit),
             MenuLevel.Roles => ToggleRole(digit),
@@ -1142,7 +1194,7 @@ public sealed class MenuStateMachine
                 Level = MenuLevel.Root;
                 return new MenuNavigated(Level);
 
-            case MenuLevel.More or MenuLevel.Board:
+            case MenuLevel.More:
                 Level = MenuLevel.Root;
                 return new MenuNavigated(Level);
 
@@ -1247,7 +1299,6 @@ public sealed class MenuStateMachine
         MenuLevel.Root => RootEntries(),
         MenuLevel.Branch => Selection?.Children ?? [],
         MenuLevel.Confirm => ModifierEntries(),
-        MenuLevel.Board => BoardEntries(),
         MenuLevel.BoardAction => BoardActionEntries(),
         MenuLevel.More => MoreOptions(),
         MenuLevel.FireTool => FireToolEntries(),
@@ -1396,9 +1447,9 @@ public sealed class MenuStateMachine
             ("move", $"{keys.Up} {keys.Down}   MOVE THE HIGHLIGHT"),
             ("select", $"{keys.Select}     TAKE THE HIGHLIGHTED LINE"),
             ("back", $"{keys.Back}     BACK ONE LEVEL"),
-            ("digits", "1-9   JUMP STRAIGHT TO A ROW"),
-            ("more", "0     MORE"),
-            ("row", "ON A ROW: ACCEPT TAKES IT, DONE CLOSES IT"),
+            ("digits", "1-9   PICK BY NUMBER ON ANY LIST"),
+            ("tools", "0     TOOLS, FROM ANYWHERE"),
+            ("board", $"{keys.Down} ONTO A ROW, THEN {keys.Select} FOR ITS VERBS"),
             ("claim", "ACCEPTING STARTS IT. THERE IS NO SECOND STEP"),
             ("coord", $"ON A COORDINATE: POINT AT THE MAP, {keys.Select} READS IT"),
             ("release", $"LET GO OF {keys.Menu} TO CLOSE"),
@@ -1440,7 +1491,17 @@ public sealed class MenuStateMachine
     /// </remarks>
     private List<MenuEntry> RootEntries()
     {
-        var entries = new List<MenuEntry>(_tree.Root);
+        // TOOLS first, then the request categories, then the board's rows. On screen the first two
+        // groups draw ABOVE the board, so walking UP from a row reaches the categories and then
+        // TOOLS, and walking DOWN reaches the rows. Up is asking for something, down is the work in
+        // front of you, and neither direction can wander into the other.
+        var entries = new List<MenuEntry>
+        {
+            new() { Digit = NoDigit, Path = "home.fire", Label = "ARTILLERY" },
+            new() { Digit = ZeroDigit, Path = "home.more", Label = "TOOLS" },
+        };
+
+        entries.AddRange(_tree.Root);
 
         entries.AddRange(_context.OccupiedSlots
             .Where(s => s is >= 1 and <= 9)
@@ -1452,19 +1513,17 @@ public sealed class MenuStateMachine
                 Label = s.ToString(CultureInfo.InvariantCulture),
             }));
 
-        // Below MORE, and its own entry rather than a page inside one: ranging a gun is something
-        // you do over and over while the fight moves, not a setting you open once a session.
-        entries.Add(new MenuEntry { Digit = NoDigit, Path = "home.fire", Label = "ARTILLERY" });
-        entries.Add(new MenuEntry { Digit = ZeroDigit, Path = "home.more", Label = "MORE" });
         return entries;
     }
 
     /// <summary>
-    /// Where DOWN from rest lands: the first board row, or MORE when the board is empty.
+    /// Where DOWN from rest lands: the first board row, or the first request category when there
+    /// are no rows to go down to.
     /// </summary>
     /// <remarks>
-    /// Never a request. Down is the board's direction, and landing on a request category because
-    /// no rows exist makes down and up do the same thing on an empty board.
+    /// It used to fall back to TOOLS, which is at the far end of the list, so on an empty board one
+    /// press of DOWN landed on the settings page and the next press of UP appeared to teleport into
+    /// the request tree.
     /// </remarks>
     private int FirstBoardIndex()
     {
@@ -1480,7 +1539,7 @@ public sealed class MenuStateMachine
 
         for (var i = 0; i < entries.Count; i++)
         {
-            if (entries[i].Path == "home.more")
+            if (!entries[i].Path.StartsWith("home.", StringComparison.Ordinal))
             {
                 return i;
             }
@@ -1529,43 +1588,28 @@ public sealed class MenuStateMachine
         })];
     }
 
-    private List<MenuEntry> BoardEntries()
-    {
-        var entries = _context.OccupiedSlots
-            .Where(s => s is >= 1 and <= 9)
-            .OrderBy(s => s)
-            .Select(s => new MenuEntry
-            {
-                Digit = s,
-                Path = $"board.{s}",
-                Label = s.ToString(CultureInfo.InvariantCulture),
-            })
-            .ToList();
-
-        // 0 is never a slot, so it is free at every board level for the one thing that is not a
-        // row. This is where the eight chords went.
-        entries.Add(new MenuEntry { Digit = ZeroDigit, Path = "board.more", Label = "MORE" });
-        return entries;
-    }
-
     /// <summary>
-    /// The verbs THIS row can honour, at fixed digits, with the rest absent.
+    /// The verbs THIS row can honour, numbered from 1, with the rest absent.
     /// </summary>
     /// <remarks>
     /// Every verb used to be offered on every row: START, DONE and RELEASE on an open row nobody
     /// had claimed, and ACCEPT on a row already yours. The server refuses all of those, so the
     /// press did nothing and the surface reported nothing, which is the one thing this product
-    /// refuses to do anywhere else. Digits stay fixed, so a verb keeps its number wherever it
-    /// appears.
+    /// refuses to do anywhere else.
+    /// <para>
+    /// Numbered from the filtered list rather than fixed, so every offer lands within a left hand's
+    /// reach. See <see cref="BoardVerbs"/>.
+    /// </para>
     /// </remarks>
     private List<MenuEntry> BoardActionEntries() =>
     [
         .. BoardVerbs
             .Where(v => _catalog.CommandVerb(v.VerbId) is not null)
             .Where(v => VerbApplies(v.VerbId))
-            .Select(v => new MenuEntry
+            .Take(MaxRowVerbs)
+            .Select((v, i) => new MenuEntry
             {
-                Digit = v.Digit,
+                Digit = i + 1,
                 Path = $"board.action.{v.VerbId}",
                 Label = v.Label,
                 VerbId = v.VerbId,
@@ -1582,21 +1626,28 @@ public sealed class MenuStateMachine
         }
 
         var mine = slot.ClaimedByViewer;
+        var asked = slot.RequestedByViewer;
         var open = slot.State == RequestState.Open;
         var working = slot.State is RequestState.Claimed or RequestState.InProgress;
 
         return verbId switch
         {
-            // Only an unclaimed row can be taken.
-            "accept" => open,
+            // Only an unclaimed row somebody else raised can be taken.
+            "accept" => open && !asked,
 
-            // Only the person holding it can finish it or give it back.
+            // Only the person holding it can finish it, move it along, or give it back.
             "done" => mine && working,
             "release" => mine && working,
+            "rounds_away" => mine && working,
 
-            // Hiding a row you are not working, and hiding its requester, are always available.
-            "pass" => open && !mine,
-            "mute" => true,
+            // Only the person who asked for it can call it off, and doing so takes it off whoever
+            // accepted it so they can go and do something else. Parsed from voice and offered
+            // nowhere, so a requester had no way to withdraw their own request at all.
+            "cancel" => asked && (open || working),
+
+            // Hiding a row you are not working, and hiding its requester, are for other people's.
+            "pass" => open && !mine && !asked,
+            "mute" => !asked && !mine,
 
             // The coordinate is worth copying whatever state the row is in.
             "copy" => true,
@@ -1731,28 +1782,17 @@ public sealed class MenuStateMachine
         return new MenuNavigated(Level);
     }
 
-    private MenuNavigated EnterBoard()
-    {
-        Level = MenuLevel.Board;
-        return new MenuNavigated(Level);
-    }
-
+    /// <summary>Opens the verbs for one row. The navigation path reaches this by selecting it.</summary>
     private MenuOutcome SelectRow(int digit)
     {
-        if (digit == ZeroDigit)
+        if (!_context.OccupiedSlots.Contains(digit))
         {
-            Level = MenuLevel.More;
-            return new MenuNavigated(Level);
+            return MenuOutcome.None;
         }
 
-        if (_context.OccupiedSlots.Contains(digit))
-        {
-            _selectedSlot = digit;
-            Level = MenuLevel.BoardAction;
-            return new MenuNavigated(Level);
-        }
-
-        return MenuOutcome.None;
+        _selectedSlot = digit;
+        Level = MenuLevel.BoardAction;
+        return new MenuNavigated(Level);
     }
 
     /// <summary>A role toggled from the overlay. The server owns the result; this only asks.</summary>
@@ -1833,15 +1873,17 @@ public sealed class MenuStateMachine
 
     private MenuOutcome RunBoardVerb(int digit)
     {
-        var verb = Array.Find(BoardVerbs, v => v.Digit == digit);
-        if (verb.VerbId is null || _catalog.CommandVerb(verb.VerbId) is null || _selectedSlot == 0)
+        // Off the entries this row actually offers, never off the whole table: the digit is a
+        // position in the filtered list, so 1 is whatever this row's first verb is.
+        var entry = BoardActionEntries().Find(e => e.Digit == digit);
+        if (entry?.VerbId is not { } verbId || _selectedSlot == 0)
         {
             return MenuOutcome.None;
         }
 
         var slot = _selectedSlot;
         Reset();
-        return new MenuBoardAction(verb.VerbId, slot);
+        return new MenuBoardAction(verbId, slot);
     }
 
     private MenuLevel PopToBranch()

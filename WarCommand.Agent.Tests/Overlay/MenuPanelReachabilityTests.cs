@@ -31,26 +31,33 @@ public sealed class MenuPanelReachabilityTests
     }
 
     [Fact]
-    public void Down_from_rest_shows_the_board_and_not_the_request_list()
+    public void Down_from_rest_highlights_a_row_and_leaves_the_menu_above_it_on_screen()
     {
         var menu = Machine();
         menu.OpenOnBoard(T0, new MenuContext { OccupiedSlots = [1, 2] });
 
-        // The request categories are drawn only while the highlight is in them. Drawing them always
-        // made DOWN look exactly like UP: the row was highlighted underneath, but the panel above
-        // was full of request categories and the surface read as the request menu either way.
-        Assert.Empty(MenuViewModel.From(menu).Options);
+        // The highlight is on the row, which is what DOWN means, and the menu above stays drawn.
+        // It used to vanish the moment the highlight moved onto a row, so walking down made the
+        // block above you disappear and walking back up made it reappear with the highlight
+        // already inside it. There was no way to see what was above before going there.
         Assert.Equal(1, menu.HighlightedSlot);
+
+        var view = MenuViewModel.From(menu);
+        Assert.NotEmpty(view.Options);
+        Assert.DoesNotContain(view.Options, o => o.IsHighlighted);
     }
 
     [Fact]
-    public void Down_from_rest_on_an_empty_board_lands_on_more_not_a_request()
+    public void Down_from_rest_on_an_empty_board_lands_on_a_request_not_on_tools()
     {
         var menu = Machine();
         menu.OpenOnBoard(T0, new MenuContext());
 
-        Assert.False(menu.HighlightIsARequest);
-        Assert.Empty(MenuViewModel.From(menu).Options);
+        // With no rows there is nothing below to go down to. It used to fall back to TOOLS, which
+        // is at the far end of the list, so one press of DOWN landed on the settings page and the
+        // next press of UP appeared to teleport into the request tree.
+        Assert.True(menu.HighlightIsARequest);
+        Assert.NotEqual("home.more", menu.Options[menu.Highlight].Path);
     }
 
     [Fact]
@@ -64,26 +71,28 @@ public sealed class MenuPanelReachabilityTests
     }
 
     [Fact]
-    public void More_is_drawn_below_the_rows_never_above_them()
+    public void Tools_is_drawn_above_the_rows_with_everything_else_that_is_not_a_row()
     {
         var menu = Machine();
         menu.Open(T0, context: new MenuContext { OccupiedSlots = [1] });
 
         var view = MenuViewModel.From(menu);
 
-        // Above the board are requests only. MORE sits under the rows because that is where it is
-        // in the list, and drawing it above made it read as a request category.
-        Assert.DoesNotContain(view.Options, o => o.Label == "MORE");
-        Assert.Contains(view.Trailing, o => o.Label == "MORE");
+        // Nothing trails the board. TOOLS and ARTILLERY used to draw below it while the request
+        // categories drew above, so walking UP from the bottom crossed the whole board to reach
+        // the requests and read as a teleport.
+        Assert.Contains(view.Options, o => o.Label == "TOOLS");
+        Assert.Contains(view.Options, o => o.Label == "ARTILLERY");
+        Assert.Empty(view.Trailing);
     }
 
     [Fact]
-    public void An_empty_board_still_offers_more()
+    public void An_empty_board_still_offers_tools()
     {
         var menu = Machine();
         menu.Open(T0, context: new MenuContext());
 
-        Assert.Contains(MenuViewModel.From(menu).Trailing, o => o.Label == "MORE");
+        Assert.Contains(MenuViewModel.From(menu).Options, o => o.Label == "TOOLS");
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -136,13 +136,17 @@ public partial class AgentWindow : Window
     {
         var menu = _bindings[BindingAction.Menu];
         var ptt = _bindings[BindingAction.Ptt];
+        var up = _bindings[BindingAction.NavUp];
+        var down = _bindings[BindingAction.NavDown];
+        var select = _bindings[BindingAction.NavSelect];
+        var back = _bindings[BindingAction.NavBack];
         MenuOpenLine.Text = menu.IsBound
-            ? $"Hold {menu.Label} and press the digits below. Release and nothing is listening. Hold {(ptt.IsBound ? ptt.Label : "the push to talk key")} instead to speak."
+            ? $"Hold {menu.Label}. {up.Label} and {down.Label} move, {select.Label} takes the highlighted line, {back.Label} goes back. Release and nothing is listening. Hold {(ptt.IsBound ? ptt.Label : "the push to talk key")} instead to speak."
             : "No overlay menu key is bound. Click its chord above and press any key.";
 
-        RowVerbs.ItemsSource = MenuStateMachine.BoardVerbList
-            .Select(v => $"{v.Digit.ToString(CultureInfo.InvariantCulture)}  {v.Label}")
-            .ToList();
+        // No digits here. A row offers only the verbs it can honour and numbers them from one, so
+        // the number beside DONE depends on the row you are standing on.
+        RowVerbs.ItemsSource = MenuStateMachine.BoardVerbList.ToList();
 
         MorePages.ItemsSource = MenuStateMachine.MoreList
             .Select(e => $"{e.Digit.ToString(CultureInfo.InvariantCulture)}  {e.Label}")

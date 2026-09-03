@@ -148,6 +148,80 @@ public sealed class AWholeSessionTests
     }
 
     [Fact]
+    public void Up_is_the_menu_and_down_is_the_board_and_neither_crosses_the_other()
+    {
+        var session = new Session();
+        session.Observer.OnRequestSubmitted(Row("MTR-1", Mate));
+        session.Observer.OnRequestSubmitted(Row("MED-2", Mate));
+
+        var menu = session.Machine;
+        menu.OpenOnBoard(T0, session.ContextNow());
+
+        // DOWN from rest is the board. Walking down stays on rows until they run out.
+        Assert.NotNull(menu.HighlightedSlot);
+        var firstRow = menu.Highlight;
+        menu.Scroll(1, T0);
+        Assert.NotNull(menu.HighlightedSlot);
+
+        // UP off the top row is the menu, and it is the request categories first, never the tools.
+        menu.Scroll(-1, T0);
+        menu.Scroll(-1, T0);
+        Assert.True(menu.HighlightIsARequest, "up off a row must reach the requests");
+        Assert.NotEqual("home.more", menu.Options[menu.Highlight].Path);
+        Assert.True(menu.Highlight < firstRow, "the menu is above the board, not below it");
+    }
+
+    [Fact]
+    public void Tools_is_one_press_from_anywhere_and_back_never_closes()
+    {
+        var session = new Session();
+        session.Observer.OnRequestSubmitted(Row("MTR-1", Mate));
+
+        var menu = session.Machine;
+        menu.OpenOnBoard(T0, session.ContextNow());
+
+        // Into a request category, three levels from home.
+        while (!menu.HighlightIsARequest)
+        {
+            menu.Scroll(-1, T0);
+        }
+
+        menu.Select(T0);
+        Assert.Equal(MenuLevel.Branch, menu.Level);
+
+        // 0 reaches the tools from there without walking back out.
+        menu.Digit(0, T0);
+        Assert.Equal(MenuLevel.More, menu.Level);
+
+        // And back climbs out to rest rather than ending the interaction. It used to CLOSE at the
+        // top, so the key meaning "I did not mean that" also dropped you out of the menu entirely.
+        menu.Back(T0);
+        Assert.Equal(MenuLevel.Root, menu.Level);
+        menu.Back(T0);
+        Assert.Equal(MenuLevel.Root, menu.Level);
+        Assert.True(menu.IsOpen, "back must never close the menu");
+    }
+
+    [Fact]
+    public void Your_own_request_offers_cancel_and_never_offers_you_your_own_job()
+    {
+        var session = new Session();
+        session.Observer.OnRequestSubmitted(Row("MED-9", Viewer));
+        session.Observer.Render();
+
+        var slot = session.Board.Rows.Concat(session.Board.Yours).Single().Slot;
+        Assert.NotNull(slot);
+
+        var verbs = session.VerbsOn(slot.Value);
+
+        // Cancel parsed from voice and was offered nowhere, so a requester had no way to withdraw
+        // their own request at all. Accepting your own is not a thing either.
+        Assert.Contains("cancel", verbs);
+        Assert.DoesNotContain("accept", verbs);
+        Assert.DoesNotContain("pass", verbs);
+    }
+
+    [Fact]
     public void A_status_word_never_outlives_what_it_describes()
     {
         var session = new Session();
