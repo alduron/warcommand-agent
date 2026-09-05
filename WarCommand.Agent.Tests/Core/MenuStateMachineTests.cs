@@ -218,28 +218,20 @@ public class MenuStateMachineTests
     }
 
     [Fact]
-    public void The_home_list_is_tools_then_requests_then_rows_in_that_order()
+    public void The_request_list_holds_requests_and_nothing_else()
     {
         var menu = Machine();
         menu.Open(T0, Snapshot, new MenuContext { OccupiedSlots = [2, 5] });
 
-        // BOARD used to be an entry here, nesting the board menu inside the request menu: taking a
-        // row meant REQUEST, then BOARD, then a slot, then a verb. Then it became a separate level
-        // joined by a crossover edge, with MORE hanging off the end of it. One list, no modes.
+        // Three surfaces, one key each. One merged list put the rows and the tools on the request
+        // menu, so DOWN into the board and then UP walked back into the requests with both on
+        // screen, and TOOLS read like something you could ask a squadmate for.
         var paths = menu.Options.Select(o => o.Path).ToList();
-        var firstRow = paths.FindIndex(p => p.StartsWith("board.", StringComparison.Ordinal));
-        var tools = paths.IndexOf("home.more");
-        var artillery = paths.IndexOf("home.fire");
 
-        // Everything that is not a row sits ABOVE the rows, so walking UP off a row reaches the
-        // request categories and then the tools, and walking DOWN reaches the rows. Neither
-        // direction crosses the board to get to the other group, which is what made it confusing.
-        Assert.True(artillery >= 0 && tools >= 0);
-        Assert.True(tools < firstRow, "tools sit above the rows");
-        Assert.True(artillery < firstRow, "artillery sits above the rows");
-        Assert.Equal(paths.Count - 1, paths.FindLastIndex(p => p.StartsWith("board.", StringComparison.Ordinal)));
-        Assert.Equal(2, paths.Count(p => p.StartsWith("board.", StringComparison.Ordinal)));
-        Assert.DoesNotContain(menu.Options, o => o.Label == "BOARD");
+        Assert.DoesNotContain(paths, p => p.StartsWith("board.", StringComparison.Ordinal));
+        Assert.DoesNotContain(paths, p => p.StartsWith("home.", StringComparison.Ordinal));
+        Assert.DoesNotContain(menu.Options, o => o.Label is "BOARD" or "TOOLS" or "ARTILLERY");
+        Assert.NotEmpty(paths);
     }
 
     [Fact]
@@ -248,9 +240,9 @@ public class MenuStateMachineTests
         var menu = Machine();
         menu.OpenOnBoard(T0, new MenuContext { OccupiedSlots = [2, 5] });
 
-        // The board is not a level any more, it is a stretch of the home list, so opening onto it
-        // is a highlight position rather than a mode.
-        Assert.Equal(MenuLevel.Root, menu.Level);
+        // A level of its own. It was a stretch of the home list, so UP off the first row walked
+        // straight into the request categories and both surfaces were on screen at once.
+        Assert.Equal(MenuLevel.Board, menu.Level);
         Assert.Equal(2, menu.HighlightedSlot);
 
         // Select takes that row straight to its verbs. No slot digit, no BOARD detour, and the
@@ -261,18 +253,25 @@ public class MenuStateMachineTests
     }
 
     [Fact]
-    public void Back_at_the_root_returns_to_rest_and_never_closes()
+    public void Back_at_the_top_of_a_surface_leaves_it()
     {
-        var menu = Machine();
-        menu.Open(T0, Snapshot);
+        // Back means one thing everywhere: leave the level you are on. At the top of a surface that
+        // is leaving the surface, which lands back at held rest with the hold still armed and the
+        // other two surfaces one press away.
+        foreach (var open in new Func<MenuStateMachine, MenuOutcome>[]
+        {
+            m => m.Open(T0, Snapshot, Slots(2)),
+            m => m.OpenOnBoard(T0, Slots(2), Snapshot),
+            m => m.OpenTools(T0, Slots(2), Snapshot),
+        })
+        {
+            var menu = Machine();
+            open(menu);
+            Assert.True(menu.IsOpen);
 
-        // Back means one thing everywhere: leave the level you are on. At the top that is a return
-        // to rest, with the key still held and the board still on screen. It used to CLOSE, so the
-        // key that means "I did not mean that" also ended the interaction and the only way back in
-        // was to let go and start again.
-        Assert.IsType<MenuNavigated>(menu.Back(T0));
-        Assert.Equal(MenuLevel.Root, menu.Level);
-        Assert.Equal(MenuStateMachine.NoHighlight, menu.Highlight);
+            Assert.IsType<MenuDiscarded>(menu.Back(T0));
+            Assert.False(menu.IsOpen);
+        }
     }
 
     [Fact]
@@ -285,7 +284,7 @@ public class MenuStateMachineTests
 
         menu.Back(T0);
 
-        Assert.Equal(MenuLevel.Root, menu.Level);
+        Assert.Equal(MenuLevel.Board, menu.Level);
         Assert.True(menu.IsOpen);
     }
 
@@ -388,34 +387,27 @@ public class MenuStateMachineTests
     }
 
     [Fact]
-    public void The_artillery_tool_keeps_both_ends_and_never_closes_after_a_read()
+    public void The_range_tool_keeps_both_ends_and_never_leaves_the_page()
     {
         var menu = Machine();
-        menu.Open(T0, snapshot: null);
+        menu.OpenTools(T0, new MenuContext());
 
-        // Walk to ARTILLERY on the home list and open it.
-        while (menu.Options[menu.Highlight].Path != "home.fire")
-        {
-            menu.Scroll(1, T0);
-        }
+        menu.Digit(menu.Options.Single(o => o.VerbId == "range").Digit, T0);
+        Assert.Equal(MenuLevel.RangeTool, menu.Level);
 
-        menu.Select(T0);
-        Assert.Equal(MenuLevel.FireTool, menu.Level);
-
-        // Set the gun. GUN HERE used to be a one-shot buried in MORE that closed the menu, so
-        // re-ranging meant walking the whole tree again.
-        menu.Select(T0);
-        Assert.Equal(MenuLevel.GunPosition, menu.Level);
+        // Pressing an end reads the map where it stands. Each end used to be a level of its own, so
+        // setting both meant four presses through two pages that drew nothing but a prompt.
+        Assert.IsType<MenuCoordinateReadRequested>(menu.Select(T0));
+        Assert.Equal(MenuLevel.RangeTool, menu.Level);
         menu.AcceptReadCoordinate(new MapPoint(10m, 10m, "map_readout", null, null), T0);
-        Assert.Equal(MenuLevel.FireTool, menu.Level);
+        Assert.Equal(MenuLevel.RangeTool, menu.Level);
         Assert.Equal(10m, menu.ToolGun?.X);
 
         // Then the target, from the same page, without leaving it.
         menu.Scroll(1, T0);
-        menu.Select(T0);
-        Assert.Equal(MenuLevel.FireTarget, menu.Level);
+        Assert.IsType<MenuCoordinateReadRequested>(menu.Select(T0));
         menu.AcceptReadCoordinate(new MapPoint(20m, 20m, "map_readout", null, null), T0);
-        Assert.Equal(MenuLevel.FireTool, menu.Level);
+        Assert.Equal(MenuLevel.RangeTool, menu.Level);
         Assert.Equal(20m, menu.ToolTarget?.X);
 
         // And the target can be re-read over and over, which is the whole point of the tool.
@@ -445,17 +437,21 @@ public class MenuStateMachineTests
     }
 
     [Fact]
-    public void Up_off_the_top_of_the_board_reaches_the_requests_above_it()
+    public void The_board_never_walks_into_the_requests()
     {
         var menu = Machine();
-        menu.OpenOnBoard(T0, new MenuContext { OccupiedSlots = [3] });
+        menu.OpenOnBoard(T0, new MenuContext { OccupiedSlots = [3, 7] });
         Assert.Equal(3, menu.HighlightedSlot);
 
-        // No crossover, no level change: the request above this row is simply the previous entry.
+        // Off either end it wraps inside the board. It used to rise into the request categories, so
+        // one press of DOWN and one of UP put the board AND the request menu on screen together.
         menu.Scroll(-1, T0);
+        Assert.Equal(MenuLevel.Board, menu.Level);
+        Assert.Equal(7, menu.HighlightedSlot);
 
-        Assert.Equal(MenuLevel.Root, menu.Level);
-        Assert.Null(menu.HighlightedSlot);
+        menu.Scroll(1, T0);
+        Assert.Equal(MenuLevel.Board, menu.Level);
+        Assert.Equal(3, menu.HighlightedSlot);
     }
 
     [Fact]
@@ -706,38 +702,27 @@ public class MenuStateMachineTests
         var menu = Machine();
         menu.Open(T0, Snapshot, new MenuContext { OccupiedSlots = [1] });
 
-        // Not on the TOOLS page. There were two entry points to the same value, and backing out of
-        // a gun read went to whichever one the code assumed rather than the one you used.
+        // One entry point. There were two routes to the same value, and backing out of a gun read
+        // went to whichever one the code assumed rather than the one you used.
         menu.Digit(0, T0);
         Assert.DoesNotContain(menu.Options, o => o.VerbId == "gun");
 
-        // The one route is ARTILLERY on the home list, and backing out of it returns HOME.
-        menu.Back(T0);
-        while (menu.Options[menu.Highlight].Path != "home.fire")
-        {
-            menu.Scroll(-1, T0);
-        }
-
-        menu.Select(T0);
-        Assert.Equal(MenuLevel.FireTool, menu.Level);
+        // ARTILLERY is a tool, so it lives on TOOLS, and backing out of it returns there.
+        var range = menu.Options.Single(o => o.VerbId == "range");
+        menu.Digit(range.Digit, T0);
+        Assert.Equal(MenuLevel.RangeTool, menu.Level);
 
         menu.Back(T0);
-        Assert.Equal(MenuLevel.Root, menu.Level);
+        Assert.Equal(MenuLevel.More, menu.Level);
     }
 
     [Fact]
     public void Reading_a_gun_feeds_the_row_brackets_as_well_as_the_tool()
     {
         var menu = Machine();
-        menu.OpenOnBoard(T0, new MenuContext());
-        while (menu.Options[menu.Highlight].Path != "home.fire")
-        {
-            menu.Scroll(-1, T0);
-        }
-
-        menu.Select(T0);
-        menu.Select(T0);
-        Assert.Equal(MenuLevel.GunPosition, menu.Level);
+        menu.OpenTools(T0, new MenuContext());
+        menu.Digit(menu.Options.Single(o => o.VerbId == "range").Digit, T0);
+        Assert.IsType<MenuCoordinateReadRequested>(menu.Select(T0));
 
         // One read, both consumers: the ARTILLERY section ranges from it and every mortar row
         // draws its bracket from it.
@@ -746,7 +731,7 @@ public class MenuStateMachineTests
         Assert.Equal(Snapshot, menu.ToolGun);
 
         // And clearing says so, so the rows stop ranging from a gun the tool has forgotten.
-        while (menu.Options[menu.Highlight].Path != "fire.clear")
+        while (menu.Options[menu.Highlight].Path != "range.clear")
         {
             menu.Scroll(1, T0);
         }
@@ -818,8 +803,9 @@ public class MenuStateMachineTests
         menu.Backspace(T0);
         Assert.Equal(MenuLevel.More, menu.Level);
 
+        // TOOLS is a surface, not a page above the requests, so backing off it leaves the menu.
         menu.Backspace(T0);
-        Assert.Equal(MenuLevel.Root, menu.Level);
+        Assert.False(menu.IsOpen);
     }
 
     [Fact]

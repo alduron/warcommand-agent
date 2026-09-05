@@ -161,12 +161,14 @@ public class SpeechIsolationTests
     }
 
     [Fact]
-    public void The_engine_contract_is_the_one_method_the_spec_writes()
+    public void The_engine_contract_is_the_two_methods_the_spec_writes()
     {
+        // Two, not one: a whole buffer and a streamed session. The session exists because a panel
+        // only lives while the hold key is down, so decoding on release could never reach one.
         var methods = typeof(ISpeechEngine).GetMethods();
-        var recognize = Assert.Single(methods);
+        Assert.Equal(2, methods.Length);
 
-        Assert.Equal("RecognizeAsync", recognize.Name);
+        var recognize = Assert.Single(methods, m => m.Name == "RecognizeAsync");
         Assert.Equal(typeof(Task<WarCommand.Agent.Core.Grammar.Utterance>), recognize.ReturnType);
         Assert.Equal(
             new[]
@@ -176,6 +178,32 @@ public class SpeechIsolationTests
                 typeof(CancellationToken),
             },
             recognize.GetParameters().Select(p => p.ParameterType));
+
+        var session = Assert.Single(methods, m => m.Name == "BeginSession");
+        Assert.Equal(typeof(ISpeechSession), session.ReturnType);
+        Assert.Equal(
+            new[] { typeof(WarCommand.Agent.Core.Grammar.Grammar) },
+            session.GetParameters().Select(p => p.ParameterType));
+    }
+
+    /// <summary>
+    /// The session hands audio in and utterances out, and holds no path, stream or serializer, so
+    /// there is no member through which a chunk could reach a disk even by accident.
+    /// </summary>
+    [Fact]
+    public void The_session_contract_carries_audio_one_way_only()
+    {
+        var methods = typeof(ISpeechSession).GetMethods().Where(m => m.Name != "Dispose").ToList();
+
+        var feed = Assert.Single(methods, m => m.Name == "Feed");
+        Assert.Equal(typeof(WarCommand.Agent.Core.Grammar.Utterance), feed.ReturnType);
+        Assert.Equal(
+            new[] { typeof(ReadOnlySpan<short>) },
+            feed.GetParameters().Select(p => p.ParameterType));
+
+        var final = Assert.Single(methods, m => m.Name == "Final");
+        Assert.Equal(typeof(WarCommand.Agent.Core.Grammar.Utterance), final.ReturnType);
+        Assert.Empty(final.GetParameters());
     }
 
     private static List<string> WithMetadata(Func<MetadataReader, List<string>> read)

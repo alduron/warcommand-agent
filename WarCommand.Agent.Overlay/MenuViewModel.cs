@@ -121,7 +121,7 @@ public sealed record MenuViewModel
     {
         if (menu.ToolGun is null)
         {
-            return "SET YOUR GUN FIRST";
+            return "SET THE ORIGIN";
         }
 
         if (menu.ToolTarget is null)
@@ -129,9 +129,37 @@ public sealed record MenuViewModel
             return "NOW SET THE TARGET";
         }
 
-        // The numbers themselves live in the ARTILLERY section, which stays on screen with the key
-        // released. This line only says the section below has them.
-        return "BRACKET BELOW";
+        // The range itself, in the mode it is being judged in, and whether that mode can reach it.
+        // This line used to read BRACKET BELOW, which named a section rather than answering the
+        // question the page was opened to answer.
+        var mode = menu.RangeMode;
+        if (Metres(menu.ToolGun, menu.ToolTarget) is not { } range)
+        {
+            return "MAP UNKNOWN";
+        }
+
+        var text = FormattableString.Invariant($"{range:0} M");
+        return mode.IsOutOfRange(range)
+            ? FormattableString.Invariant($"{text}   OUT OF REACH")
+            : text;
+    }
+
+    /// <summary>
+    /// The straight-line range in metres, or null while the map scale is unknown.
+    /// </summary>
+    /// <remarks>
+    /// The scale is a served fact, never a number in this assembly, so an unmeasured map answers
+    /// with nothing rather than with a plausible wrong distance.
+    /// </remarks>
+    public static decimal? Metres(MapPoint from, MapPoint to)
+    {
+        var ballistics = BundledContracts.Ballistics().Current;
+        var scale = FireSolutionCalculator.UnitsToMeters(
+            BundledContracts.GameProfile().Current,
+            ballistics,
+            null);
+
+        return scale is { } units ? FireSolutionCalculator.RangeUnits(from, to) * units : null;
     }
 
     /// <summary>
@@ -145,7 +173,10 @@ public sealed record MenuViewModel
     {
         ArgumentNullException.ThrowIfNull(menu);
 
-        return ArtilleryViewModel.For(menu.ToolGun, menu.ToolTarget, (gun, target) =>
+        return ArtilleryViewModel.For(
+            menu.ToolGun,
+            menu.ToolTarget,
+            (gun, target) =>
         {
             var ballistics = BundledContracts.Ballistics().Current;
             var weapon = ballistics.Weapons.Count > 0 ? ballistics.Weapons[0] : null;
@@ -164,7 +195,9 @@ public sealed record MenuViewModel
                 DateTimeOffset.UtcNow);
 
             return BoardRowViewModel.BracketParts(solution);
-        });
+        },
+            menu.RangeMode,
+            (gun, target) => Metres(gun, target) ?? 0m);
     }
 
     /// <summary>
@@ -200,6 +233,13 @@ public sealed record MenuViewModel
     /// </summary>
     private static List<MenuOptionViewModel> LeadingFor(MenuStateMachine menu)
     {
+        // The board surface draws NOTHING in the panel: every entry on it is a row, and the real
+        // rows on the surface carry their own highlight. Drawing them here draws the board twice.
+        if (menu.Level == MenuLevel.Board)
+        {
+            return [];
+        }
+
         var all = Project(menu);
         if (menu.Level != MenuLevel.Root)
         {
@@ -287,7 +327,7 @@ public sealed record MenuViewModel
     private static string? TypedFor(MenuStateMachine menu)
     {
         // The artillery tool shows the BRACKET between its two ends, recomputed on every read.
-        if (menu.Level == MenuLevel.FireTool)
+        if (menu.Level == MenuLevel.RangeTool)
         {
             return Bracket(menu);
         }
@@ -334,12 +374,11 @@ public sealed record MenuViewModel
 
     private static string TitleFor(MenuStateMachine menu) => menu.Level switch
     {
-        MenuLevel.Root => "WARCOMMAND",
+        MenuLevel.Root => "REQUEST",
+        MenuLevel.Board => "BOARD",
         MenuLevel.Branch => menu.Selection?.Label.ToUpperInvariant() ?? "REQUEST",
         MenuLevel.Coordinate => menu.CurrentPointLabel,
-        MenuLevel.FireTool => "ARTILLERY",
-        MenuLevel.FireTarget => "TARGET",
-        MenuLevel.GunPosition => "GUN POSITION",
+        MenuLevel.RangeTool => $"RANGE  {menu.RangeMode.Label}",
         MenuLevel.Confirm => menu.SelectedTypeId is { } type ? type.ToUpperInvariant() : "CONFIRM",
         MenuLevel.BoardAction => "SLOT  PICK A VERB",
         MenuLevel.More => "TOOLS",

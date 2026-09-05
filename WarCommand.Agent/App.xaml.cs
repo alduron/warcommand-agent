@@ -27,6 +27,7 @@ using WarCommand.Agent.Dev;
 using WarCommand.Agent.Game;
 using WarCommand.Agent.Input;
 using WarCommand.Agent.Input.Bindings;
+using WarCommand.Agent.Speech;
 using WarCommand.Agent.Speech.Capture;
 using WarCommand.Agent.Realtime;
 using WarCommand.Agent.Startup;
@@ -499,12 +500,17 @@ public partial class App : Application, IDisposable
 
         // Voice. The model, engine, grammar and parser all existed with nothing constructing any
         // of them, so holding push-to-talk opened the keyboard menu and listened to nothing.
+        // The roles THIS player enabled, not the catalog's defaults. Pruning the vocabulary against
+        // the defaults dropped the request types of every role the player had turned on.
         _voice = new Composition.VoiceDriver(
             EnsureAudioDevices() ?? (IAudioCapture)new WasapiAudioCapture(),
             () => BundledContracts.Catalog().Current,
             () => _observer?.Board,
-            () => BundledContracts.Catalog().Current.DefaultEnabledRoles,
-            parsed => OnParsedSpeech(parsed, log),
+            () => _enabledRoleIds,
+            // Streaming recognition raises this from the decode task, mid-hold. Everything it
+            // reaches is a WPF object, so it hops the dispatcher before it touches anything.
+            parsed => Dispatcher.BeginInvoke(() => OnParsedSpeech(parsed, log)),
+            new SilentHoldMonitor(BundledContracts.GameProfile().Current.Speech),
             log);
 
         _input = Composition.InputComposition.Start(
@@ -567,8 +573,8 @@ public partial class App : Application, IDisposable
     /// </remarks>
     private async void OnHold(BindingAction action, bool held, SettingsStore settings, FileClientLog log)
     {
-        // Both hold keys open the menu, so the surface is the same whichever way you came in. Only
-        // push-to-talk opens a microphone, and the menu key must never open one.
+        // Both hold keys open the menu, so the surface is the same whichever way you came in, and
+        // both open the microphone: the split meant the key under the left hand heard nothing.
         if (_menu is { } menu)
         {
             if (held)
@@ -603,7 +609,11 @@ public partial class App : Application, IDisposable
             }
         }
 
-        if (action != BindingAction.Ptt || _voice is not { } voice)
+        // BOTH hold keys open the microphone. Splitting them meant the key most people hold, the
+        // one under the left hand, listened to nothing, and every report of that read as voice
+        // being broken outright. A hold is now either talking or working the menu, and the menu
+        // itself says which: see MenuDriver.TouchedThisHold.
+        if (action is not (BindingAction.Ptt or BindingAction.Menu) || _voice is not { } voice)
         {
             return;
         }
@@ -614,8 +624,11 @@ public partial class App : Application, IDisposable
             return;
         }
 
+        // No discard on a menu-touched hold any more. Recognition is streaming, so an utterance
+        // acts when it is spoken rather than at release, and a hold is free to be both: press a
+        // digit, say a panel, let go.
         await voice.EndHoldAsync(_shutdown.Token).ConfigureAwait(true);
-        if (voice.Fault is { } fault)
+        if ((voice.Fault ?? voice.Warning) is { } fault)
         {
             _observer?.SetFault(fault);
         }
@@ -657,7 +670,13 @@ public partial class App : Application, IDisposable
                 KeyLabel(BindingAction.NavUp),
                 KeyLabel(BindingAction.NavDown),
                 KeyLabel(BindingAction.NavSelect),
-                KeyLabel(BindingAction.NavBack)),
+                KeyLabel(BindingAction.NavBack),
+                KeyLabel(BindingAction.NavTools),
+                KeyLabel(BindingAction.NavCycle)),
+
+            // Every mode the range page offers, straight off the served ballistics: RAW, then one
+            // per weapon carrying that weapon's own envelope. No range limit is written in code.
+            RangeModes = RangeModesNow(),
         };
     }
 
@@ -845,6 +864,79 @@ public partial class App : Application, IDisposable
 
                 break;
 
+            // The parity verbs that name no row and need no panel on screen. Each one is the same
+            // act its keyboard route performs, reached through the same code rather than a second
+            // implementation that can drift away from it.
+            case ParsedCommand { VerbId: "read" }:
+                if (_presenter is { } readSurface)
+                {
+                    ReadCoordinateFromScreen(readSurface, log);
+                }
+
+                break;
+
+            case ParsedCommand { VerbId: "invite" }:
+                if (_inviteCode is { } code)
+                {
+                    System.Windows.Clipboard.SetText($"WARCOMMAND:{code}");
+                    _observer?.SetFault($"COPIED WARCOMMAND:{code}");
+                }
+                else
+                {
+                    _observer?.SetFault("NO INVITE CODE");
+                }
+
+                break;
+
+            case ParsedCommand { VerbId: "join", InviteCode: { } spokenCode }:
+                JoinFromMenu(spokenCode, log);
+                break;
+
+            case ParsedCommand { VerbId: "role", RoleId: { } spokenRole }:
+                ToggleRoleFromMenu(spokenRole, log);
+                break;
+
+            // The panels. Spoken under the hold, they open under the hold and close when the key
+            // comes up, which is exactly what pressing their digit does. Routed through the menu
+            // rather than reimplemented beside it, so a gated panel is refused for the speaker the
+            // same way it is absent for the presser.
+            case ParsedCommand { VerbId: "help" or "match" or "people" or "range" or "join" } panelCommand
+                when _menu is { } panelMenu:
+                panelMenu.OpenPanel(panelCommand.VerbId);
+                RenderMenuNow();
+                break;
+
+            case ParsedCommand { VerbId: "role" } when _menu is { } rolesMenu:
+                rolesMenu.OpenPanel("roles");
+                RenderMenuNow();
+                break;
+
+            case ParsedCommand { VerbId: "weapon" } when _menu is { } rangeMenu:
+                // The range page is the only surface a weapon means anything on, so saying it from
+                // anywhere else opens the page first and then steps it.
+                if (rangeMenu.Menu.Level is not MenuLevel.RangeTool)
+                {
+                    rangeMenu.OpenPanel("range");
+                }
+
+                rangeMenu.Cycle(1);
+                RenderMenuNow();
+                break;
+
+            case ParsedCommand { VerbId: "link" }:
+                RunPanel("link", log);
+                break;
+
+            case ParsedCommand { VerbId: "board" }:
+                _overlay?.CycleBoard();
+                break;
+
+            case ParsedCommand { VerbId: "gun_clear" }:
+                _gunPosition = null;
+                _observer?.SetGunPosition(null);
+                _observer?.SetFault("GUN CLEARED");
+                break;
+
             case ParsedCommand command:
                 // Heard, understood, and not something this build does. Silence here read as the
                 // microphone not working at all.
@@ -866,6 +958,18 @@ public partial class App : Application, IDisposable
 
             default:
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Redraws the menu surface now. A spoken panel arrives off the key path, so nothing else
+    /// would push it onto the screen.
+    /// </summary>
+    private void RenderMenuNow()
+    {
+        if (_presenter is { } surface)
+        {
+            RenderMenu(surface);
         }
     }
 
@@ -960,22 +1064,38 @@ public partial class App : Application, IDisposable
             return $"OPEN MAP, POINT, {select} READS   OR TYPE   {back} BACK";
         }
 
-        if (_menu?.Menu.Level is MenuLevel.GunPosition)
+        if (_menu?.Menu.Level is MenuLevel.RangeTool)
         {
-            return $"OPEN MAP, POINT AT YOUR GUN, {select} READS   {back} BACK";
+            var cycle = KeyLabel(BindingAction.NavCycle);
+            var forward = KeyLabel(BindingAction.NavTools);
+            return $"{up}/{down} PICK   {select} READS THE MAP   "
+                + $"{cycle}/{forward} MODE   {back} BACK";
         }
 
-        if (_menu?.Menu.Level is MenuLevel.FireTarget)
-        {
-            return $"OPEN MAP, POINT AT THE TARGET, {select} READS   {back} BACK";
-        }
+        var tools = KeyLabel(BindingAction.NavTools);
+        return $"{up}/{down} MOVE   {select} SELECT   {back} BACK   {tools} TOOLS";
+    }
 
-        if (_menu?.Menu.Level is MenuLevel.FireTool)
-        {
-            return $"{up}/{down} PICK   {select} RE-READ IT   {back} BACK";
-        }
+    /// <summary>
+    /// The range calculator's modes, from the served ballistics.
+    /// </summary>
+    /// <remarks>
+    /// SNIPING is raw range judged against nothing; every other mode is a weapon, labelled by its
+    /// role and bounded by its own min and max. A limit that moves is a contract edit.
+    /// </remarks>
+    private static IReadOnlyList<RangeMode> RangeModesNow()
+    {
+        var ballistics = BundledContracts.Ballistics().Current;
 
-        return $"{up}/{down} MOVE   {select} SELECT   {back} BACK";
+        return
+        [
+            RangeMode.Raw,
+            .. ballistics.Weapons.Select(w => new RangeMode(
+                w.Id,
+                w.Role.ToUpperInvariant(),
+                w.MinRangeM,
+                w.MaxRangeM)),
+        ];
     }
 
     private string KeyLabel(BindingAction action) =>
@@ -993,7 +1113,9 @@ public partial class App : Application, IDisposable
             ? MenuViewModel.From(menu.Menu, MenuLegend())
             : _holdHeld
                 ? MenuViewModel.Armed(
-                    $"{KeyLabel(BindingAction.NavUp)}/{KeyLabel(BindingAction.NavDown)} MOVE")
+                    $"{KeyLabel(BindingAction.NavUp)} REQUEST   "
+                    + $"{KeyLabel(BindingAction.NavDown)} BOARD   "
+                    + $"{KeyLabel(BindingAction.NavTools)} TOOLS")
                 : MenuViewModel.Closed);
 
         // Straight away, not on the next tick: reading the map for a gun or a target is the moment

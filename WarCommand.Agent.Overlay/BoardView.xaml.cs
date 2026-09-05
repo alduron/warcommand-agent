@@ -210,7 +210,13 @@ public partial class BoardView : UserControl
         }
 
         ArtillerySection.Visibility = Visibility.Visible;
+        ArtilleryLabel.Text = artillery.Mode.Length == 0 ? "RANGE" : $"RANGE  {artillery.Mode}";
         ArtilleryGun.Text = artillery.Gun;
+        ArtilleryRange.Text = artillery.Range;
+        ArtilleryRange.Visibility = artillery.Range.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        ArtilleryRange.Foreground = artillery.RangeIsOutOfReach
+            ? (System.Windows.Media.Brush)FindResource("Urgent")
+            : (System.Windows.Media.Brush)FindResource("Ink");
         ArtilleryTarget.Text = artillery.Target;
         ArtilleryBracket.Text = artillery.Bracket;
         ArtilleryBracket.Visibility = artillery.Bracket.Length == 0 ? Visibility.Collapsed : Visibility.Visible;

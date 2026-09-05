@@ -1470,6 +1470,92 @@
       ],
       "takes": "slot_ref",
       "note": "Reads back azimuth, elevation and time of flight for that row."
+    },
+    {
+      "id": "match",
+      "aliases": [
+        "match",
+        "match info"
+      ],
+      "no_slot_ref": true,
+      "client_only": true,
+      "note": "Opens the MATCH panel. Parity verb: MORE 3 on the keyboard."
+    },
+    {
+      "id": "people",
+      "aliases": [
+        "people",
+        "who is on"
+      ],
+      "no_slot_ref": true,
+      "client_only": true,
+      "note": "Opens the PEOPLE panel. Parity verb: MORE 4 on the keyboard."
+    },
+    {
+      "id": "range",
+      "aliases": [
+        "range",
+        "range tool"
+      ],
+      "no_slot_ref": true,
+      "client_only": true,
+      "note": "Opens the RANGE calculator. Parity verb: MORE 5, and TOOLS on the keyboard."
+    },
+    {
+      "id": "link",
+      "aliases": [
+        "link account"
+      ],
+      "no_slot_ref": true,
+      "client_only": true,
+      "note": "Opens the account link prompt. Parity verb: MORE 8. Two words: bare 'link' is one syllable with nothing to distinguish it."
+    },
+    {
+      "id": "invite",
+      "aliases": [
+        "invite code"
+      ],
+      "no_slot_ref": true,
+      "client_only": true,
+      "note": "Copies the invite code to the clipboard, as pressing it on the MATCH panel does."
+    },
+    {
+      "id": "read",
+      "aliases": [
+        "read map",
+        "read grid"
+      ],
+      "no_slot_ref": true,
+      "client_only": true,
+      "note": "Reads the coordinate off the screen, the same act the menu's read entry performs. Never 'read coords': 'coords' is outside the small model's lexicon and is silently dropped."
+    },
+    {
+      "id": "board",
+      "aliases": [
+        "board"
+      ],
+      "no_slot_ref": true,
+      "client_only": true,
+      "note": "Cycles the overlay board full, dim, off. Parity verb for the RightAlt+B chord, which is the one control with no menu entry at all."
+    },
+    {
+      "id": "weapon",
+      "aliases": [
+        "weapon",
+        "next weapon"
+      ],
+      "no_slot_ref": true,
+      "client_only": true,
+      "note": "Steps the range calculator to the next weapon, as the cycle key does on that page."
+    },
+    {
+      "id": "gun_clear",
+      "aliases": [
+        "clear gun"
+      ],
+      "no_slot_ref": true,
+      "client_only": true,
+      "note": "Clears the stored gun position. 'clear' alone already means clear mutes, so this one is two words."
     }
   ],
   "coordinate_handoff_moved": "Lives in contracts/game-profile.json. The chat text format is a fact about the game, not about our request vocabulary.",

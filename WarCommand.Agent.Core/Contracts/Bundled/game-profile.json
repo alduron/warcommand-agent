@@ -327,9 +327,11 @@
       225,
       210,
       195,
-      180
+      180,
+      165,
+      150
     ],
-    "near_white_ladder_note": "Thresholds tried IN ORDER until a complete pair decodes. MEASURED: the readout is dimmer near the edges of the map, so one fixed threshold reads the middle and goes blind at the border while the numbers are plainly legible to a human. The text carries a black outline, which is why dropping the threshold stays safe: the outline separates the glyphs from whatever is behind them. First match wins, so the common case still costs one pass."
+    "near_white_ladder_note": "Thresholds tried on the SAME frame, all of them, and the decodes VOTE. MEASURED: the readout is dimmer near the edges of the map, so one fixed threshold reads the middle and goes blind at the border while the numbers are plainly legible to a human. The text carries a black outline, which is why dropping the threshold stays safe: the outline separates the glyphs from whatever is behind them. First match no longer wins. A top rung that erodes a glyph into a different but still legal digit used to answer before the rungs that can actually see the text were tried, and that reading is stable, so every re-read returned the same wrong number and looked like a cache. The reading most rungs agree on wins, a tie between two readings refuses with AMBIGUOUS READ, and the bottom two rungs exist for the dim border."
   },
   "point_confidence": {
     "note": "Applies to BOTH coordinate sources, which is why it sits beside map_readout rather than inside it. request_points.confidence was previously written and never read, scoped to being 'diagnosable after the fact', so a 0.31 point rendered identically to a 0.99 one on every provider's overlay. These two thresholds are the only thing that makes the field mean anything.",

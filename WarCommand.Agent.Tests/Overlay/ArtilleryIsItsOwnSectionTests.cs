@@ -26,18 +26,17 @@ public sealed class ArtilleryIsItsOwnSectionTests
     private static MenuStateMachine WithGunAndTarget(bool target)
     {
         var menu = Machine();
-        menu.OpenOnBoard(T0, new MenuContext());
+        menu.OpenTools(T0, new MenuContext());
 
-        while (menu.Options[menu.Highlight].Path != "home.fire")
+        while (menu.Options[menu.Highlight].Path != "board.more.range")
         {
             menu.Scroll(-1, T0);
         }
 
         menu.Select(T0);
-        Assert.Equal(MenuLevel.FireTool, menu.Level);
+        Assert.Equal(MenuLevel.RangeTool, menu.Level);
 
         menu.Select(T0);
-        Assert.Equal(MenuLevel.GunPosition, menu.Level);
         menu.AcceptReadCoordinate(new MapPoint(84.10m, 70.88m, "map_readout", null, null), T0);
 
         if (!target)
@@ -45,13 +44,12 @@ public sealed class ArtilleryIsItsOwnSectionTests
             return menu;
         }
 
-        while (menu.Options[menu.Highlight].Path != "fire.target")
+        while (menu.Options[menu.Highlight].Path != "range.target")
         {
             menu.Scroll(1, T0);
         }
 
         menu.Select(T0);
-        Assert.Equal(MenuLevel.FireTarget, menu.Level);
         menu.AcceptReadCoordinate(new MapPoint(85.53m, 69.42m, "map_readout", null, null), T0);
         return menu;
     }
@@ -127,12 +125,12 @@ public sealed class ArtilleryIsItsOwnSectionTests
         // Back out to the artillery page, where CLEAR appears only once there is something to
         // clear. There was no way to unset a gun at all: reading one put ARTILLERY on the board
         // permanently, and every bracket it drew was there for the rest of the session.
-        while (menu.Level != MenuLevel.FireTool)
+        while (menu.Level != MenuLevel.RangeTool)
         {
             menu.Back(T0);
         }
 
-        var clear = menu.Options.Single(o => o.Path == "fire.clear");
+        var clear = menu.Options.Single(o => o.Path == "range.clear");
         menu.Digit(clear.Digit, T0);
 
         // Both ends together: a gun position with no target goes stale where it stands, and a
@@ -142,24 +140,24 @@ public sealed class ArtilleryIsItsOwnSectionTests
         Assert.Null(menu.ToolTarget);
 
         // And the entry goes with it, rather than sitting there clearing nothing.
-        Assert.DoesNotContain(menu.Options, o => o.Path == "fire.clear");
+        Assert.DoesNotContain(menu.Options, o => o.Path == "range.clear");
     }
 
     [Fact]
     public void Every_digit_the_artillery_page_draws_actually_does_something()
     {
         var menu = WithGunAndTarget(target: false);
-        while (menu.Level != MenuLevel.FireTool)
+        while (menu.Level != MenuLevel.RangeTool)
         {
             menu.Back(T0);
         }
 
-        // The page drew 1, 2 and 3 and dispatched none of them: FireTool was missing from the
+        // The page drew 1, 2 and 3 and dispatched none of them: RangeTool was missing from the
         // digit switch entirely, so the only way to work the tool was to navigate onto each line.
         foreach (var entry in menu.Options)
         {
             var fresh = WithGunAndTarget(target: false);
-            while (fresh.Level != MenuLevel.FireTool)
+            while (fresh.Level != MenuLevel.RangeTool)
             {
                 fresh.Back(T0);
             }

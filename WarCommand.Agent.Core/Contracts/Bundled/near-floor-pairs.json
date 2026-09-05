@@ -218,6 +218,30 @@
     {
       "position_class": "initial",
       "reason": "near_floor",
+      "score": 1.0,
+      "cleared_by": "features",
+      "segment_distance": 0.5,
+      "differing_features": [
+        "stressed_vowel"
+      ],
+      "a": {
+        "alias": "range",
+        "owner": "verb:range",
+        "ambiguous": false
+      },
+      "b": {
+        "alias": "wrench",
+        "owner": "type:vehicle_repair",
+        "ambiguous": false
+      },
+      "phonemes": {
+        "a": "R EY1 N JH",
+        "b": "R EH1 N CH"
+      }
+    },
+    {
+      "position_class": "initial",
+      "reason": "near_floor",
       "score": 1.1111,
       "cleared_by": "features",
       "segment_distance": 0.5556,
@@ -238,6 +262,31 @@
       "phonemes": {
         "a": "EH1 S K AO0 R T",
         "b": "T R AE1 N S P AO0 R T"
+      }
+    },
+    {
+      "position_class": "initial",
+      "reason": "near_floor",
+      "score": 1.1429,
+      "cleared_by": "features",
+      "segment_distance": 0.5714,
+      "differing_features": [
+        "onset",
+        "coda"
+      ],
+      "a": {
+        "alias": "big guns",
+        "owner": "type:artillery_fire",
+        "ambiguous": false
+      },
+      "b": {
+        "alias": "clear gun",
+        "owner": "verb:gun_clear",
+        "ambiguous": false
+      },
+      "phonemes": {
+        "a": "B IH1 G G AH1 N Z",
+        "b": "K L IH1 R G AH1 N"
       }
     },
     {
@@ -618,6 +667,30 @@
       "position_class": "initial",
       "reason": "near_floor",
       "score": 1.2,
+      "cleared_by": "segment_distance",
+      "segment_distance": 0.6,
+      "differing_features": [
+        "onset"
+      ],
+      "a": {
+        "alias": "match",
+        "owner": "verb:match",
+        "ambiguous": false
+      },
+      "b": {
+        "alias": "scratch",
+        "owner": "verb:cancel",
+        "ambiguous": false
+      },
+      "phonemes": {
+        "a": "M AE1 CH",
+        "b": "S K R AE1 CH"
+      }
+    },
+    {
+      "position_class": "initial",
+      "reason": "near_floor",
+      "score": 1.2,
       "cleared_by": "features",
       "segment_distance": 0.6,
       "differing_features": [
@@ -736,6 +809,56 @@
       "phonemes": {
         "a": "P AE1 S",
         "b": "T R AE1 K S"
+      }
+    },
+    {
+      "position_class": "initial",
+      "reason": "near_floor",
+      "score": 1.2,
+      "cleared_by": "features",
+      "segment_distance": 0.6,
+      "differing_features": [
+        "onset",
+        "coda"
+      ],
+      "a": {
+        "alias": "people",
+        "owner": "verb:people",
+        "ambiguous": false
+      },
+      "b": {
+        "alias": "pickup",
+        "owner": "type:transport_move",
+        "ambiguous": false
+      },
+      "phonemes": {
+        "a": "P IY1 P AH0 L",
+        "b": "P IH1 K AH2 P"
+      }
+    },
+    {
+      "position_class": "initial",
+      "reason": "near_floor",
+      "score": 1.2,
+      "cleared_by": "features",
+      "segment_distance": 0.6,
+      "differing_features": [
+        "onset",
+        "coda"
+      ],
+      "a": {
+        "alias": "people",
+        "owner": "verb:people",
+        "ambiguous": false
+      },
+      "b": {
+        "alias": "repeat",
+        "owner": "verb:repeat",
+        "ambiguous": false
+      },
+      "phonemes": {
+        "a": "P IY1 P AH0 L",
+        "b": "R IY0 P IY1 T"
       }
     },
     {
@@ -918,6 +1041,32 @@
       "reason": "near_floor",
       "score": 1.25,
       "cleared_by": "features",
+      "segment_distance": 0.4,
+      "differing_features": [
+        "syllable_count",
+        "onset",
+        "coda"
+      ],
+      "a": {
+        "alias": "abort",
+        "owner": "verb:cancel",
+        "ambiguous": false
+      },
+      "b": {
+        "alias": "board",
+        "owner": "verb:board",
+        "ambiguous": false
+      },
+      "phonemes": {
+        "a": "AH0 B AO1 R T",
+        "b": "B AO1 R D"
+      }
+    },
+    {
+      "position_class": "initial",
+      "reason": "near_floor",
+      "score": 1.25,
+      "cleared_by": "features",
       "segment_distance": 0.625,
       "differing_features": [
         "onset",
@@ -936,6 +1085,31 @@
       "phonemes": {
         "a": "AE0 K S EH1 P T",
         "b": "EH1 K S T R AE0 K T"
+      }
+    },
+    {
+      "position_class": "initial",
+      "reason": "near_floor",
+      "score": 1.25,
+      "cleared_by": "features",
+      "segment_distance": 0.5,
+      "differing_features": [
+        "stressed_vowel",
+        "coda"
+      ],
+      "a": {
+        "alias": "bird",
+        "owner": "type:air_transport_move",
+        "ambiguous": false
+      },
+      "b": {
+        "alias": "board",
+        "owner": "verb:board",
+        "ambiguous": false
+      },
+      "phonemes": {
+        "a": "B ER1 D",
+        "b": "B AO1 R D"
       }
     },
     {

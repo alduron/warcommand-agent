@@ -17,4 +17,33 @@ public interface ISpeechEngine
     /// and never retained: no implementation may copy it anywhere that outlives the call.
     /// </summary>
     Task<Utterance> RecognizeAsync(AudioBuffer buffer, Grammar grammar, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Opens a session that decodes while the key is still down, so an utterance acts the moment it
+    /// is finished rather than on release.
+    /// </summary>
+    /// <remarks>
+    /// This is what makes voice a peer of the keyboard: a panel spoken under the hold opens under
+    /// the hold, and closing it is letting go, exactly as pressing its digit would be.
+    /// </remarks>
+    ISpeechSession BeginSession(Grammar grammar);
+}
+
+/// <summary>
+/// One hold's streaming decode. Fed chunks as they arrive; each completed utterance comes back the
+/// moment the recognizer decides the speaker stopped.
+/// </summary>
+/// <remarks>
+/// Not thread safe, and not meant to be: one hold, one session, one draining task.
+/// </remarks>
+public interface ISpeechSession : IDisposable
+{
+    /// <summary>
+    /// Feeds one chunk. Returns a completed utterance when the recognizer found an endpoint, else
+    /// null. The samples are read and never retained.
+    /// </summary>
+    Utterance? Feed(ReadOnlySpan<short> samples);
+
+    /// <summary>Whatever is still in flight when the key comes up. Null when nothing was said.</summary>
+    Utterance? Final();
 }

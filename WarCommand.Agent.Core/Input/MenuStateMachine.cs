@@ -32,10 +32,16 @@ public enum MenuLevel
     Closed,
 
     /// <summary>
-    /// Everything at once: the request categories and TOOLS above the board, the board's own rows
-    /// below them. A digit here is a row; 0 is TOOLS.
+    /// The request surface: ARTILLERY, TOOLS and the request categories. Reached by UP from rest,
+    /// and it holds no board rows. 0 is TOOLS.
     /// </summary>
     Root,
+
+    /// <summary>
+    /// The board surface: the occupied slot rows and nothing else. Reached by DOWN from rest. It is
+    /// not nested in <see cref="Root"/> and cannot be walked into from it.
+    /// </summary>
+    Board,
 
     /// <summary>A compiled category or sub-category.</summary>
     Branch,
@@ -67,14 +73,31 @@ public enum MenuLevel
     /// <summary>Who is on the match. Read only.</summary>
     People,
 
-    /// <summary>Waiting for a screen read that sets where the gun is.</summary>
-    GunPosition,
+    /// <summary>
+    /// The range calculator: origin, target, the range between them, and the weapon the range is
+    /// judged against. Both ends read the map in place; there is no page to walk into for either.
+    /// </summary>
+    RangeTool,
+}
 
-    /// <summary>The artillery tool: your gun, the target, and the bracket between them.</summary>
-    FireTool,
+/// <summary>
+/// One calculator the range page can be set to, cycled with the two mode keys.
+/// </summary>
+/// <remarks>
+/// Built from the served ballistics rather than written here: RAW plus one per weapon, each
+/// carrying that weapon's own envelope. No range limit is a constant in this assembly.
+/// </remarks>
+public sealed record RangeMode(string Id, string Label, decimal? MinRangeM = null, decimal? MaxRangeM = null)
+{
+    /// <summary>Raw range, judged against nothing. Always the first mode.</summary>
+    public static RangeMode Raw { get; } = new("raw", "SNIPING");
 
-    /// <summary>Waiting for a screen read that sets the tool's target.</summary>
-    FireTarget,
+    /// <summary>What a caller with no ballistics to hand gets: the raw range and no envelope.</summary>
+    public static IReadOnlyList<RangeMode> Fallback { get; } = [Raw];
+
+    /// <summary>True while this range is outside what the mode can reach.</summary>
+    public bool IsOutOfRange(decimal metres) =>
+        (MinRangeM is { } min && metres < min) || (MaxRangeM is { } max && metres > max);
 }
 
 /// <summary>One selectable entry. Compiled from menu_paths, never hand drawn.</summary>
@@ -473,6 +496,9 @@ public sealed record MenuContext
 
     /// <summary>The keys in force, so HELP names the keys this player actually has.</summary>
     public MenuKeys Keys { get; init; } = MenuKeys.Defaults;
+
+    /// <summary>The range calculator's modes, in cycle order, from the served ballistics.</summary>
+    public IReadOnlyList<RangeMode> RangeModes { get; init; } = RangeMode.Fallback;
 }
 
 /// <summary>
@@ -482,10 +508,17 @@ public sealed record MenuContext
 /// Every one of them is rebindable, so HELP that hardcoded them would be wrong for anybody who
 /// changed one, which is the reader most in need of it.
 /// </remarks>
-public sealed record MenuKeys(string Menu, string Up, string Down, string Select, string Back)
+public sealed record MenuKeys(
+    string Menu,
+    string Up,
+    string Down,
+    string Select,
+    string Back,
+    string Tools = "E",
+    string Cycle = "Q")
 {
     /// <summary>What ships. Only used where the real bindings are not to hand.</summary>
-    public static MenuKeys Defaults { get; } = new("CAPS LOCK", "W", "S", "D", "A");
+    public static MenuKeys Defaults { get; } = new("CAPS LOCK", "W", "S", "D", "A", "E", "Q");
 }
 
 /// <summary>Timings and sizes for the menu. None of them is a fact about the game.</summary>
@@ -528,7 +561,7 @@ public sealed class MenuStateMachine
     /// <summary>An entry the digit path cannot reach. The nav keys dispatch on Path, not Digit.</summary>
     private const int NoDigit = -1;
 
-    /// <summary>The artillery tool's two rows, in the order FireToolEntries builds them.</summary>
+    /// <summary>The range page's two ends, in the order RangeToolEntries builds them.</summary>
     private const int GunIndex = 0;
 
     private const int TargetIndex = 1;
@@ -588,7 +621,8 @@ public sealed class MenuStateMachine
         (2, "roles", "ROLES"),
         (3, "match", "MATCH"),
         (4, "people", "PEOPLE"),
-        // 5 stays empty where GUN HERE was. It set the same gun position the ARTILLERY tool sets,
+        (5, "range", "RANGE"),
+        // 5 held GUN HERE before ARTILLERY took it. It set the same gun position the ARTILLERY tool sets,
         // by a second route with its own way back out, so backing out of a gun read landed you
         // somewhere different depending on which entry you had come in through.
         (6, "join", "JOIN CODE"),
@@ -609,10 +643,17 @@ public sealed class MenuStateMachine
     private DateTimeOffset _lastInput;
     private MenuLevel _level = MenuLevel.Closed;
 
-    // The artillery tool's two ends. Kept on the machine so both survive a read and the page can
+    // The range calculator's two ends. Kept on the machine so both survive a read and the page can
     // be re-entered without losing what was already set.
     private MapPoint? _toolGun;
     private MapPoint? _toolTarget;
+
+    // Which end the next screen read fills. Set by pressing that end, cleared by the read, so both
+    // ends are one press plus one read rather than a page to walk into and back out of.
+    private string? _rangeAwaiting;
+
+    // An index into the context's modes, kept across opens so the crew's weapon stays chosen.
+    private int _rangeMode;
 
     // Points collected for the draft, in ordinal order. A two-point type wants both before it can
     // be submitted at all: TRANSPORT, LIFT and ESCORT were unsubmittable because the machine had
@@ -850,8 +891,8 @@ public sealed class MenuStateMachine
             return MenuOutcome.None;
         }
 
-        // These levels hold no options: select is a request to read the map.
-        if (Level is MenuLevel.Coordinate or MenuLevel.GunPosition or MenuLevel.FireTarget)
+        // The coordinate level holds no options: select is a request to read the map.
+        if (Level is MenuLevel.Coordinate)
         {
             _lastInput = now;
             return new MenuCoordinateReadRequested();
@@ -870,24 +911,9 @@ public sealed class MenuStateMachine
             return MenuOutcome.None;
         }
 
-        // On the coordinate level select means READ THE MAP, not pick an option: there is no list
-        // there, only a grid waiting to be filled. Open the map, point, press it.
-        if (Level is MenuLevel.Coordinate or MenuLevel.GunPosition or MenuLevel.FireTarget)
+        if (Level is MenuLevel.RangeTool)
         {
-            _lastInput = now;
-            return new MenuCoordinateReadRequested();
-        }
-
-        if (Level is MenuLevel.FireTool)
-        {
-            if (chosen.Path == "fire.clear")
-            {
-                return ClearFireTool(now);
-            }
-
-            _lastInput = now;
-            Level = chosen.Path == "fire.gun" ? MenuLevel.GunPosition : MenuLevel.FireTarget;
-            return new MenuNavigated(Level);
+            return PressRangeEntry(chosen, now);
         }
 
         if (Level is MenuLevel.Match)
@@ -908,39 +934,24 @@ public sealed class MenuStateMachine
             return MenuOutcome.None;
         }
 
-        // On the home list a digit is ambiguous: 1 is both the first category and slot 1. The path
-        // is not, so navigation dispatches on it and the digit keys keep their old meaning.
-        if (Level is MenuLevel.Root)
+        // On the board surface the digit is the slot, and selecting a row opens its verbs.
+        if (Level is MenuLevel.Board)
         {
             _lastInput = now;
-
-            if (chosen.Path == "home.more")
-            {
-                Level = MenuLevel.More;
-                return new MenuNavigated(Level);
-            }
-
-            if (chosen.Path == "home.fire")
-            {
-                Level = MenuLevel.FireTool;
-                return new MenuNavigated(Level);
-            }
-
-            if (chosen.Path.StartsWith("board.", StringComparison.Ordinal))
-            {
-                _selectedSlot = chosen.Digit;
-                Level = MenuLevel.BoardAction;
-                return new MenuNavigated(Level);
-            }
+            return SelectRow(chosen.Digit);
         }
 
         return Digit(chosen.Digit, now);
     }
 
     /// <summary>
-    /// Opens with the board's first row highlighted. This is what DOWN does from rest: taking a
-    /// job is the common case and it must not go through the request menu to get there.
+    /// Opens the BOARD surface with its first row highlighted. This is what DOWN does from rest:
+    /// taking a job is the common case and it must not go through the request menu to get there.
     /// </summary>
+    /// <remarks>
+    /// A level of its own, not an index into the home list. Nothing here walks into the requests;
+    /// BACK is the only way off it.
+    /// </remarks>
     public MenuOutcome OpenOnBoard(DateTimeOffset now, MenuContext? context = null, MapPoint? snapshot = null)
     {
         // The SAME snapshot the upward open carries. Passing null here meant the direction of your
@@ -952,7 +963,7 @@ public sealed class MenuStateMachine
             return opened;
         }
 
-        Highlight = FirstBoardIndex();
+        Level = MenuLevel.Board;
         return new MenuNavigated(Level);
     }
 
@@ -970,7 +981,7 @@ public sealed class MenuStateMachine
                 return _selectedSlot > 0 ? _selectedSlot : null;
             }
 
-            if (Level is not MenuLevel.Root)
+            if (Level is not MenuLevel.Board)
             {
                 return null;
             }
@@ -981,8 +992,7 @@ public sealed class MenuStateMachine
                 return null;
             }
 
-            var chosen = options[Highlight];
-            return chosen.Path.StartsWith("board.", StringComparison.Ordinal) ? chosen.Digit : null;
+            return options[Highlight].Digit;
         }
     }
 
@@ -1046,26 +1056,29 @@ public sealed class MenuStateMachine
     {
         ArgumentNullException.ThrowIfNull(point);
 
-        // One read, three meanings, decided by the level that asked for it.
-        if (Level is MenuLevel.GunPosition)
+        // One read, three meanings, decided by what asked for it. On the range page the end that
+        // was pressed takes it and the page never moved in the first place, so the highlight stays
+        // where the finger left it and pressing again re-reads THAT end.
+        if (Level is MenuLevel.RangeTool)
         {
             _lastInput = now;
-            _toolGun = point;
+            var origin = Awaiting("range.origin");
+            var awaited = _rangeAwaiting;
+            _rangeAwaiting = null;
 
-            // Straight back to the tool, never closed: the next thing a gunner does is range
-            // another target, and a page that closes itself after every read makes that a menu
-            // walk each time. The highlight stays on the end just set, so pressing select again
-            // re-reads THAT end rather than the other one.
-            Level = MenuLevel.FireTool;
-            Highlight = GunIndex;
-            return new MenuGunPositionSet(point);
-        }
+            if (awaited is null)
+            {
+                return MenuOutcome.None;
+            }
 
-        if (Level is MenuLevel.FireTarget)
-        {
-            _lastInput = now;
+            if (origin)
+            {
+                _toolGun = point;
+                Highlight = GunIndex;
+                return new MenuGunPositionSet(point);
+            }
+
             _toolTarget = point;
-            Level = MenuLevel.FireTool;
             Highlight = TargetIndex;
             return new MenuNavigated(Level);
         }
@@ -1095,11 +1108,13 @@ public sealed class MenuStateMachine
     /// </remarks>
     public MenuOutcome Back(DateTimeOffset now)
     {
-        if (Level is MenuLevel.Root)
+        // The top of either surface. Backing off it closes the menu and leaves the hold armed, so
+        // the prompt comes back and the other surface is one press away. Clearing the highlight and
+        // staying open left you inside a page you had asked to leave, with its keys still live.
+        if (Level is MenuLevel.Root or MenuLevel.Board)
         {
             _lastInput = now;
-            Highlight = NoHighlight;
-            return new MenuNavigated(Level);
+            return Close("back");
         }
 
         return Backspace(now);
@@ -1129,13 +1144,13 @@ public sealed class MenuStateMachine
         }
 
         _lastInput = now;
-        // 0 is TOOLS from anywhere with a list on it. It is never a slot and never a category, so
-        // it collides with nothing, and it means the artillery tool and the invite code are one
-        // press away from wherever you happen to be standing.
-        if (digit == ZeroDigit && Level is not (MenuLevel.Root or MenuLevel.More
+        // 0 is TOOLS from anywhere with a list on it, the same surface the TOOLS key opens. It is
+        // never a slot and never a category, so it collides with nothing on either other surface.
+        if (digit == ZeroDigit && Level is not (MenuLevel.More
             or MenuLevel.Coordinate or MenuLevel.Join or MenuLevel.Confirm or MenuLevel.Roles))
         {
-            return EnterMore();
+            Level = MenuLevel.More;
+            return new MenuNavigated(Level);
         }
 
         return Level switch
@@ -1144,7 +1159,8 @@ public sealed class MenuStateMachine
             // but they are reached by walking down onto them and selecting, which is what the keys
             // are for; the number on a row is its identity, the thing voice says and the eye finds,
             // not a second keyboard route that would collide with this one.
-            MenuLevel.Root => digit == ZeroDigit ? EnterMore() : Descend(_tree.Root, digit),
+            MenuLevel.Root => Descend(_tree.Root, digit),
+            MenuLevel.Board => SelectRow(digit),
             MenuLevel.Branch => Descend(Selection!.Children, digit),
             MenuLevel.Coordinate => TypeCoordinateDigit(digit),
             MenuLevel.Confirm => ToggleModifier(digit),
@@ -1152,7 +1168,7 @@ public sealed class MenuStateMachine
 
             // The artillery page drew 1, 2 and 3 and dispatched none of them, so every digit on it
             // was dead and the only way to work the tool was to navigate onto each line.
-            MenuLevel.FireTool => SelectFireTool(digit, now),
+            MenuLevel.RangeTool => SelectRangeEntry(digit, now),
             MenuLevel.More => RunMore(digit),
             MenuLevel.Roles => ToggleRole(digit),
             MenuLevel.Join => TypeJoinDigit(digit),
@@ -1176,20 +1192,15 @@ public sealed class MenuStateMachine
                 _digits.RemoveAt(_digits.Count - 1);
                 return new MenuNavigated(Level);
 
-            case MenuLevel.GunPosition or MenuLevel.FireTarget:
-                Level = MenuLevel.FireTool;
-                return new MenuNavigated(Level);
-
             case MenuLevel.Join or MenuLevel.Help or MenuLevel.Roles
                 or MenuLevel.Match or MenuLevel.People:
                 Level = MenuLevel.More;
                 return new MenuNavigated(Level);
 
-            // Home, not TOOLS. ARTILLERY is an entry on the home list and has been since it stopped
-            // being a page inside MORE; backing out of it into TOOLS put you somewhere you had
-            // never been.
-            case MenuLevel.FireTool:
-                Level = MenuLevel.Root;
+            // RANGE lives on the TOOLS page, so backing out of it lands where it was entered from.
+            // It is not a request and it is not on the request list.
+            case MenuLevel.RangeTool:
+                Level = MenuLevel.More;
                 return new MenuNavigated(Level);
 
             case MenuLevel.Confirm:
@@ -1214,12 +1225,13 @@ public sealed class MenuStateMachine
             // requests, the rows and MORE. There is no separate board level to return to.
             case MenuLevel.BoardAction:
                 _selectedSlot = 0;
-                Level = MenuLevel.Root;
+                Level = MenuLevel.Board;
                 return new MenuNavigated(Level);
 
+            // TOOLS is a surface of its own, reached by its own key from anywhere. There is no
+            // level above it to climb to, so backing off it leaves the menu and re-arms the hold.
             case MenuLevel.More:
-                Level = MenuLevel.Root;
-                return new MenuNavigated(Level);
+                return Close("back");
 
             default:
                 return MenuOutcome.None;
@@ -1320,11 +1332,12 @@ public sealed class MenuStateMachine
     private IReadOnlyList<MenuEntry> CurrentOptions() => Level switch
     {
         MenuLevel.Root => RootEntries(),
+        MenuLevel.Board => BoardRowEntries(),
         MenuLevel.Branch => Selection?.Children ?? [],
         MenuLevel.Confirm => ModifierEntries(),
         MenuLevel.BoardAction => BoardActionEntries(),
         MenuLevel.More => MoreOptions(),
-        MenuLevel.FireTool => FireToolEntries(),
+        MenuLevel.RangeTool => RangeToolEntries(),
         MenuLevel.Help => HelpEntries(),
         MenuLevel.Roles => RoleEntries(),
         MenuLevel.Match => MatchEntries(),
@@ -1366,70 +1379,116 @@ public sealed class MenuStateMachine
     /// walking the whole menu again. A gun crew re-ranges constantly, so both ends stay one press
     /// away and the page never closes itself after a read.
     /// </remarks>
-    private List<MenuEntry> FireToolEntries()
+    private List<MenuEntry> RangeToolEntries()
     {
         var entries = new List<MenuEntry>(4)
         {
             new()
             {
                 Digit = 1,
-                Path = "fire.gun",
-                Label = _toolGun is { } gun
-                    ? FormattableString.Invariant($"GUN     x{gun.X:0.00} y{gun.Y:0.00}")
-                    : "GUN     NOT SET",
+                Path = "range.origin",
+                Label = Awaiting("range.origin") ? "ORIGIN  POINT AND READ" : _toolGun is { } gun
+                    ? FormattableString.Invariant($"ORIGIN  x{gun.X:0.00} y{gun.Y:0.00}")
+                    : "ORIGIN  NOT SET",
             },
             new()
             {
                 Digit = 2,
-                Path = "fire.target",
-                Label = _toolTarget is { } target
+                Path = "range.target",
+                Label = Awaiting("range.target") ? "TARGET  POINT AND READ" : _toolTarget is { } target
                     ? FormattableString.Invariant($"TARGET  x{target.X:0.00} y{target.Y:0.00}")
                     : "TARGET  NOT SET",
             },
         };
 
-        // Only once there is something to clear. A gun read is what puts ARTILLERY on the board and
-        // there was no way to take it off again: the section, and every bracket it drew, was
-        // permanent for the rest of the session.
+        // Only once there is something to clear. An origin read is what puts the range section on
+        // the board and there was no way to take it off again: the section, and every bracket it
+        // drew, was permanent for the rest of the session.
         if (_toolGun is not null || _toolTarget is not null)
         {
-            entries.Add(new MenuEntry { Digit = 3, Path = "fire.clear", Label = "CLEAR" });
+            entries.Add(new MenuEntry { Digit = 3, Path = "range.clear", Label = "CLEAR" });
         }
 
         return entries;
     }
 
-    /// <summary>Presses one of the artillery page's digits, exactly as selecting it would.</summary>
-    private MenuOutcome SelectFireTool(int digit, DateTimeOffset now)
+    private bool Awaiting(string path) =>
+        string.Equals(_rangeAwaiting, path, StringComparison.Ordinal);
+
+    /// <summary>Presses one of the range page's digits, exactly as selecting it would.</summary>
+    private MenuOutcome SelectRangeEntry(int digit, DateTimeOffset now)
     {
-        var entry = FireToolEntries().Find(e => e.Digit == digit);
-        if (entry is null)
+        var entry = RangeToolEntries().Find(e => e.Digit == digit);
+        return entry is null ? MenuOutcome.None : PressRangeEntry(entry, now);
+    }
+
+    /// <summary>
+    /// Pressing an end READS THE MAP where it stands, and the page never changes.
+    /// </summary>
+    /// <remarks>
+    /// Each end used to be a level of its own, so setting both meant four presses through two pages
+    /// that drew nothing but a prompt. A gun crew re-ranges constantly; the page stays put and the
+    /// row it filled says so.
+    /// </remarks>
+    private MenuOutcome PressRangeEntry(MenuEntry entry, DateTimeOffset now)
+    {
+        if (entry.Path == "range.clear")
+        {
+            return ClearRangeTool(now);
+        }
+
+        _lastInput = now;
+        _rangeAwaiting = entry.Path;
+        return new MenuCoordinateReadRequested();
+    }
+
+    /// <summary>The modes this page can be set to, from the served ballistics.</summary>
+    public IReadOnlyList<RangeMode> RangeModes =>
+        _context.RangeModes.Count > 0 ? _context.RangeModes : RangeMode.Fallback;
+
+    /// <summary>The calculator the range is judged against right now.</summary>
+    public RangeMode RangeMode
+    {
+        get
+        {
+            var modes = RangeModes;
+            return modes[((_rangeMode % modes.Count) + modes.Count) % modes.Count];
+        }
+    }
+
+    /// <summary>
+    /// Steps the calculator: sniping, then one per weapon. Negative steps back.
+    /// </summary>
+    /// <remarks>
+    /// A mode, not a page. The same two points mean a different answer to a sniper and to a gun
+    /// crew, and walking a menu to say which is a menu walked between every shot.
+    /// </remarks>
+    public MenuOutcome CycleRangeMode(int step, DateTimeOffset now)
+    {
+        if (Level is not MenuLevel.RangeTool || step == 0)
         {
             return MenuOutcome.None;
         }
 
-        if (entry.Path == "fire.clear")
-        {
-            return ClearFireTool(now);
-        }
-
         _lastInput = now;
-        Level = entry.Path == "fire.gun" ? MenuLevel.GunPosition : MenuLevel.FireTarget;
+        var modes = RangeModes;
+        _rangeMode = (((_rangeMode + step) % modes.Count) + modes.Count) % modes.Count;
         return new MenuNavigated(Level);
     }
 
     /// <summary>
-    /// Forgets the gun and the target, which takes the ARTILLERY section off the board.
+    /// Forgets the origin and the target, which takes the range section off the board.
     /// </summary>
     /// <remarks>
     /// Both ends together. Clearing only the target would leave a gun position that goes stale
     /// where it stands, and a bracket computed from where a gun used to be is worse than no bracket.
     /// </remarks>
-    private MenuGunPositionCleared ClearFireTool(DateTimeOffset now)
+    private MenuGunPositionCleared ClearRangeTool(DateTimeOffset now)
     {
         _lastInput = now;
         _toolGun = null;
         _toolTarget = null;
+        _rangeAwaiting = null;
         Highlight = FirstSelectable();
 
         // The app hears it too: the gun that draws a bracket on every mortar row is the same gun,
@@ -1438,7 +1497,7 @@ public sealed class MenuStateMachine
         return new MenuGunPositionCleared();
     }
 
-    /// <summary>Where the tool believes your gun is. Null until a read sets it.</summary>
+    /// <summary>Where the tool is ranging from. Null until a read sets it.</summary>
     public MapPoint? ToolGun => _toolGun;
 
     /// <summary>Where the tool is ranging to. Null until a read sets it.</summary>
@@ -1514,12 +1573,14 @@ public sealed class MenuStateMachine
         var lines = new (string Id, string Label)[]
         {
             ("hold", $"HOLD {keys.Menu} WHILE YOU WORK"),
+            ("surfaces", $"{keys.Up} REQUEST   {keys.Down} BOARD   {keys.Tools} TOOLS"),
             ("move", $"{keys.Up} {keys.Down}   MOVE THE HIGHLIGHT"),
             ("select", $"{keys.Select}     TAKE THE HIGHLIGHTED LINE"),
             ("back", $"{keys.Back}     BACK ONE LEVEL"),
             ("digits", "1-9   PICK BY NUMBER ON ANY LIST"),
-            ("tools", "0     TOOLS, FROM ANYWHERE"),
-            ("board", $"{keys.Down} ONTO A ROW, THEN {keys.Select} FOR ITS VERBS"),
+            ("backtop", $"{keys.Back}     AT THE TOP, LEAVES THE SURFACE"),
+            ("board", $"{keys.Down} OPENS THE BOARD, {keys.Select} FOR A ROW'S VERBS"),
+            ("range", $"ON RANGE: {keys.Cycle} {keys.Tools} CHANGE THE CALCULATOR"),
             ("claim", "ACCEPTING STARTS IT. THERE IS NO SECOND STEP"),
             ("coord", $"ON A COORDINATE: POINT AT THE MAP, {keys.Select} READS IT"),
             ("release", $"LET GO OF {keys.Menu} TO CLOSE"),
@@ -1546,34 +1607,20 @@ public sealed class MenuStateMachine
     /// is the reason the chord surface is small; a digit it does not draw is a chord with no key.
     /// </remarks>
     /// <summary>
-    /// The whole home list, top to bottom: the request categories, then the board's rows, then
-    /// MORE. One list, walked with one pair of keys, with no crossover edges and no modes.
+    /// The request surface: the request categories, and nothing else.
     /// </summary>
     /// <remarks>
-    /// It was three surfaces with special cases joining them: BOARD nested inside the request menu,
-    /// then a crossover edge off the top of the board, with MORE hanging off the end of the board
-    /// list where it made no sense. Moving between them meant remembering which edge did what.
-    /// <para>
-    /// Ordering matches the surface: the panel draws the leading entries above the board, the rows
-    /// draw themselves in the middle, and the trailing entries draw below. What you see going past
-    /// is the order you are moving through.
-    /// </para>
+    /// Three surfaces, one key each: UP is what you ask a squadmate for, DOWN is the work in front
+    /// of you, TOOLS is the machine itself. One merged list had all three on it, so DOWN into the
+    /// board and then UP walked straight back into the requests, and ARTILLERY and TOOLS sat among
+    /// the categories reading like things you could ask somebody for.
     /// </remarks>
-    private List<MenuEntry> RootEntries()
-    {
-        // TOOLS first, then the request categories, then the board's rows. On screen the first two
-        // groups draw ABOVE the board, so walking UP from a row reaches the categories and then
-        // TOOLS, and walking DOWN reaches the rows. Up is asking for something, down is the work in
-        // front of you, and neither direction can wander into the other.
-        var entries = new List<MenuEntry>
-        {
-            new() { Digit = NoDigit, Path = "home.fire", Label = "ARTILLERY" },
-            new() { Digit = ZeroDigit, Path = "home.more", Label = "TOOLS" },
-        };
+    private List<MenuEntry> RootEntries() => [.. _tree.Root];
 
-        entries.AddRange(_tree.Root);
-
-        entries.AddRange(_context.OccupiedSlots
+    /// <summary>The occupied rows, in slot order. The whole of the board surface.</summary>
+    private List<MenuEntry> BoardRowEntries() =>
+    [
+        .. _context.OccupiedSlots
             .Where(s => s is >= 1 and <= 9)
             .OrderBy(s => s)
             .Select(s => new MenuEntry
@@ -1581,44 +1628,10 @@ public sealed class MenuStateMachine
                 Digit = s,
                 Path = $"board.{s}",
                 Label = s.ToString(CultureInfo.InvariantCulture),
-            }));
+            }),
+    ];
 
-        return entries;
-    }
-
-    /// <summary>
-    /// Where DOWN from rest lands: the first board row, or the first request category when there
-    /// are no rows to go down to.
-    /// </summary>
-    /// <remarks>
-    /// It used to fall back to TOOLS, which is at the far end of the list, so on an empty board one
-    /// press of DOWN landed on the settings page and the next press of UP appeared to teleport into
-    /// the request tree.
-    /// </remarks>
-    private int FirstBoardIndex()
-    {
-        var entries = RootEntries();
-
-        for (var i = 0; i < entries.Count; i++)
-        {
-            if (entries[i].Path.StartsWith("board.", StringComparison.Ordinal))
-            {
-                return i;
-            }
-        }
-
-        for (var i = 0; i < entries.Count; i++)
-        {
-            if (!entries[i].Path.StartsWith("home.", StringComparison.Ordinal))
-            {
-                return i;
-            }
-        }
-
-        return 0;
-    }
-
-    /// <summary>True while the highlight is on a request category rather than a row or MORE.</summary>
+    /// <summary>True while the highlight is on a request category.</summary>
     public bool HighlightIsARequest
     {
         get
@@ -1634,8 +1647,7 @@ public sealed class MenuStateMachine
                 return false;
             }
 
-            var path = options[Highlight].Path;
-            return !path.StartsWith("board.", StringComparison.Ordinal) && path != "home.more";
+            return true;
         }
     }
 
@@ -1753,6 +1765,7 @@ public sealed class MenuStateMachine
         "roles" => _context.EnabledRoleIds.Count > 0,
         "match" => _context.DeploymentLabel is not null,
         "people" => _context.Roster.Count > 0,
+        "range" => true,
         // Always offered. It used to require a coordinate snapshot taken at key-down, and snapshots
         // are never taken at key-down any more, so GUN HERE silently vanished from MORE and the
         // whole fire-solution path became unreachable. Selecting it READS THE MAP, like the
@@ -1843,13 +1856,58 @@ public sealed class MenuStateMachine
     }
 
     /// <summary>
-    /// Digit 0 on the home list is MORE, matching where it is drawn. It used to open the board,
-    /// which is no longer a level: the rows are part of this list and are reached by moving to one.
+    /// The TOOLS surface, from rest or from either other surface. Its own key, because it is not a
+    /// request and putting it on the request list made it read like one.
     /// </summary>
-    private MenuNavigated EnterMore()
+    public MenuOutcome OpenTools(DateTimeOffset now, MenuContext? context = null, MapPoint? snapshot = null)
     {
+        if (!IsOpen)
+        {
+            var opened = Open(now, snapshot, context);
+            if (opened is MenuDiscarded)
+            {
+                return opened;
+            }
+        }
+
+        _lastInput = now;
         Level = MenuLevel.More;
         return new MenuNavigated(Level);
+    }
+
+    /// <summary>
+    /// Opens one MORE entry by id, which is how a spoken panel reaches the same surface its digit
+    /// reaches.
+    /// </summary>
+    /// <remarks>
+    /// Routed through <see cref="RunMore"/> rather than setting a level here, so voice and the
+    /// keyboard cannot drift: a gated entry is refused for the speaker exactly as it is absent for
+    /// the presser, and a panel that grows a precondition grows it for both at once.
+    /// </remarks>
+    public MenuOutcome OpenPanel(
+        string panelId,
+        DateTimeOffset now,
+        MenuContext? context = null,
+        MapPoint? snapshot = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(panelId);
+
+        if (!MoreDigits.TryGetValue(panelId, out var digit))
+        {
+            return MenuOutcome.None;
+        }
+
+        if (!IsOpen)
+        {
+            var opened = Open(now, snapshot, context);
+            if (opened is MenuDiscarded)
+            {
+                return opened;
+            }
+        }
+
+        _lastInput = now;
+        return RunMore(digit);
     }
 
     /// <summary>Opens the verbs for one row. The navigation path reaches this by selecting it.</summary>
@@ -1923,18 +1981,18 @@ public sealed class MenuStateMachine
             return new MenuNavigated(Level);
         }
 
+        if (entry.Id == "range")
+        {
+            Level = MenuLevel.RangeTool;
+            return new MenuNavigated(Level);
+        }
+
         if (entry.Id == "gun")
         {
-            if (_snapshot is { } known)
-            {
-                Reset();
-                return new MenuGunPositionSet(known);
-            }
-
-            // No point in hand, so ask for one the same way the coordinate level does: open the
-            // map, put the cursor on the gun, and the read fills it.
-            Level = MenuLevel.GunPosition;
-            return new MenuNavigated(Level);
+            // The one route to an origin is the range page, which reads the map where it stands.
+            Level = MenuLevel.RangeTool;
+            _rangeAwaiting = "range.origin";
+            return new MenuCoordinateReadRequested();
         }
 
         Reset();

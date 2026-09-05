@@ -1,4 +1,4 @@
-using WarCommand.Agent.Core.Abstractions;
+﻿using WarCommand.Agent.Core.Abstractions;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Model;
 
@@ -15,6 +15,9 @@ namespace WarCommand.Agent.Capture;
 /// another press somewhere clearer. A wrong coordinate is a fire mission on the wrong grid; a
 /// refused one costs a second.
 /// </remarks>
+/// <summary>One ladder rung's decode of one frame. The unit the rungs vote with.</summary>
+internal readonly record struct Vote(string RawText, decimal X, decimal Y, decimal Margin);
+
 public sealed class MapReadoutCoordinateSource : ICoordinateSource
 {
     private readonly Func<GameProfile> _profile;
@@ -198,6 +201,14 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
             ? readout.NearWhiteLadder
             : [readout.NearWhiteThreshold];
 
+        // EVERY rung is read and they VOTE. Taking the first rung that decoded meant a dim edge
+        // readout, where the top rung erodes a glyph into a different but still legal one, was
+        // answered by the eroded reading before the rungs that can actually see the text were ever
+        // tried. That reading is stable, so re-reading returned the same wrong number for as long
+        // as the cursor sat there and it looked exactly like a cache. It is not one: nothing here
+        // holds a coordinate or a frame between calls.
+        var votes = new List<Vote>();
+
         foreach (var threshold in ladder)
         {
             var candidates = NearWhiteScanner.Scan(frame, threshold, glyphGap: readout.GlyphGapPx);
@@ -210,15 +221,62 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
 
             if (reader.ReadPoint(frame, candidates, _mapBounds()) is { } found)
             {
-                return new MapPoint(found.X, found.Y, Id, found.RawText, Confidence(found.Confidence));
+                votes.Add(new Vote(found.RawText, found.X, found.Y, found.Confidence));
             }
         }
 
-        // Both halves or nothing, at every threshold on the ladder. One axis is not a coordinate,
-        // and a half read that silently kept the previous value would be the worst outcome
-        // available.
-        LastRefusal = "NO COORDS";
-        return null;
+        if (votes.Count == 0)
+        {
+            // Both halves or nothing, at every threshold on the ladder. One axis is not a
+            // coordinate, and a half read that silently kept the previous value would be the worst
+            // outcome available.
+            LastRefusal = "NO COORDS";
+            return null;
+        }
+
+        if (Consensus(votes) is not { } agreed)
+        {
+            LastRefusal = "AMBIGUOUS READ";
+            return null;
+        }
+
+        // Agreement across rungs is the evidence, so it carries the confidence. One rung agreeing
+        // with nothing is the dim edge reading that only the bottom of the ladder can see: still
+        // answered, because refusing there is the blindness this ladder exists to fix, but marked
+        // as the weaker reading it is.
+        return new MapPoint(
+            agreed.Vote.X,
+            agreed.Vote.Y,
+            Id,
+            agreed.Vote.RawText,
+            Confidence(agreed.Vote.Margin, agreed.Agreeing));
+    }
+
+    /// <summary>
+    /// The reading the most ladder rungs agree on, or null when two readings tie.
+    /// </summary>
+    /// <remarks>
+    /// The rungs are evidence, not a search that stops at the first hit. A tie is the case worth
+    /// refusing: two rungs read the same pixels as two different coordinates and nothing in the
+    /// frame says which is right, so answering either one is a coin toss on somebody's grid.
+    /// </remarks>
+    internal static (Vote Vote, int Agreeing)? Consensus(IReadOnlyList<Vote> votes)
+    {
+        ArgumentNullException.ThrowIfNull(votes);
+
+        var tally = votes
+            .GroupBy(v => v.RawText, StringComparer.Ordinal)
+            .Select(g => (Text: g.Key, Count: g.Count()))
+            .OrderByDescending(g => g.Count)
+            .ToList();
+
+        if (tally.Count == 0 || (tally.Count > 1 && tally[0].Count == tally[1].Count))
+        {
+            return null;
+        }
+
+        var winner = votes.First(v => string.Equals(v.RawText, tally[0].Text, StringComparison.Ordinal));
+        return (winner, tally[0].Count);
     }
 
     /// <summary>
@@ -236,8 +294,10 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
     /// nudges it. It is a statement about agreement, not a probability.
     /// </para>
     /// </remarks>
-    private static decimal Confidence(decimal margin) =>
-        Math.Round(Math.Clamp(0.75m + (margin * 3m), 0m, 1m), 2);
+    private static decimal Confidence(decimal margin, int agreeingThresholds) =>
+        Math.Round(
+            Math.Clamp((agreeingThresholds > 1 ? 0.75m : 0.60m) + (margin * 3m), 0m, 1m),
+            2);
 
     /// <summary>The square of the given radius around the cursor, clipped to the client rect.</summary>
     private static CaptureArea Around(CaptureArea client, (int X, int Y)? cursor, int radius)

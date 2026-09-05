@@ -1,9 +1,10 @@
+using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 
 namespace WarCommand.Agent.Overlay;
 
 /// <summary>
-/// The artillery readout as its own section of the board.
+/// The range readout as its own section of the board.
 /// </summary>
 /// <remarks>
 /// It used to be one string squeezed into the menu's typed-text field, which clipped it and tied it
@@ -18,8 +19,17 @@ namespace WarCommand.Agent.Overlay;
 /// </remarks>
 public sealed record ArtilleryViewModel
 {
-    /// <summary>Where the gun is, or what is still missing.</summary>
+    /// <summary>Where the range is measured from, or what is still missing.</summary>
     public required string Gun { get; init; }
+
+    /// <summary>The calculator this range is judged against: SNIPING, MORTAR, ARTILLERY.</summary>
+    public string Mode { get; init; } = string.Empty;
+
+    /// <summary>The straight-line range between the two ends, or empty while one is missing.</summary>
+    public string Range { get; init; } = string.Empty;
+
+    /// <summary>True while the range is outside what the chosen weapon can reach.</summary>
+    public bool RangeIsOutOfReach { get; init; }
 
     /// <summary>Where the target is, or what is still missing.</summary>
     public required string Target { get; init; }
@@ -37,7 +47,9 @@ public sealed record ArtilleryViewModel
     public static ArtilleryViewModel? For(
         MapPoint? gun,
         MapPoint? target,
-        Func<MapPoint, MapPoint, (string Bracket, string Note)> compute)
+        Func<MapPoint, MapPoint, (string Bracket, string Note)> compute,
+        RangeMode? mode = null,
+        Func<MapPoint, MapPoint, decimal>? metres = null)
     {
         ArgumentNullException.ThrowIfNull(compute);
 
@@ -48,7 +60,8 @@ public sealed record ArtilleryViewModel
 
         var readout = new ArtilleryViewModel
         {
-            Gun = FormattableString.Invariant($"GUN     x{gun.X:0.00} y{gun.Y:0.00}"),
+            Mode = mode?.Label ?? string.Empty,
+            Gun = FormattableString.Invariant($"ORIGIN  x{gun.X:0.00} y{gun.Y:0.00}"),
             Target = target is { } aimed
                 ? FormattableString.Invariant($"TARGET  x{aimed.X:0.00} y{aimed.Y:0.00}")
                 : "TARGET  NOT SET",
@@ -56,7 +69,17 @@ public sealed record ArtilleryViewModel
 
         if (target is not { } aim)
         {
-            return readout with { Note = "SET THE TARGET FOR A BRACKET" };
+            return readout with { Note = "SET THE TARGET FOR A RANGE" };
+        }
+
+        if (metres is not null)
+        {
+            var range = metres(gun, aim);
+            readout = readout with
+            {
+                Range = FormattableString.Invariant($"{range:0} M"),
+                RangeIsOutOfReach = mode?.IsOutOfRange(range) == true,
+            };
         }
 
         var (bracket, note) = compute(gun, aim);

@@ -43,6 +43,24 @@ public enum BindingAction
 
     /// <summary>Up one level. Armed only while a hold key is down.</summary>
     NavBack,
+
+    /// <summary>
+    /// The TOOLS page, straight from rest. Armed only while a hold key is down.
+    /// </summary>
+    /// <remarks>
+    /// Tools are not requests, so they are not on the request list. UP is what you ask for, DOWN is
+    /// the work in front of you, and this is the machine itself: three surfaces, one key each.
+    /// </remarks>
+    NavTools,
+
+    /// <summary>
+    /// Steps the range calculator back a mode. Armed only while a hold key is down.
+    /// </summary>
+    /// <remarks>
+    /// Forward is the TOOLS key, which cycles rather than opening TOOLS while the range page is up:
+    /// on that page you are already in the tools.
+    /// </remarks>
+    NavCycle,
 }
 
 /// <summary>Display text for a binding. The only text a conflict message or the tray may render.</summary>
@@ -59,10 +77,12 @@ public static class BindingActions
         BindingAction.NavDown,
         BindingAction.NavSelect,
         BindingAction.NavBack,
+        BindingAction.NavTools,
+        BindingAction.NavCycle,
     ];
 
     /// <summary>
-    /// The four navigation keys. Armed ONLY while a hold key is down, so W walks and D leans
+    /// The navigation keys. Armed ONLY while a hold key is down, so W walks and D leans
     /// exactly as they always did whenever the overlay is not being driven.
     /// </summary>
     public static IReadOnlyList<BindingAction> Navigation { get; } =
@@ -71,6 +91,8 @@ public static class BindingActions
         BindingAction.NavDown,
         BindingAction.NavSelect,
         BindingAction.NavBack,
+        BindingAction.NavTools,
+        BindingAction.NavCycle,
     ];
 
     /// <summary>True for a key that only ever acts inside a held menu.</summary>
@@ -87,6 +109,8 @@ public static class BindingActions
         BindingAction.NavDown => "Menu: down",
         BindingAction.NavSelect => "Menu: select",
         BindingAction.NavBack => "Menu: back",
+        BindingAction.NavTools => "Menu: tools",
+        BindingAction.NavCycle => "Menu: mode back",
         _ => "Unbound",
     };
 

@@ -116,10 +116,10 @@ public sealed record AgentSettings
     // Overlay.
 
     /// <summary>
-    /// Always on, mirroring the game, or hidden. Defaults to always on, and it has to: Wardogs is
-    /// not out, so mirroring it would leave the overlay correct and invisible on every machine.
+    /// Always on, mirroring the game, or hidden. Defaults to mirroring Wardogs: the overlay belongs
+    /// on the game's screen, and always on is the fallback for a machine the game is not on.
     /// </summary>
-    public OverlayMode OverlayMode { get; init; } = OverlayMode.AlwaysOn;
+    public OverlayMode OverlayMode { get; init; } = OverlayMode.MirrorGame;
 
     /// <summary>
     /// Which monitor the overlay draws on, as a Windows device name like <c>\.\DISPLAY2</c>.

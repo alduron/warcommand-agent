@@ -213,6 +213,14 @@ public sealed class BindingSet
         _chords[BindingAction.NavSelect] = Chord.Bare("D");
         _chords[BindingAction.NavBack] = Chord.Bare("A");
 
+        // TOOLS is its own key because it is its own surface. It sat on the request list, where it
+        // read as something you could ask a squadmate for.
+        _chords[BindingAction.NavTools] = Chord.Bare("E");
+
+        // Q steps the range calculator back a mode. E steps it forward, which is why forward has no
+        // key of its own: on the range page you are already in the tools.
+        _chords[BindingAction.NavCycle] = Chord.Bare("Q");
+
         _chords[BindingAction.Board] = Chord.RightAlt("B");
         _chords[BindingAction.Panic] = Chord.RightAlt("P");
     }

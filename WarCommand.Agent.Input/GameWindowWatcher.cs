@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Input.Hooks;
 
@@ -233,7 +233,24 @@ public sealed class GameWindowWatcher : IForegroundProbe, IDisposable
             return null;
         }
 
-        var foreground = NativeMethods.GetForegroundWindow() == window;
+        // Focus is decided by the owning process, never by handle equality with MainWindowHandle.
+        // A UE5 client can present into a window that is not the one MainWindowHandle names, and
+        // comparing handles then reports the game unfocused for as long as it runs: hotkeys still
+        // worked, because their gate already compared pids, and the mirrored overlay never drew.
+        // The foreground handle is also the one adopted, so the client rect is the rect being
+        // drawn into.
+        var foregroundWindow = NativeMethods.GetForegroundWindow();
+        var foreground = false;
+        if (foregroundWindow != IntPtr.Zero)
+        {
+            _ = NativeMethods.GetWindowThreadProcessId(foregroundWindow, out var owner);
+            if (pids.Contains(owner))
+            {
+                foreground = true;
+                window = foregroundWindow;
+            }
+        }
+
         var rect = NativeMethods.IsIconic(window) ? ScreenRect.Empty : ClientRectOf(window);
         var exclusive = foreground && IsExclusiveFullscreen();
 

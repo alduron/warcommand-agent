@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.RegularExpressions;
 using WarCommand.Agent.Capture;
 using WarCommand.Agent.Core.Contracts;
@@ -452,7 +452,11 @@ internal static class Program
         // Several thresholds from ONE capture. A higher threshold thins the strokes, which is what
         // separates characters the anti-aliased outline has bridged together, and asking a human to
         // hold a cursor still once per threshold is not a debugging loop anybody finishes.
-        int[] thresholds = [threshold, 245, 250, 252, 254];
+        // The SERVED ladder, plus whatever --threshold asked for. Five hardcoded high values were
+        // exactly the wrong set for the case worth snapping: the readout dims towards the edges of
+        // the map, so the rungs that can see it there are the low ones, and none of them was ever
+        // written out. Binding rule 5 as well: these are facts about the game, not constants.
+        int[] thresholds = [threshold, .. readout.NearWhiteLadder];
 
         var written = 0;
         foreach (var t in thresholds.Distinct().Order())

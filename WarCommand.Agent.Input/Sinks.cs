@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using WarCommand.Agent.Input.Bindings;
 
 namespace WarCommand.Agent.Input;
@@ -61,6 +61,12 @@ public interface IMenuNavSink
 
     /// <summary>Right click. Up one level.</summary>
     void Back();
+
+    /// <summary>The TOOLS surface, from rest or from anywhere on either other surface.</summary>
+    void Tools();
+
+    /// <summary>Steps a page that has modes. Negative is back, positive is forward.</summary>
+    void Cycle(int direction);
 }
 
 /// <summary>A chord fired. Everything that is not PTT and not a menu key arrives here.</summary>

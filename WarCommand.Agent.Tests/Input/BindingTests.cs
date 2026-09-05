@@ -26,16 +26,17 @@ public class BindingTests
     }
 
     [Fact]
-    public void The_whole_hotkey_surface_is_eight_bindings()
+    public void The_whole_hotkey_surface_is_ten_bindings()
     {
-        // Two hold keys, two RightAlt chords, and the four navigation keys. Navigation is bindable
-        // because it sits on WASD and anybody who moves those in game must move these.
+        // Two hold keys, two RightAlt chords, and the six navigation keys: up, down, select, back,
+        // tools and the mode step. Navigation is bindable because it sits on the movement keys and
+        // anybody who moves those in game must move these.
         //
-        // Escape was the ninth and is gone: it discarded and closed, which is what letting go of
-        // the hold key already does, and holding a binding on it took the game's own Escape.
-        Assert.Equal(8, BindingActions.All.Count);
-        Assert.Equal(8, BindingSet.Defaults().All.Count());
-        Assert.Equal(4, BindingActions.Navigation.Count);
+        // Escape is gone: it discarded and closed, which is what letting go of the hold key already
+        // does, and holding a binding on it took the game's own Escape.
+        Assert.Equal(10, BindingActions.All.Count);
+        Assert.Equal(10, BindingSet.Defaults().All.Count());
+        Assert.Equal(6, BindingActions.Navigation.Count);
     }
 
     [Fact]

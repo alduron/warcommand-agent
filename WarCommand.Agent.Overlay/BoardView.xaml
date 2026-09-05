@@ -559,14 +559,14 @@
                     <ItemsControl x:Name="SecondaryList" ItemTemplate="{StaticResource StripRowTemplate}" />
                 </StackPanel>
 
-                <!-- ARTILLERY: a section of the board, not a line inside a menu. The bracket used
-                     to be squeezed into the menu's one typed-text field, so it was clipped and it
-                     only existed while the key was held: the crew could not read the numbers they
-                     were about to dial. It lives here for as long as a gun is set. -->
+                <!-- RANGE: a section of the board, not a line inside a menu. The numbers used
+                     to be squeezed into the menu's one typed-text field, so they were clipped and
+                     they only existed while the key was held: the crew could not read what they
+                     were about to dial. It lives here for as long as an origin is set. -->
                 <StackPanel x:Name="ArtillerySection" Visibility="Collapsed">
                     <Border Padding="9,5,9,2">
                         <TextBlock x:Name="ArtilleryLabel" Style="{StaticResource Up}"
-                                   Foreground="{StaticResource Dim}" Text="ARTILLERY" />
+                                   Foreground="{StaticResource Dim}" Text="RANGE" />
                     </Border>
                     <Border Padding="9,0,9,6">
                         <StackPanel>
@@ -576,6 +576,13 @@
                             <TextBlock x:Name="ArtilleryTarget" Style="{StaticResource Mono}"
                                        FontSize="{StaticResource LabelSize}"
                                        Foreground="{StaticResource Ink}" TextWrapping="Wrap" />
+
+                            <!-- The range itself, in the mode's own terms. It turns red the
+                                 moment the shot is outside what that weapon can reach. -->
+                            <TextBlock x:Name="ArtilleryRange" Style="{StaticResource Mono}"
+                                       FontSize="{StaticResource SlotSize}"
+                                       Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                       TextWrapping="Wrap" />
 
                             <!-- The numbers the crew dials. Big, on their own line, wrapping rather
                                  than trimming: a clipped elevation is a round on the wrong grid. -->

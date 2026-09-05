@@ -126,7 +126,7 @@ public sealed class MenuDriver : IMenuKeySink, IMenuGate, IMenuNavSink
         if (!_menu.IsOpen)
         {
             // From rest, UP is the request menu and DOWN is the board. Two directions, two
-            // surfaces, neither nested in the other.
+            // surfaces, neither nested in the other. TOOLS is the third and has its own key.
             if (notches < 0)
             {
                 Raise(_menu.Open(_clock(), PendingSnapshot, PendingContext));
@@ -142,8 +142,35 @@ public sealed class MenuDriver : IMenuKeySink, IMenuGate, IMenuNavSink
         Raise(_menu.Scroll(notches, _clock()));
     }
 
+    /// <summary>
+    /// Opens one MORE panel by id, which is how a spoken panel reaches the surface its digit
+    /// reaches. Carries the same snapshot and context a key-opened menu carries.
+    /// </summary>
+    public void OpenPanel(string panelId) =>
+        Raise(_menu.OpenPanel(panelId, _clock(), PendingContext, PendingSnapshot));
+
     /// <inheritdoc />
     public void Commit() => Raise(_menu.Select(_clock()));
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Opens TOOLS from rest as well as from an open menu: it is a surface, not a page hanging off
+    /// the request list, where it read as something you could ask a squadmate for. On the range
+    /// page it steps the calculator forward instead, because that page IS the tools.
+    /// </remarks>
+    public void Tools()
+    {
+        if (_menu.Level is MenuLevel.RangeTool)
+        {
+            Raise(_menu.CycleRangeMode(1, _clock()));
+            return;
+        }
+
+        Raise(_menu.OpenTools(_clock(), PendingContext, PendingSnapshot));
+    }
+
+    /// <inheritdoc />
+    public void Cycle(int direction) => Raise(_menu.CycleRangeMode(direction, _clock()));
 
     /// <inheritdoc />
     /// <remarks>

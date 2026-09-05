@@ -1,4 +1,4 @@
-﻿namespace WarCommand.Agent.Speech.Capture;
+namespace WarCommand.Agent.Speech.Capture;
 
 /// <summary>One WASAPI capture endpoint, by its friendly name.</summary>
 /// <param name="Id">Endpoint id. Stable across reboots; what settings stores.</param>
@@ -63,8 +63,19 @@ public interface IAudioDeviceCatalog
 }
 
 /// <summary>
+/// One chunk of captured audio, handed over as it arrives. A span, so the samples never escape as
+/// an array reference and there is nothing to retain.
+/// </summary>
+/// <remarks>
+/// Raised on the capture thread. It MUST NOT block: anything slow starves capture and Windows
+/// starts dropping buffers. Copy what you need and return.
+/// </remarks>
+public delegate void AudioChunkHandler(ReadOnlySpan<short> samples);
+
+/// <summary>
 /// The microphone, opened once and held for the session. Audio only ever moves from here into an
-/// <see cref="AudioBuffer"/>: there is no sink that writes it anywhere else.
+/// <see cref="AudioBuffer"/> or through <see cref="IAudioCapture.OnChunk"/>: there is no sink that
+/// writes it anywhere else.
 /// </summary>
 /// <remarks>
 /// Device loss is handled live. Unplugging a USB headset mid-match falls back to Default, reports
@@ -92,6 +103,17 @@ public interface IAudioCapture : IDisposable
 
     /// <summary>Stops capture and zeroes every scratch buffer it held.</summary>
     void Close();
+
+    /// <summary>
+    /// Handed every chunk as it arrives, for a recognizer that decodes while the key is still down.
+    /// Null when nobody is listening, which is the whole-buffer path.
+    /// </summary>
+    /// <remarks>
+    /// Set before <see cref="BeginHold"/> and cleared after <see cref="EndHold"/>. It is an
+    /// addition to the destination buffer rather than a replacement: the buffer still carries the
+    /// hold's peak, which is what the silent-hold check reads.
+    /// </remarks>
+    AudioChunkHandler? OnChunk { get; set; }
 
     /// <summary>Routes captured samples into <paramref name="destination"/> until the hold ends.</summary>
     void BeginHold(AudioBuffer destination);

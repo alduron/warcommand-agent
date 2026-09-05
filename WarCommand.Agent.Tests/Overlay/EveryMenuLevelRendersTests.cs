@@ -46,25 +46,20 @@ public sealed class EveryMenuLevelRendersTests
     /// <summary>Every level the hold key can reach, opened and drawn.</summary>
     private static IEnumerable<(string Where, MenuViewModel View)> EveryLevel()
     {
-        // The home list.
+        // The request surface.
         var home = Machine();
-        home.OpenOnBoard(T0, Context());
+        home.Open(T0, context: Context());
         yield return ("home", MenuViewModel.From(home));
 
-        // Each trailing tool and each page under MORE.
-        foreach (var path in (string[])["home.fire", "home.more"])
-        {
-            var machine = Machine();
-            machine.OpenOnBoard(T0, Context());
-            SelectPath(machine, path);
-            yield return (path, MenuViewModel.From(machine));
-        }
+        // The TOOLS surface, and each page behind it.
+        var tools = Machine();
+        tools.OpenTools(T0, Context());
+        yield return ("tools", MenuViewModel.From(tools));
 
-        foreach (var page in (string[])["help", "roles", "match", "people"])
+        foreach (var page in (string[])["range", "help", "roles", "match", "people"])
         {
             var machine = Machine();
-            machine.OpenOnBoard(T0, Context());
-            SelectPath(machine, "home.more");
+            machine.OpenTools(T0, Context());
             SelectPath(machine, $"board.more.{page}");
             yield return ($"board.more.{page}", MenuViewModel.From(machine));
         }
@@ -82,7 +77,7 @@ public sealed class EveryMenuLevelRendersTests
         foreach (var root in MenuTree.Compile(Catalog).Root)
         {
             var machine = Machine();
-            machine.OpenOnBoard(T0, Context());
+            machine.Open(T0, context: Context());
             SelectPath(machine, root.Path);
             yield return (root.Path, MenuViewModel.From(machine));
         }
@@ -207,8 +202,7 @@ public sealed class EveryMenuLevelRendersTests
     public void Help_is_reference_text_and_never_a_row_of_dead_keys()
     {
         var machine = Machine();
-        machine.OpenOnBoard(T0, Context());
-        SelectPath(machine, "home.more");
+        machine.OpenTools(T0, Context());
         SelectPath(machine, "board.more.help");
 
         var view = MenuViewModel.From(machine);
@@ -229,8 +223,7 @@ public sealed class EveryMenuLevelRendersTests
     public void Help_describes_the_controls_that_exist_now()
     {
         var machine = Machine();
-        machine.OpenOnBoard(T0, Context());
-        SelectPath(machine, "home.more");
+        machine.OpenTools(T0, Context());
         SelectPath(machine, "board.more.help");
 
         var text = string.Join(" | ", MenuViewModel.From(machine).Options.Select(o => o.Label));
@@ -247,19 +240,19 @@ public sealed class EveryMenuLevelRendersTests
     }
 
     [Fact]
-    public void Artillery_is_reachable_and_draws_no_digit()
+    public void The_range_calculator_is_a_tool_and_lives_on_the_tools_surface()
     {
         var machine = Machine();
-        machine.OpenOnBoard(T0, Context());
+        machine.OpenTools(T0, Context());
         var view = MenuViewModel.From(machine);
 
-        var artillery = view.Options.Concat(view.Trailing).Single(o => o.Label == "ARTILLERY");
+        var range = view.Options.Concat(view.Trailing).Single(o => o.Label == "RANGE");
 
-        // There is no spare digit: 1 to 9 are board rows and 0 is MORE. Blank is the honest answer,
-        // and the row is reached by scrolling onto it like every other navigable entry.
-        Assert.Equal(string.Empty, artillery.DigitDisplay);
+        // It is a tool, so it carries a TOOLS digit rather than sitting among the request
+        // categories where it read as something you could ask a squadmate for.
+        Assert.NotEqual(string.Empty, range.DigitDisplay);
 
-        SelectPath(machine, "home.fire");
-        Assert.Equal(MenuLevel.FireTool, machine.Level);
+        SelectPath(machine, "board.more.range");
+        Assert.Equal(MenuLevel.RangeTool, machine.Level);
     }
 }

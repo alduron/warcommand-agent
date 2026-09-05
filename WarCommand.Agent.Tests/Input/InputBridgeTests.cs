@@ -109,11 +109,19 @@ public class InputBridgeTests
             }
         }
 
+        public int ToolsOpened { get; private set; }
+
         public void Commit() => Commits++;
 
         public void Back()
         {
         }
+
+        public void Tools() => ToolsOpened++;
+
+        public int Cycled { get; private set; }
+
+        public void Cycle(int direction) => Cycled += direction;
     }
 
     [Fact]

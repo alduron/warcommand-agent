@@ -1,4 +1,4 @@
-﻿using NAudio.CoreAudioApi;
+using NAudio.CoreAudioApi;
 using NAudio.CoreAudioApi.Interfaces;
 using NAudio.Wave;
 
@@ -151,6 +151,9 @@ public sealed class WasapiAudioCapture : IAudioCapture, IAudioDeviceCatalog
             _log.Note(SpeechEvent.CaptureClosed, name);
         }
     }
+
+    /// <inheritdoc />
+    public AudioChunkHandler? OnChunk { get; set; }
 
     /// <inheritdoc />
     public void BeginHold(AudioBuffer destination)
@@ -396,7 +399,17 @@ public sealed class WasapiAudioCapture : IAudioCapture, IAudioDeviceCatalog
             }
 
             _levelPeak = Math.Max(_levelPeak * 0.7, peak / (double)short.MaxValue);
-            _destination?.Append(_scratch.AsSpan(0, written));
+
+            if (_destination is { } destination)
+            {
+                destination.Append(_scratch.AsSpan(0, written));
+
+                // The streaming tap, and only while a hold is actually open. It copies and
+                // returns: this is the capture thread inside the data lock, so anything that
+                // decodes here would starve capture and Windows would drop buffers.
+                OnChunk?.Invoke(_scratch.AsSpan(0, written));
+            }
+
             Array.Clear(_scratch, 0, written);
         }
     }

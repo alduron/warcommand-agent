@@ -275,6 +275,12 @@ public sealed class InputBridge
                 case BindingAction.NavSelect:
                     _menuNav.Commit();
                     break;
+                case BindingAction.NavTools:
+                    _menuNav.Tools();
+                    break;
+                case BindingAction.NavCycle:
+                    _menuNav.Cycle(-1);
+                    break;
                 default:
                     _menuNav.Back();
                     break;

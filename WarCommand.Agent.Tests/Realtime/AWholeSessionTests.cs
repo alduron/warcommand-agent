@@ -157,49 +157,53 @@ public sealed class AWholeSessionTests
         var menu = session.Machine;
         menu.OpenOnBoard(T0, session.ContextNow());
 
-        // DOWN from rest is the board. Walking down stays on rows until they run out.
-        Assert.NotNull(menu.HighlightedSlot);
-        var firstRow = menu.Highlight;
-        menu.Scroll(1, T0);
+        // DOWN from rest is the board, and every press after that stays on it.
+        Assert.Equal(MenuLevel.Board, menu.Level);
         Assert.NotNull(menu.HighlightedSlot);
 
-        // UP off the top row is the menu, and it is the request categories first, never the tools.
-        menu.Scroll(-1, T0);
-        menu.Scroll(-1, T0);
-        Assert.True(menu.HighlightIsARequest, "up off a row must reach the requests");
-        Assert.NotEqual("home.more", menu.Options[menu.Highlight].Path);
-        Assert.True(menu.Highlight < firstRow, "the menu is above the board, not below it");
+        foreach (var notches in (int[])[1, -1, -1, -1, 1])
+        {
+            menu.Scroll(notches, T0);
+            Assert.Equal(MenuLevel.Board, menu.Level);
+            Assert.NotNull(menu.HighlightedSlot);
+        }
+
+        // Leaving is BACK, and it lands at rest with nothing on screen but the board itself. It
+        // used to walk up into the request categories, so DOWN then UP drew both at once.
+        menu.Back(T0);
+        Assert.False(menu.IsOpen);
+
+        // And UP from rest is the requests, with no rows on it.
+        menu.Open(T0, context: session.ContextNow());
+        Assert.Equal(MenuLevel.Root, menu.Level);
+        Assert.True(menu.HighlightIsARequest);
+        Assert.DoesNotContain(menu.Options, o => o.Path.StartsWith("board.", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void Tools_is_one_press_from_anywhere_and_back_never_closes()
+    public void Tools_is_one_press_from_anywhere_and_is_never_on_the_request_list()
     {
         var session = new Session();
         session.Observer.OnRequestSubmitted(Row("MTR-1", Mate));
 
         var menu = session.Machine;
-        menu.OpenOnBoard(T0, session.ContextNow());
+        menu.Open(T0, context: session.ContextNow());
 
-        // Into a request category, three levels from home.
-        while (!menu.HighlightIsARequest)
-        {
-            menu.Scroll(-1, T0);
-        }
+        // Not a request. It sat among the categories, where it read as something to ask for.
+        Assert.DoesNotContain(menu.Options, o => o.Label is "TOOLS" or "ARTILLERY");
 
+        // Into a request category, two levels down.
         menu.Select(T0);
         Assert.Equal(MenuLevel.Branch, menu.Level);
 
-        // 0 reaches the tools from there without walking back out.
-        menu.Digit(0, T0);
+        // The TOOLS key reaches them from there without walking back out.
+        menu.OpenTools(T0, session.ContextNow());
         Assert.Equal(MenuLevel.More, menu.Level);
 
-        // And back climbs out to rest rather than ending the interaction. It used to CLOSE at the
-        // top, so the key meaning "I did not mean that" also dropped you out of the menu entirely.
+        // And backing off TOOLS leaves it, because it is a surface rather than a page above the
+        // requests: the hold stays armed and the other two surfaces are one press away.
         menu.Back(T0);
-        Assert.Equal(MenuLevel.Root, menu.Level);
-        menu.Back(T0);
-        Assert.Equal(MenuLevel.Root, menu.Level);
-        Assert.True(menu.IsOpen, "back must never close the menu");
+        Assert.False(menu.IsOpen);
     }
 
     [Fact]

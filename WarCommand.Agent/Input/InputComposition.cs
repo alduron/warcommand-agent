@@ -51,8 +51,8 @@ public sealed class InputComposition : IDisposable
     /// <param name="overlay">Registered as the drawing subsystem and driven by the Board chord.</param>
     /// <param name="tray">Registered as the indicator subsystem so it greys on panic.</param>
     /// <param name="onHold">
-    /// Hold-key edges, with the action so the two can be told apart: PTT opens the microphone and
-    /// Menu does not. Down is where a coordinate is snapshotted, for both.
+    /// Hold-key edges, with the action so the two can be told apart. Both open the microphone and
+    /// both open the menu; down is where a coordinate is snapshotted, for both.
     /// </param>
     /// <param name="menu">
     /// The menu keys and the gate. Null leaves every digit inert, which is the tray-only and
@@ -135,8 +135,8 @@ public sealed class InputComposition : IDisposable
     /// Carries the hold-key edges out, naming which key it was. No key code, ever.
     /// </summary>
     /// <remarks>
-    /// Both hold keys land on this one sink, so the action is read back from the bridge: PTT wants
-    /// a microphone opened and Menu must never open one.
+    /// Both hold keys land on this one sink, so the action is read back from the bridge. They now
+    /// do the same thing; the action is still carried because a binding is still a binding.
     /// </remarks>
     private sealed class PttRouter(InputBridge bridge, Action<BindingAction, bool> onHold) : IPttSink
     {
