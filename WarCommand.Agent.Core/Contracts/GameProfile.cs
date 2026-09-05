@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace WarCommand.Agent.Core.Contracts;
@@ -81,6 +81,20 @@ public sealed record MapReadoutSection
     /// glyphs is what makes dropping the threshold safe.
     /// </remarks>
     public IReadOnlyList<int> NearWhiteLadder { get; init; } = [];
+
+    /// <summary>
+    /// Rungs derived from the frame itself, as fractions of the brightest near-neutral pixel found
+    /// beside the crosshair. Empty means fixed rungs only.
+    /// </summary>
+    /// <remarks>
+    /// A fixed ladder guesses where the text sits on a gradient. These measure it: the readout's
+    /// own core is the brightest thing beside the cursor, so a fraction of it lands on the glyph
+    /// body wherever the map has dimmed it to. Every rung, fixed or derived, is one vote.
+    /// </remarks>
+    public IReadOnlyList<decimal> NearWhiteRelativeRatios { get; init; } = [];
+
+    /// <summary>No derived rung goes below this. Under it, terrain is brighter than the text.</summary>
+    public int NearWhiteFloor { get; init; } = 120;
 
     /// <summary>'scan_panel_for_pattern'. Never a fixed rectangle.</summary>
     public string ScanStrategy { get; init; } = "scan_panel_for_pattern";

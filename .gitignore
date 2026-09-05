@@ -19,3 +19,7 @@ TestResults/
 # Local dev TLS proxy: each developer generates their own cert and key. See DEVELOPING.md.
 dev/cert.pem
 dev/key.pem
+
+# The capture probe's default output. Masks are the sanctioned tuning artifact and a curated few
+# belong in a test; a raw dump of a live session does not, per 12-security.md.
+masks/

@@ -49,7 +49,7 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
     private readonly Func<IReadOnlyCollection<string>> _enabledRoleIds;
     private readonly Action<ParseResult> _onParsed;
     private readonly SilentHoldMonitor _silence;
-    private readonly FileClientLog _log;
+    private readonly RollingFileLog _log;
 
     private VoskModel? _model;
     private ISpeechEngine? _engine;
@@ -66,7 +66,7 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
         Func<IReadOnlyCollection<string>> enabledRoleIds,
         Action<ParseResult> onParsed,
         SilentHoldMonitor silence,
-        FileClientLog log)
+        RollingFileLog log)
     {
         ArgumentNullException.ThrowIfNull(capture);
         ArgumentNullException.ThrowIfNull(catalog);

@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="WarCommand.Agent.Tests" />
+    <InternalsVisibleTo Include="WarCommand.CaptureProbe" />
   </ItemGroup>
 
   <PropertyGroup>

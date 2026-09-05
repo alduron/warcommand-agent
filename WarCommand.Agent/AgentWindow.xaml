@@ -516,6 +516,76 @@
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
+            <TabItem Header="LOGS">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,20,24,24">
+                    <StackPanel MaxWidth="720">
+
+                        <TextBlock Text="SUPPORT" Style="{StaticResource SectionHeader}" />
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Border Style="{StaticResource FieldRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                            <TextBlock Text="Export logs" Style="{StaticResource FieldLabel}" />
+                                            <TextBlock x:Name="LogSizeCaption" Style="{StaticResource FieldCaption}"
+                                                       Text="One zip on your desktop" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="EXPORT" Click="OnExportLogs"
+                                                MinWidth="92" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource FieldRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                            <TextBlock Text="Verbose logging" Style="{StaticResource FieldLabel}" />
+                                            <TextBlock Text="Off: faults only. On: every step, for one reproduction"
+                                                       Style="{StaticResource FieldCaption}" />
+                                        </StackPanel>
+                                        <CheckBox x:Name="VerboseLogging" Grid.Column="1"
+                                                  Style="{StaticResource Switch}" Click="OnDirty" />
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource FieldRow}" BorderThickness="0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                            <TextBlock Text="Open log folder" Style="{StaticResource FieldLabel}" />
+                                            <TextBlock Text="Rolling, 7 days, 10 MB total"
+                                                       Style="{StaticResource FieldCaption}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="OPEN" Click="OnOpenLogFolder"
+                                                MinWidth="92" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="WHAT IS IN IT" Style="{StaticResource SectionHeader}" />
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Margin="18">
+                                <TextBlock Style="{StaticResource FieldCaption}" TextWrapping="Wrap"
+                                           Text="Faults, window and display names, agent version, backend." />
+                                <TextBlock Style="{StaticResource FieldCaption}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                           Text="No token, key binding, callsign, coordinate, audio or screen frame." />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
         </TabControl>
     </DockPanel>
 </Window>

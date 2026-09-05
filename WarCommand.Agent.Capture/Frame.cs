@@ -1,4 +1,4 @@
-namespace WarCommand.Agent.Capture;
+﻿namespace WarCommand.Agent.Capture;
 
 /// <summary>
 /// One captured frame, bottom-up BGRA. Lives for as long as the scan and never leaves the process:
@@ -75,6 +75,39 @@ public sealed class Frame
         }
 
         return rows;
+    }
+
+    /// <summary>
+    /// The brightest near-neutral pixel inside the box, by its weakest channel, or 0 for an empty
+    /// box. This is what a relative threshold is a fraction of.
+    /// </summary>
+    /// <remarks>
+    /// The weakest channel, not the average: a saturated colour is bright and is not text. The
+    /// readout's own core is the brightest neutral thing beside the crosshair, so measuring it is
+    /// how a threshold follows the map's gradient instead of guessing at it.
+    /// </remarks>
+    public int PeakNearWhite(int left, int top, int width, int height)
+    {
+        var right = Math.Min(Width, left + width);
+        var bottom = Math.Min(Height, top + height);
+        left = Math.Max(0, left);
+        top = Math.Max(0, top);
+
+        var peak = 0;
+        for (var y = top; y < bottom; y++)
+        {
+            for (var x = left; x < right; x++)
+            {
+                var i = ((y * Width) + x) * 4;
+                var weakest = Math.Min(Pixels[i], Math.Min(Pixels[i + 1], Pixels[i + 2]));
+                if (weakest > peak)
+                {
+                    peak = weakest;
+                }
+            }
+        }
+
+        return peak;
     }
 
     /// <summary>True when every channel is at or above the threshold. The readout is near-white text.</summary>

@@ -154,6 +154,16 @@ public sealed record AgentSettings
     /// <summary>Opt-in, off by default. Binding rule 9.</summary>
     public bool ScreenCaptureEnabled { get; init; }
 
+    /// <summary>
+    /// Off: warnings and errors only. On: every step as well, for reproducing something on request.
+    /// </summary>
+    /// <remarks>
+    /// The default file has to stay small enough that somebody will actually attach it, and long
+    /// enough that it still holds last night's incident. Warnings and errors alone do both. Verbose
+    /// is what a person is asked to switch on for one reproduction, not what everyone runs.
+    /// </remarks>
+    public bool VerboseLogging { get; init; }
+
 
 
     /// <summary>

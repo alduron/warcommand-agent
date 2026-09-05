@@ -1,8 +1,9 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using WarCommand.Agent.Client.Diagnostics;
 using WarCommand.Agent.Client.Storage;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Settings;
@@ -140,8 +141,9 @@ public partial class AgentWindow : Window
         var down = _bindings[BindingAction.NavDown];
         var select = _bindings[BindingAction.NavSelect];
         var back = _bindings[BindingAction.NavBack];
+        var tools = _bindings[BindingAction.NavTools];
         MenuOpenLine.Text = menu.IsBound
-            ? $"Hold {menu.Label}. {up.Label} and {down.Label} move, {select.Label} takes the highlighted line, {back.Label} goes back. Release and nothing is listening. Hold {(ptt.IsBound ? ptt.Label : "the push to talk key")} instead to speak."
+            ? $"Hold {menu.Label}. {up.Label} is the request menu, {down.Label} is the board, {tools.Label} is tools. {select.Label} takes the highlighted line, {back.Label} leaves it. Release and nothing is listening. Hold {(ptt.IsBound ? ptt.Label : "the push to talk key")} instead to speak."
             : "No overlay menu key is bound. Click its chord above and press any key.";
 
         // No digits here. A row offers only the verbs it can honour and numbers them from one, so
@@ -206,6 +208,8 @@ public partial class AgentWindow : Window
         WhenUnfocused.SelectedIndex = (int)settings.WhenUnfocused;
         AutoCopyOnClaim.IsChecked = settings.AutoCopyOnClaim;
         ScreenCapture.IsChecked = settings.ScreenCaptureEnabled;
+        VerboseLogging.IsChecked = settings.VerboseLogging;
+        RenderLogSize();
 
         _loading = false;
         RenderValues();
@@ -256,7 +260,82 @@ public partial class AgentWindow : Window
         WhenUnfocused = (UnfocusedBehaviour)Math.Max(WhenUnfocused.SelectedIndex, 0),
         AutoCopyOnClaim = AutoCopyOnClaim.IsChecked is true,
         ScreenCaptureEnabled = ScreenCapture.IsChecked is true,
+        VerboseLogging = VerboseLogging.IsChecked is true,
     };
+
+    /// <summary>
+    /// One zip on the desktop, then Explorer with it selected.
+    /// </summary>
+    /// <remarks>
+    /// The desktop rather than a save dialog: the person doing this is mid-incident and describing
+    /// it to somebody else, and a file picker is one more thing to explain. Selecting it in Explorer
+    /// is what turns "it exported" into a file they can drag into a chat window.
+    /// </remarks>
+    private void OnExportLogs(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var zip = LogBundle.Write(
+                _store.Paths,
+                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                App.DescribeForSupport(_store.Current));
+
+            SavedNote.Text = "Exported to your desktop";
+            RenderLogSize();
+            Reveal(zip);
+        }
+        catch (IOException error)
+        {
+            SavedNote.Text = "Export failed: " + error.Message;
+        }
+        catch (UnauthorizedAccessException error)
+        {
+            SavedNote.Text = "Export failed: " + error.Message;
+        }
+    }
+
+    /// <summary>What the export would weigh, so nobody has to guess before clicking.</summary>
+    private void RenderLogSize()
+    {
+        var directory = _store.Paths.LogDirectory;
+        long bytes = 0;
+
+        if (Directory.Exists(directory))
+        {
+            foreach (var file in Directory.GetFiles(directory))
+            {
+                bytes += new FileInfo(file).Length;
+            }
+        }
+
+        LogSizeCaption.Text = bytes == 0
+            ? "Nothing logged yet"
+            : FormattableString.Invariant($"One zip on your desktop, about {bytes / 1024} KB");
+    }
+
+    private void OnOpenLogFolder(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(_store.Paths.LogDirectory);
+        Reveal(_store.Paths.LogDirectory);
+    }
+
+    /// <summary>Explorer, with the item selected rather than merely open beside it.</summary>
+    private static void Reveal(string path)
+    {
+        using var explorer = new System.Diagnostics.Process
+        {
+            StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = File.Exists(path)
+                    ? FormattableString.Invariant($"/select,\"{path}\"")
+                    : FormattableString.Invariant($"\"{path}\""),
+                UseShellExecute = true,
+            },
+        };
+
+        explorer.Start();
+    }
 
     private void OnResetBindings(object sender, RoutedEventArgs e)
     {

@@ -68,8 +68,11 @@ public class AgentWindowTests
                 window.UpdateLayout();
             }
 
-            // Audio, Keybinds, Speech, Overlay. No Board: the queue is the web board.
-            Assert.Equal(4, window.Tabs.Items.Count);
+            // Named rather than counted, so this keeps saying what it means: NO BOARD tab. The
+            // queue is the web board and the glance is the overlay, per the one-window rule.
+            Assert.Equal(
+                ["AUDIO", "KEYBINDS", "SPEECH", "OVERLAY", "LOGS"],
+                window.Tabs.Items.Cast<System.Windows.Controls.TabItem>().Select(t => t.Header));
             window.Close();
         });
     }

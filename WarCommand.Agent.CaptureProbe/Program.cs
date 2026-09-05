@@ -243,6 +243,15 @@ internal static class Program
         Console.WriteLine($"Open the map and hover a point. Reading in {delay}s...");
         Thread.Sleep(delay * 1000);
 
+        // POINT comes from the shipping path, not a second one beside it. The probe used to scan at
+        // one threshold and assemble the pair itself, so it agreed with the agent by coincidence
+        // and disagreed with it exactly where the agent was wrong. The blob list below is still the
+        // single-threshold view, which is what --why is for.
+        var source = new MapReadoutCoordinateSource(
+            () => profile,
+            () => target.Handle,
+            () => true);
+
         var area = GameWindow.ClientRectOnScreen(target.Handle);
 
         for (var i = 1; i <= frames; i++)
@@ -263,11 +272,12 @@ internal static class Program
                     .OrderBy(b => Distance(b, at.X, at.Y))];
             }
 
-            var runs = reader.Read(frame, blobs);
-            var point = reader.ReadPoint(frame, blobs);
+            var runs = reader.Read(frame, blobs, threshold);
+            var point = source.ReadOnceForProbe();
 
             Console.WriteLine();
-            Console.WriteLine($"frame {i}: {blobs.Count} candidates near the crosshair, {runs.Count} decoded");
+            Console.WriteLine(
+                $"frame {i}: {blobs.Count} candidates near the crosshair, {runs.Count} decoded at {threshold}");
 
             foreach (var run in runs.Take(6))
             {
@@ -284,8 +294,9 @@ internal static class Program
             }
 
             Console.WriteLine(point is { } p
-                ? $"  POINT  x{p.X} y{p.Y}   worst margin {p.Confidence:F3}   raw '{p.RawText}'"
-                : "  no complete x and y pair this frame");
+                ? $"  POINT  x{p.X} y{p.Y}   confidence {p.Confidence:F2}   raw '{p.RawText}'"
+                : $"  refused: {source.LastRefusal ?? "no pair"}");
+            Console.WriteLine($"  votes  {source.LastVoteSummary ?? "none"}");
         }
 
         Console.WriteLine();
@@ -443,6 +454,7 @@ internal static class Program
         }
 
         Directory.CreateDirectory(dir);
+        var snapReader = new ReadoutReader(readout);
 
         var blobs = NearWhiteScanner.Scan(frame, threshold, glyphGap: readout.GlyphGapPx)
             .Where(b => DistanceTo(b, at.X, at.Y) <= radius)
@@ -456,14 +468,22 @@ internal static class Program
         // exactly the wrong set for the case worth snapping: the readout dims towards the edges of
         // the map, so the rungs that can see it there are the low ones, and none of them was ever
         // written out. Binding rule 5 as well: these are facts about the game, not constants.
-        int[] thresholds = [threshold, .. readout.NearWhiteLadder];
+        int[] thresholds =
+        [
+            threshold,
+            .. MapReadoutCoordinateSource.Rungs(readout.NearWhiteLadder, readout, frame, at),
+        ];
 
         var written = 0;
         foreach (var t in thresholds.Distinct().Order())
         {
+            // Nearest first and capped, the same way the reader caps them: a rung low enough to
+            // flood the panel would otherwise bury the two blobs worth reading under a hundred
+            // pieces of terrain.
             var perT = NearWhiteScanner.Scan(frame, t, glyphGap: readout.GlyphGapPx)
                 .Where(b => DistanceTo(b, at.X, at.Y) <= radius)
                 .OrderBy(b => DistanceTo(b, at.X, at.Y))
+                .Take(Math.Max(2, readout.ExpectedMatchesPerFrame * 6))
                 .ToList();
 
             var index = 0;
@@ -475,10 +495,20 @@ internal static class Program
                 written++;
             }
 
-            Console.WriteLine($"  threshold {t}: {perT.Count} candidates");
+            // The decode as well as the mask, from the same capture and the same rung. One hover has
+            // to answer both "what did it read" and "what did it see", or the loop costs the person
+            // at the keyboard two goes at holding a cursor still.
+            Console.WriteLine(FormattableString.Invariant(
+                $"  threshold {t}: {perT.Count} candidates"));
+
+            foreach (var blob in perT)
+            {
+                Console.WriteLine("      " + snapReader.Explain(frame, blob));
+            }
         }
 
         Console.WriteLine($"{written} masks written to {dir}");
+        Console.WriteLine("No frame was written. A mask is the 1-bit shape, per binding rule 3.");
         return 0;
     }
 

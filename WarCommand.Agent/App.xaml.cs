@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Net.Http;
@@ -159,10 +159,10 @@ public partial class App : Application, IDisposable
     private UpdateDownloader? _updates;
     private UpdateOffer? _offer;
     private DispatcherTimer? _updateTimer;
-    private FileClientLog? _updateLog;
+    private RollingFileLog? _updateLog;
 
     /// <summary>The session log. Set once in OnStartup, unlike _updateLog which installed builds own.</summary>
-    private FileClientLog? _log;
+    private RollingFileLog? _log;
     private WasapiAudioCapture? _audioDevices;
     private DispatcherTimer? _configTimer;
     private DispatcherTimer? _tickTimer;
@@ -258,7 +258,7 @@ public partial class App : Application, IDisposable
             // Before the tray, before any registration: a second instance must leave no trace.
             // It does raise the running agent's window first: somebody who clicked the Start menu
             // shortcut asked to see WarCommand, and silently exiting answers that with nothing.
-            new FileClientLog(paths).Warn("Another agent is already running. This launch is exiting.");
+            new RollingFileLog(paths).Warn("Another agent is already running. This launch is exiting.");
             AskRunningAgentToShowItself();
             Shutdown();
             return;
@@ -294,7 +294,7 @@ public partial class App : Application, IDisposable
         // Absent in a dev launch, which must never register a developer's machine for startup.
         if (!profile.IsDev)
         {
-            _startup = new WindowsStartup(new FileClientLog(paths));
+            _startup = new WindowsStartup(new RollingFileLog(paths));
             _startup.Reconcile();
             _menuState = _menuState with { StartWithWindows = _startup.IsEnabled };
         }
@@ -304,8 +304,11 @@ public partial class App : Application, IDisposable
         _tray.SetTooltip(profile.IsTrayOnly ? "WarCommand (tray only)" : "WarCommand");
         _tray.ShowLocationHint();
 
-        var log = new FileClientLog(paths);
+        // Verbose is read per line rather than captured, so the switch in settings takes effect
+        // without a restart. The store is already built above.
+        var log = new RollingFileLog(paths, () => _settings?.Current.VerboseLogging ?? false);
         _log = log;
+        InstallCrashHandlers(log);
 
         if (profile.IsTrayOnly)
         {
@@ -362,7 +365,7 @@ public partial class App : Application, IDisposable
     /// watcher's part by hand: it hands the controller a Show and no client rect, which is the
     /// same path a second-monitor user in Dim takes.
     /// </remarks>
-    private void ShowOverlayDemo(FileClientLog log)
+    private void ShowOverlayDemo(RollingFileLog log)
     {
         if (_settings is not { } settings)
         {
@@ -436,7 +439,7 @@ public partial class App : Application, IDisposable
     /// The watcher polls out of process and by window handle only. Nothing here opens the game, and
     /// nothing draws inside it: see 06-overlay-ux.md "Window" and binding rule 1.
     /// </remarks>
-    private void StartOverlay(BoardPresenter presenter, FileClientLog log)
+    private void StartOverlay(BoardPresenter presenter, RollingFileLog log)
     {
         if (_settings is not { } settings)
         {
@@ -553,7 +556,7 @@ public partial class App : Application, IDisposable
     }
 
     /// <summary>Compiles the menu for the current catalog and wires its outcomes.</summary>    /// <summary>Compiles the menu for the current catalog and wires its outcomes.</summary>
-    private Composition.MenuDriver BuildMenu(BoardPresenter presenter, FileClientLog log)
+    private Composition.MenuDriver BuildMenu(BoardPresenter presenter, RollingFileLog log)
     {
         var catalog = BundledContracts.Catalog().Current;
         var tree = MenuTree.Compile(catalog);
@@ -571,7 +574,7 @@ public partial class App : Application, IDisposable
     /// The coordinate is snapshotted on key DOWN and handed to the menu here, never sampled later:
     /// people move the mouse while they talk and while they read a menu.
     /// </remarks>
-    private async void OnHold(BindingAction action, bool held, SettingsStore settings, FileClientLog log)
+    private async void OnHold(BindingAction action, bool held, SettingsStore settings, RollingFileLog log)
     {
         // Both hold keys open the menu, so the surface is the same whichever way you came in, and
         // both open the microphone: the split meant the key under the left hand heard nothing.
@@ -720,7 +723,7 @@ public partial class App : Application, IDisposable
     /// </remarks>
     private GunPosition? _gunPosition;
 
-    private void SetGunPosition(MapPoint point, FileClientLog log)
+    private void SetGunPosition(MapPoint point, RollingFileLog log)
     {
         // The weapon is whichever gun role the user subscribes to. Mortar first: it is the common
         // one, and the two share every field the solution needs.
@@ -778,7 +781,7 @@ public partial class App : Application, IDisposable
     /// decimal point to the digit beside it. Another press somewhere clearer costs a second; a
     /// wrong coordinate costs a fire mission on the wrong grid.
     /// </remarks>
-    private async void ReadCoordinateFromScreen(BoardPresenter presenter, FileClientLog log)
+    private async void ReadCoordinateFromScreen(BoardPresenter presenter, RollingFileLog log)
     {
         if (_menu is not { } menu)
         {
@@ -817,7 +820,7 @@ public partial class App : Application, IDisposable
     /// Voice and the keyboard end in the same actions on purpose: a spoken request submits through
     /// the same call the menu submits through, and a spoken verb goes out on the same socket.
     /// </remarks>
-    private void OnParsedSpeech(ParseResult parsed, FileClientLog log)
+    private void OnParsedSpeech(ParseResult parsed, RollingFileLog log)
     {
         switch (parsed)
         {
@@ -974,7 +977,7 @@ public partial class App : Application, IDisposable
     }
 
     /// <summary>Everything the menu can decide, and what the agent does about it.</summary>
-    private void OnMenuOutcome(MenuOutcome outcome, BoardPresenter presenter, FileClientLog log)
+    private void OnMenuOutcome(MenuOutcome outcome, BoardPresenter presenter, RollingFileLog log)
     {
         switch (outcome)
         {
@@ -1128,7 +1131,7 @@ public partial class App : Application, IDisposable
     /// A request the menu finished composing. Optimistic: the row is the server's answer, and a
     /// refusal is reported on the surface rather than swallowed.
     /// </summary>
-    private async void SubmitFromMenu(MenuRequestReady ready, FileClientLog log)
+    private async void SubmitFromMenu(MenuRequestReady ready, RollingFileLog log)
     {
         if (_client is not { } client
             || _standingOn is not { } deployment
@@ -1227,7 +1230,7 @@ public partial class App : Application, IDisposable
     /// <summary>
     /// Sends whatever the queue is holding, once the socket says the network is back.
     /// </summary>
-    private async Task DrainSubmitQueueAsync(FileClientLog log)
+    private async Task DrainSubmitQueueAsync(RollingFileLog log)
     {
         if (_submitQueue is not { Count: > 0 } queue || _client is not { } client)
         {
@@ -1268,7 +1271,7 @@ public partial class App : Application, IDisposable
     /// <remarks>
     /// A claim is never queued: a replayed one takes work somebody else has already finished.
     /// </remarks>
-    private void RunBoardVerb(MenuBoardAction action, FileClientLog log)
+    private void RunBoardVerb(MenuBoardAction action, RollingFileLog log)
     {
         if (_realtime is not { } realtime || _observer?.Board is not { } board)
         {
@@ -1355,7 +1358,7 @@ public partial class App : Application, IDisposable
     /// Both are offered only when they can be honoured: restart needs admin, and link needs the
     /// prompt to be showing. Neither is a page, so neither has a level.
     /// </remarks>
-    private async void RunPanel(string panelId, FileClientLog log)
+    private async void RunPanel(string panelId, RollingFileLog log)
     {
         if (_client is not { } client)
         {
@@ -1401,7 +1404,7 @@ public partial class App : Application, IDisposable
     /// OFF returns fewer rows, and upserting alone left every row that role used to serve sitting
     /// on the surface holding a digit for the rest of the session.
     /// </remarks>
-    private async Task ReseedAfterRoleChangeAsync(FileClientLog log)
+    private async Task ReseedAfterRoleChangeAsync(RollingFileLog log)
     {
         if (_client is not { } client
             || _presenter is not { } presenter
@@ -1421,7 +1424,7 @@ public partial class App : Application, IDisposable
         }
     }
 
-    private async void ToggleRoleFromMenu(string roleId, FileClientLog log)
+    private async void ToggleRoleFromMenu(string roleId, RollingFileLog log)
     {
         if (_client is not { } client || _standingOn is not { } deployment)
         {
@@ -1460,7 +1463,7 @@ public partial class App : Application, IDisposable
     }
 
     /// <summary>Six digits off the keypad, for anybody with no microphone and no web board open.</summary>
-    private async void JoinFromMenu(string inviteCode, FileClientLog log)
+    private async void JoinFromMenu(string inviteCode, RollingFileLog log)
     {
         if (_client is not { } client || _presenter is not { } presenter)
         {
@@ -1746,7 +1749,7 @@ public partial class App : Application, IDisposable
     /// Checks now, then every six hours. A failed check is not an error the user sees: the tray
     /// simply keeps showing no update, which is what it showed a moment ago.
     /// </summary>
-    private void StartUpdateChecks(AgentPaths paths, FileClientLog log)
+    private void StartUpdateChecks(AgentPaths paths, RollingFileLog log)
     {
         if (!IsInstalledBuild())
         {
@@ -1808,7 +1811,7 @@ public partial class App : Application, IDisposable
     /// Asks the API what is published and lets <see cref="UpdateDecision"/> rule on it. Every
     /// refusal lives there, so this method only maps the wire shape and stores the outcome.
     /// </summary>
-    private async Task CheckForUpdateAsync(FileClientLog log)
+    private async Task CheckForUpdateAsync(RollingFileLog log)
     {
         if (_client is not { } client)
         {
@@ -2053,6 +2056,63 @@ public partial class App : Application, IDisposable
     /// of its own, so the Start menu shortcut is how most people will reach it, and clicking it
     /// while the agent is already running has to do something. It shows the window.
     /// </summary>
+    /// <summary>
+    /// Every way this process can die badly, written down before it does.
+    /// </summary>
+    /// <remarks>
+    /// The agent has no window most of the time, so an unhandled exception is invisible: the tray
+    /// icon vanishes and the user reports that it "stopped working". A crash nobody can describe is
+    /// the single most expensive kind of bug report, and all three of these were unhandled.
+    /// </remarks>
+    /// <summary>
+    /// The facts a log line needs beside it to mean anything, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Assembled here because only the composition root knows the backend, the game and the tray
+    /// state. What may appear is decided by <see cref="LogBundleSummary"/>'s fields, not by this
+    /// method: there is no field for a token, a binding, a callsign or a coordinate.
+    /// </remarks>
+    internal static LogBundleSummary DescribeForSupport(AgentSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var app = Current as App;
+
+        return new LogBundleSummary
+        {
+            AgentVersion = AgentVersion,
+            WindowsVersion = Environment.OSVersion.VersionString,
+            Backend = app?._menuState.Backend ?? "unknown",
+            OverlayMode = settings.OverlayMode.ToString(),
+            ScreenCaptureEnabled = settings.ScreenCaptureEnabled,
+            GameRunning = app?._gameWatcher?.GameIsRunning ?? false,
+            Connection = (app?._menuState.Indicator ?? TrayIndicator.Offline).ToString(),
+            Displays =
+            [
+                .. System.Windows.Forms.Screen.AllScreens.Select(s => FormattableString.Invariant(
+                    $"{s.Bounds.Width}x{s.Bounds.Height}{(s.Primary ? " primary" : string.Empty)}")),
+            ],
+            LastReadRefusal = app?._mapReadout?.LastRefusal,
+        };
+    }
+
+    private void InstallCrashHandlers(RollingFileLog log)
+    {
+        DispatcherUnhandledException += (_, e) =>
+            log.Error("Unhandled exception on the UI thread.", e.Exception);
+
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            log.Error("Unhandled exception. The process is going down.", e.ExceptionObject as Exception);
+
+        // Observed here so it is recorded, then marked observed: an unobserved task exception does
+        // not kill the process on .NET 8, and letting it stay unobserved records nothing.
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            log.Error("Unobserved task exception.", e.Exception);
+            e.SetObserved();
+        };
+    }
+
     private void ListenForShowRequests()
     {
         var signal = new EventWaitHandle(false, EventResetMode.AutoReset, ShowWindowEventName);
@@ -2130,7 +2190,7 @@ public partial class App : Application, IDisposable
             : FormattableString.Invariant($"{point.Source}: x{point.X:0.00} y{point.Y:0.00}"));
     }
 
-    private async Task RunAgentLoopAsync(AgentProfile profile, AgentPaths paths, FileClientLog log, BoardPresenter presenter)
+    private async Task RunAgentLoopAsync(AgentProfile profile, AgentPaths paths, RollingFileLog log, BoardPresenter presenter)
     {
         var tokenStore = new TokenStore(paths, log: log);
         _tokenStore = tokenStore;
@@ -2195,16 +2255,39 @@ public partial class App : Application, IDisposable
         _log?.Info("Bindings changed.");
     }
 
-    /// <summary>Adopts the chords held in settings, leaving any the file does not name.</summary>
+    /// <summary>
+    /// Adopts the chords held in settings, leaving any the file does not name.
+    /// </summary>
+    /// <remarks>
+    /// A stored chord wins over a DEFAULT holding the same key, which is the case whenever a new
+    /// binding ships on a key somebody had already rebound to something else: Rebind refuses a
+    /// conflict, so without this the saved choice was silently dropped in favour of the new default
+    /// and the user's own key stopped working with nothing said. A conflict between two STORED
+    /// chords is still refused, first one wins, because the file is then arguing with itself.
+    /// </remarks>
     private void ApplyStoredBindings(AgentSettings settings)
     {
+        var stored = new List<(BindingAction Action, Chord Chord)>(settings.Bindings.Count);
         foreach (var (name, label) in settings.Bindings)
         {
             if (Enum.TryParse<BindingAction>(name, out var action)
                 && Chord.TryParse(label, out var chord))
             {
-                _ = _bindings.Rebind(action, chord);
+                stored.Add((action, chord));
             }
+        }
+
+        var named = stored.Select(pair => pair.Action).ToHashSet();
+
+        foreach (var (action, chord) in stored)
+        {
+            var holder = _bindings.Resolve(chord);
+            if (holder != BindingAction.None && holder != action && !named.Contains(holder))
+            {
+                _ = _bindings.Unbind(holder);
+            }
+
+            _ = _bindings.Rebind(action, chord);
         }
     }
 
@@ -2256,7 +2339,7 @@ public partial class App : Application, IDisposable
         .FirstOrDefault();
 
     private async Task RenderForAsync(
-        WarCommandApiClient client, MeResponse me, BoardPresenter presenter, FileClientLog log)
+        WarCommandApiClient client, MeResponse me, BoardPresenter presenter, RollingFileLog log)
     {
         var membership = StandingOn(me);
 
@@ -2378,7 +2461,7 @@ public partial class App : Application, IDisposable
     }
 
     /// <summary>Callsigns on this match, for the menu's PEOPLE page.</summary>
-    private async Task LoadRosterAsync(WarCommandApiClient client, Guid deploymentId, FileClientLog log)
+    private async Task LoadRosterAsync(WarCommandApiClient client, Guid deploymentId, RollingFileLog log)
     {
         try
         {
@@ -2407,7 +2490,7 @@ public partial class App : Application, IDisposable
     /// empty in the normal case and the row reads as a switch that cannot switch.
     /// </remarks>
     private async Task LoadSwitchableDeploymentsAsync(
-        WarCommandApiClient client, MeResponse me, Guid current, FileClientLog log)
+        WarCommandApiClient client, MeResponse me, Guid current, RollingFileLog log)
     {
         var found = new List<TrayDeployment>();
         foreach (var membership in me.Memberships.Take(SwitchableGroupLimit))
@@ -2550,7 +2633,7 @@ public partial class App : Application, IDisposable
     /// </para>
     /// </remarks>
     private void StartRealtime(
-        WarCommandApiClient client, MeResponse me, BoardPresenter presenter, FileClientLog log)
+        WarCommandApiClient client, MeResponse me, BoardPresenter presenter, RollingFileLog log)
     {
         if (me.RealtimeUrl is not { } url)
         {
@@ -2670,7 +2753,7 @@ public partial class App : Application, IDisposable
     /// from the membership, and only <c>/v1/me</c> carries one.
     /// </summary>
     private async void OnDeploymentFrame(
-        WarCommandApiClient client, BoardPresenter presenter, Guid? deployment, FileClientLog log)
+        WarCommandApiClient client, BoardPresenter presenter, Guid? deployment, RollingFileLog log)
     {
         _sawFrameRecently = true;
 
@@ -2684,14 +2767,14 @@ public partial class App : Application, IDisposable
 
     /// <summary>config.changed, membership.ended and resync all mean the same thing: read it again.</summary>
     private async void OnConfigFrame(
-        WarCommandApiClient client, BoardPresenter presenter, FileClientLog log)
+        WarCommandApiClient client, BoardPresenter presenter, RollingFileLog log)
     {
         _sawFrameRecently = true;
         await ReloadConfigAsync(client, presenter, log).ConfigureAwait(true);
     }
 
     private async Task ReloadConfigAsync(
-        WarCommandApiClient client, BoardPresenter presenter, FileClientLog log)
+        WarCommandApiClient client, BoardPresenter presenter, RollingFileLog log)
     {
         try
         {
@@ -2713,7 +2796,7 @@ public partial class App : Application, IDisposable
         WarCommandApiClient client,
         BoardPresenter presenter,
         Guid deploymentId,
-        FileClientLog log,
+        RollingFileLog log,
         CancellationToken cancellationToken)
     {
         if (_observer?.Board is not { } board)
@@ -2764,7 +2847,7 @@ public partial class App : Application, IDisposable
     /// something a person does between rounds, not mid-fight.
     /// </para>
     /// </remarks>
-    private void StartConfigWatch(WarCommandApiClient client, BoardPresenter presenter, FileClientLog log)
+    private void StartConfigWatch(WarCommandApiClient client, BoardPresenter presenter, RollingFileLog log)
     {
         var timer = new DispatcherTimer { Interval = ConfigFallbackInterval };
         timer.Tick += async (_, _) =>
@@ -2816,7 +2899,7 @@ public partial class App : Application, IDisposable
     /// screen saying why. Guarded, because the socket retries on a schedule and every attempt would
     /// otherwise start another registration.
     /// </remarks>
-    private async void RecoverCredentials(string code, BoardPresenter presenter, FileClientLog log)
+    private async void RecoverCredentials(string code, BoardPresenter presenter, RollingFileLog log)
     {
         if (_recoveringCredentials
             || _client is not { } client
@@ -2856,7 +2939,7 @@ public partial class App : Application, IDisposable
     /// somebody deleted tokens.dat by hand.
     /// </summary>
     private async Task<MeResponse> AuthenticateAsync(
-        WarCommandApiClient client, TokenStore tokenStore, AgentPaths paths, AgentProfile profile, FileClientLog log)
+        WarCommandApiClient client, TokenStore tokenStore, AgentPaths paths, AgentProfile profile, RollingFileLog log)
     {
         try
         {
@@ -2886,7 +2969,7 @@ public partial class App : Application, IDisposable
     /// at the browser, and the two accounts can never be merged afterwards.
     /// </remarks>
     private async Task EnsureCredentialsAsync(
-        WarCommandApiClient client, TokenStore tokenStore, AgentPaths paths, AgentProfile profile, FileClientLog log)
+        WarCommandApiClient client, TokenStore tokenStore, AgentPaths paths, AgentProfile profile, RollingFileLog log)
     {
         if (tokenStore.DeviceId is null)
         {
@@ -2951,7 +3034,7 @@ public partial class App : Application, IDisposable
     /// giving up would leave a tray icon that has quietly stopped trying.
     /// </remarks>
     private async Task WaitForPairingAsync(
-        WarCommandApiClient client, TokenStore tokenStore, Guid deviceId, string deviceToken, FileClientLog log)
+        WarCommandApiClient client, TokenStore tokenStore, Guid deviceId, string deviceToken, RollingFileLog log)
     {
         await ShowPairingCodeAsync(client, deviceId, deviceToken, log).ConfigureAwait(true);
         _presenter?.ShowEmptyState("Not set up", _menuState.PairingCode is { } shown
@@ -3006,7 +3089,7 @@ public partial class App : Application, IDisposable
     /// agent kept the old one and the web had no way to reach it. A re-link swaps the account.
     /// </remarks>
     private void StartLocalLink(
-        WarCommandApiClient client, TokenStore tokenStore, string deviceToken, FileClientLog log)
+        WarCommandApiClient client, TokenStore tokenStore, string deviceToken, RollingFileLog log)
     {
         _localLink?.Dispose();
         _localLink = new LocalPairingListener(
@@ -3032,7 +3115,7 @@ public partial class App : Application, IDisposable
     /// Re-reads the account after a link and re-renders. The board, the header and the tray all
     /// come from <c>/v1/me</c>, so this is the whole of what changes when the account does.
     /// </summary>
-    private async Task ReloadAfterLinkAsync(WarCommandApiClient client, FileClientLog log)
+    private async Task ReloadAfterLinkAsync(WarCommandApiClient client, RollingFileLog log)
     {
         if (_presenter is not { } presenter)
         {
@@ -3064,7 +3147,7 @@ public partial class App : Application, IDisposable
     /// typed into the tray, still pairs the device.
     /// </summary>
     private async Task ShowPairingCodeAsync(
-        WarCommandApiClient client, Guid deviceId, string deviceToken, FileClientLog log)
+        WarCommandApiClient client, Guid deviceId, string deviceToken, RollingFileLog log)
     {
         try
         {
@@ -3102,7 +3185,7 @@ public partial class App : Application, IDisposable
         Guid deploymentId,
         Guid viewerId,
         BoardPresenter presenter,
-        FileClientLog log)
+        RollingFileLog log)
     {
         var now = DateTimeOffset.UtcNow;
         var wire = await client.GetBoardAsync(deploymentId, query: null, CancellationToken.None).ConfigureAwait(true);

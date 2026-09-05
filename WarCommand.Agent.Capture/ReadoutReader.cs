@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.RegularExpressions;
 using WarCommand.Agent.Core.Contracts;
 
@@ -28,6 +28,7 @@ public sealed class ReadoutReader
     private readonly double? _costOverride;
     private decimal? _floorOverride;
     private decimal? _boundsMax;
+    private int? _inkThreshold;
 
     /// <param name="readout">The served map_readout section: glyphs, pattern, threshold, floor.</param>
     /// <param name="fontOverride">Faces to use instead of the profile's, for a calibration sweep.</param>
@@ -57,13 +58,31 @@ public sealed class ReadoutReader
     public IReadOnlyList<string> Fonts => [.. _atlases.Select(a => a.FontFamily)];
 
     /// <summary>
+    /// The value every ink test in this class uses: the threshold the CALLER found the blob at,
+    /// falling back to the profile's fixed one.
+    /// </summary>
+    /// <remarks>
+    /// This is what made the near-white ladder useless at the map's edge. The ladder let the
+    /// SCANNER find a dim run, and then every measurement of that run, the text band, the ink
+    /// columns and each glyph cell, was taken at the fixed threshold again. Below it the blob
+    /// contained no ink at all, so a run a human could read plainly decoded as empty. Finding a run
+    /// and reading it have to agree on what counts as lit.
+    /// </remarks>
+    private int Ink => _inkThreshold ?? _readout.NearWhiteThreshold;
+
+    /// <summary>
     /// Every blob that reads as a complete readout token, best margin first. A blob whose text does
     /// not match the anchored pattern is dropped, which is what keeps a HUD label out of a coordinate.
     /// </summary>
-    public IReadOnlyList<ReadoutRun> Read(Frame frame, IReadOnlyList<TextBlob> blobs)
+    /// <param name="threshold">
+    /// The near-white value the blobs were found at. Null uses the profile's fixed one.
+    /// </param>
+    public IReadOnlyList<ReadoutRun> Read(Frame frame, IReadOnlyList<TextBlob> blobs, int? threshold = null)
     {
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(blobs);
+
+        _inkThreshold = threshold;
 
         var runs = new List<ReadoutRun>();
 
@@ -90,26 +109,52 @@ public sealed class ReadoutReader
     /// clean pair. Never a partial answer: one axis is not a coordinate.
     /// </summary>
     /// <param name="boundsMax">The loaded map's coord_max when known. Tighter than the envelope.</param>
+    /// <param name="threshold">
+    /// The near-white value the blobs were found at. Null uses the profile's fixed one.
+    /// </param>
     public (decimal X, decimal Y, string RawText, decimal Confidence)? ReadPoint(
         Frame frame,
         IReadOnlyList<TextBlob> blobs,
+        decimal? boundsMax = null,
+        int? threshold = null)
+    {
+        var runs = Read(frame, blobs, threshold);
+
+        return PointFrom(
+            runs.FirstOrDefault(r => r.Text.StartsWith('x'))?.Text,
+            runs.FirstOrDefault(r => r.Text.StartsWith('y'))?.Text,
+            runs.Count == 0 ? 0m : (decimal)runs.Min(r => r.WorstMargin),
+            boundsMax);
+    }
+
+    /// <summary>
+    /// Two decoded halves assembled into a point, parsed and gated on the map's bounds. Null unless
+    /// both are present, legal and possible.
+    /// </summary>
+    /// <remarks>
+    /// The halves are taken separately on purpose. They sit some distance apart on a map that
+    /// GRADES, so one can be several near-white steps brighter than the other, and MEASURED on a
+    /// live client they were: x99.90 decoded only at threshold 150 while y107.61 decoded at 179 to
+    /// 195, and at no single threshold did both. Demanding one threshold for the pair refused a
+    /// reading in which each half was clean. Both axes or nothing still holds, and it is the rule
+    /// this serves: what it never required is that both be read the same way.
+    /// </remarks>
+    public (decimal X, decimal Y, string RawText, decimal Confidence)? PointFrom(
+        string? xText,
+        string? yText,
+        decimal margin,
         decimal? boundsMax = null)
     {
         _boundsMax = boundsMax;
 
-        var runs = Read(frame, blobs);
-
-        var x = runs.FirstOrDefault(r => r.Text.StartsWith('x'));
-        var y = runs.FirstOrDefault(r => r.Text.StartsWith('y'));
-
-        if (x is null || y is null)
+        if (xText is null || yText is null)
         {
             return null;
         }
 
-        if (!decimal.TryParse(x.Text[1..], System.Globalization.NumberStyles.Number,
+        if (!decimal.TryParse(xText[1..], System.Globalization.NumberStyles.Number,
                 System.Globalization.CultureInfo.InvariantCulture, out var xValue)
-            || !decimal.TryParse(y.Text[1..], System.Globalization.NumberStyles.Number,
+            || !decimal.TryParse(yText[1..], System.Globalization.NumberStyles.Number,
                 System.Globalization.CultureInfo.InvariantCulture, out var yValue))
         {
             return null;
@@ -124,8 +169,7 @@ public sealed class ReadoutReader
             return null;
         }
 
-        var worst = (decimal)Math.Min(x.WorstMargin, y.WorstMargin);
-        return (xValue, yValue, $"{x.Text} {y.Text}", worst);
+        return (xValue, yValue, $"{xText} {yText}", margin);
     }
 
     /// <summary>
@@ -185,42 +229,45 @@ public sealed class ReadoutReader
         ReadoutRun? best = null;
         var bestMean = double.NegativeInfinity;
 
-        // The line height fixes what a character advance CAN be for this font, so a split implying
-        // an impossible pitch is rejected before it is ever scored. Without this the solver read a
-        // six character run as five, dropping a digit, because five wrong glyphs happened to score
-        // slightly better than six right ones against an approximated typeface.
-        var band = TextBand(frame, blob);
-        var lineHeight = Math.Max(1, band.Bottom - band.Top + 1);
-        var minPitch = lineHeight * _readout.Atlas.PitchRatioMin;
-        var maxPitch = lineHeight * _readout.Atlas.PitchRatioMax;
-
-        for (var count = MinGlyphs; count <= MaxGlyphs; count++)
+        foreach (var band in Bands(frame, blob))
         {
-            var pitch = blob.Width / (double)count;
-            if (pitch < 3)
-            {
-                break;
-            }
+            // The line height fixes what a character advance CAN be for this font, so a split
+            // implying an impossible pitch is rejected before it is ever scored. Without this the
+            // solver read a six character run as five, dropping a digit, because five wrong glyphs
+            // happened to score slightly better than six right ones against an approximated
+            // typeface.
+            var lineHeight = Math.Max(1, band.Bottom - band.Top + 1);
+            var minPitch = lineHeight * _readout.Atlas.PitchRatioMin;
+            var maxPitch = lineHeight * _readout.Atlas.PitchRatioMax;
 
-            if (pitch < minPitch || pitch > maxPitch)
+            for (var count = MinGlyphs; count <= MaxGlyphs; count++)
             {
-                continue;
-            }
+                var pitch = blob.Width / (double)count;
+                if (pitch < 3)
+                {
+                    break;
+                }
 
-            var run = ReadBlobAtPitch(frame, blob, atlas, pitch);
-            if (run is null || run.Text.Length != count)
-            {
-                continue;
-            }
+                if (pitch < minPitch || pitch > maxPitch)
+                {
+                    continue;
+                }
 
-            var mean = run.WorstMargin + (run.Score / run.Text.Length);
-            if (mean <= bestMean)
-            {
-                continue;
-            }
+                var run = ReadBlobAtPitch(frame, blob, atlas, pitch, band);
+                if (run is null || run.Text.Length != count)
+                {
+                    continue;
+                }
 
-            bestMean = mean;
-            best = run;
+                var mean = run.WorstMargin + (run.Score / run.Text.Length);
+                if (mean <= bestMean)
+                {
+                    continue;
+                }
+
+                bestMean = mean;
+                best = run;
+            }
         }
 
         return best is null || (decimal)best.WorstMargin < (_floorOverride ?? _readout.GlyphMarginFloor)
@@ -228,17 +275,45 @@ public sealed class ReadoutReader
             : best;
     }
 
+    /// <summary>
+    /// The bands worth attempting: the strict one, which throws away a crossing line, and the
+    /// generous one, which keeps every row carrying ink at all. Distinct only.
+    /// </summary>
+    /// <remarks>
+    /// One share cannot serve both jobs. The strict share exists to drop a crosshair line lying
+    /// across the run, and it does. It also drops the TOP row of a run whose top row happens to be
+    /// sparse, which is every run made of round digits: the tops of 0, 6, 8 and 9 are one or two
+    /// pixels each, while 5 and 7 have a full width bar. Cropping that row is what read y108.62 as
+    /// y108.52 and y88.88 as y85.85, on the game's own glyphs, at every threshold and every pitch,
+    /// identically on every re-read. Trying both and keeping the better score costs one more solve
+    /// and needs no new number to tune: a band that cropped a digit scores worse, because the
+    /// cropped shape is not the glyph the atlas holds.
+    /// </remarks>
+    private (int Top, int Bottom)[] Bands(Frame frame, TextBlob blob)
+    {
+        var strict = TextBand(frame, blob, StrictBandShare);
+        var generous = TextBand(frame, blob, GenerousBandShare);
+        return strict == generous ? [strict] : [generous, strict];
+    }
+
+    /// <summary>Enough ink that a line crossing the run cannot reach it.</summary>
+    private const double StrictBandShare = 0.35;
+
+    /// <summary>Any ink at all, so the one pixel apex of a 6 is not mistaken for background.</summary>
+    private const double GenerousBandShare = 0.05;
+
     /// <summary>Shortest and longest legal readout: x1.23 through x12345.67.</summary>
     private const int MinGlyphs = 5;
 
     private const int MaxGlyphs = 10;
 
-    private ReadoutRun? ReadBlobAtPitch(Frame frame, TextBlob blob, GlyphAtlas atlas, double pitch)
+    private ReadoutRun? ReadBlobAtPitch(
+        Frame frame,
+        TextBlob blob,
+        GlyphAtlas atlas,
+        double pitch,
+        (int Top, int Bottom) band)
     {
-        // The text band, not the whole blob: the crosshair sits inside the y run's box and its ink
-        // invents column structure the solver would otherwise try to explain.
-        var band = TextBand(frame, blob);
-
         // Widths hold to the pitch this attempt assumes. A full stop is the one glyph much narrower
         // than its advance, so the floor is loose while the ceiling is tight.
         var minWidth = Math.Max(2, (int)(pitch * 0.30));
@@ -417,7 +492,7 @@ public sealed class ReadoutReader
             var lit = false;
             for (var y = band.Top; y <= band.Bottom && !lit; y++)
             {
-                lit = frame.IsNearWhite(blob.Left + x, y, _readout.NearWhiteThreshold);
+                lit = frame.IsNearWhite(blob.Left + x, y, Ink);
             }
 
             if (!lit)
@@ -448,7 +523,7 @@ public sealed class ReadoutReader
     /// built from it crops the tops off the digits. A crosshair line crossing the run contributes
     /// only a pixel or two per row, so it falls below the share and is excluded.
     /// </remarks>
-    private (int Top, int Bottom) TextBand(Frame frame, TextBlob blob)
+    private (int Top, int Bottom) TextBand(Frame frame, TextBlob blob, double share = StrictBandShare)
     {
         var perRow = new int[blob.Height];
         var densest = 0;
@@ -457,7 +532,7 @@ public sealed class ReadoutReader
         {
             for (var x = 0; x < blob.Width; x++)
             {
-                if (frame.IsNearWhite(blob.Left + x, blob.Top + y, _readout.NearWhiteThreshold))
+                if (frame.IsNearWhite(blob.Left + x, blob.Top + y, Ink))
                 {
                     perRow[y]++;
                 }
@@ -474,7 +549,7 @@ public sealed class ReadoutReader
         // A descender is a couple of columns, so its rows carry little ink and fall below the
         // share. That matters: y108.62 descends and x97.56 does not, so using the full box made the
         // y run's glyph window half again too wide and the solver split 7 characters into 10.
-        var floor = Math.Max(2, (int)(densest * 0.35));
+        var floor = Math.Max(share >= StrictBandShare ? 2 : 1, (int)(densest * share));
         var top = -1;
         var bottom = -1;
 
@@ -511,7 +586,7 @@ public sealed class ReadoutReader
 
             for (var y = blob.Top; y <= blob.Bottom; y++)
             {
-                if (!frame.IsNearWhite(blob.Left + x, y, _readout.NearWhiteThreshold))
+                if (!frame.IsNearWhite(blob.Left + x, y, Ink))
                 {
                     continue;
                 }
@@ -548,7 +623,7 @@ public sealed class ReadoutReader
         {
             for (var y = band.Top; y <= band.Bottom; y++)
             {
-                if (frame.IsNearWhite(blob.Left + x, y, _readout.NearWhiteThreshold))
+                if (frame.IsNearWhite(blob.Left + x, y, Ink))
                 {
                     columns[x] = true;
                     break;
@@ -592,7 +667,7 @@ public sealed class ReadoutReader
         {
             for (var x = 0; x < width; x++)
             {
-                var lit = frame.IsNearWhite(left + x, band.Top + y, _readout.NearWhiteThreshold);
+                var lit = frame.IsNearWhite(left + x, band.Top + y, Ink);
                 ink[(y * width) + x] = lit ? 1f : 0f;
 
                 if (!lit)
