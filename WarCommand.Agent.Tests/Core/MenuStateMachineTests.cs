@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 
@@ -642,11 +642,18 @@ public class MenuStateMachineTests
     public void A_row_then_a_verb_runs_it_immediately()
     {
         var menu = Machine();
-        menu.Open(T0, Snapshot, Slots(1, 4));
 
-        // Walk to slot 4 in the home list and take it. Two presses to a verb list.
-        while (menu.HighlightedSlot != 4)
+        // OPENED ON THE BOARD. The root list is the request tree, FIRE through INTEL, and carries no
+        // board row at all, so a scroll there never highlights a slot. This walked the root looking
+        // for one in an unbounded loop: it spun forever, took the test host with it, and hung the
+        // release workflow for an hour and fifty minutes with no output past "Test".
+        menu.OpenOnBoard(T0, Slots(1, 4), Snapshot);
+
+        // Bounded, and it fails rather than spins. There are nine slots, so a lap and a half is
+        // more than enough to reach any of them.
+        for (var step = 0; menu.HighlightedSlot != 4; step++)
         {
+            Assert.True(step < 20, $"slot 4 was never highlighted; the walk stopped on {menu.HighlightedSlot}");
             menu.Scroll(1, T0);
         }
 

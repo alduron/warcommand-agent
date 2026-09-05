@@ -19,6 +19,10 @@ jobs:
     # Windows only. Five of the eight assemblies target net8.0-windows and the test project
     # references the Vosk native package, so a linux runner cannot build this solution at all.
     runs-on: windows-latest
+    # A hung test used to run until somebody noticed: a release sat on "Test" for an hour
+    # and fifty minutes and the CI run before it was cancelled by hand at three hours. The
+    # whole suite finishes in eight seconds, so anything past this is a hang, not slowness.
+    timeout-minutes: 20
     steps:
       # Checked out into warcommand-agent/ rather than the workspace root, because three tests
       # read the shared parse spec out of the SIBLING repo by walking up from the solution. That
@@ -88,7 +92,7 @@ jobs:
         run: dotnet build WarCommand.Agent.sln -c Release --no-restore
 
       - name: Test
-        run: dotnet test WarCommand.Agent.sln -c Release --no-build --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test WarCommand.Agent.sln -c Release --no-build --logger "trx;LogFileName=test-results.trx" --blame-hang --blame-hang-timeout 5m
 
       - name: Publish test results
         if: always()

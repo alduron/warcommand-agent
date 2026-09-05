@@ -26,6 +26,10 @@ defaults:
 jobs:
   release:
     runs-on: windows-latest
+    # A hung test used to run until somebody noticed: a release sat on "Test" for an hour
+    # and fifty minutes and the CI run before it was cancelled by hand at three hours. The
+    # whole suite finishes in eight seconds, so anything past this is a hang, not slowness.
+    timeout-minutes: 20
     steps:
       # The umbrella layout, for the same reason ci.yml uses it: three tests read the shared parse
       # spec out of the sibling repo by walking up from the solution.
@@ -109,7 +113,7 @@ jobs:
 
       # A release that has not passed its own tests is the failure this step exists to prevent.
       - name: Test
-        run: dotnet test WarCommand.Agent.sln -c Release --no-build
+        run: dotnet test WarCommand.Agent.sln -c Release --no-build --blame-hang --blame-hang-timeout 5m
 
       # Self-contained so no user installs a .NET runtime first, and NOT single-file: Vosk
       # P/Invokes libvosk.dll by name and the self-extract path for native libraries is the part

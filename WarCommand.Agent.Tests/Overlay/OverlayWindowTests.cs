@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
@@ -101,28 +101,6 @@ public class OverlayWindowTests
         Assert.Equal(1.0, high);
     }
 
-    private static void OnStaThread(Action body)
-    {
-        Exception? failure = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                body();
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
-            {
-                failure = ex;
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join(TimeSpan.FromSeconds(60));
-
-        if (failure is not null)
-        {
-            throw new InvalidOperationException("The STA body threw.", failure);
-        }
-    }
+    /// <summary>Delegates to the one runner. See <see cref="Sta"/> for why it must be background.</summary>
+    private static void OnStaThread(Action body) => Sta.Run(body);
 }

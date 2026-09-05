@@ -11,31 +11,8 @@ namespace WarCommand.Agent.Tests.Tray;
 /// </summary>
 public class TrayIconControllerTests
 {
-    /// <summary>WinForms wants STA, and xUnit gives every test an MTA thread.</summary>
-    private static void OnStaThread(Action body)
-    {
-        Exception? failure = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                body();
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
-            {
-                failure = ex;
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join(TimeSpan.FromSeconds(30));
-
-        if (failure is not null)
-        {
-            throw new InvalidOperationException("The STA body threw.", failure);
-        }
-    }
+    /// <summary>Delegates to the one runner. See <see cref="Sta"/> for why it must be background.</summary>
+    private static void OnStaThread(Action body) => Sta.Run(body);
 
     /// <summary>
     /// A ContextMenuStrip holding no items refuses to open, and it decides that before Opening can
