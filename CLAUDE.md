@@ -52,7 +52,11 @@ grammar, `06-overlay-ux.md` before drawing anything, `08-api-realtime.md` before
     digit is never reissued until the other eight have been. When digits are scarce, admit by
     `(priority DESC, created_at ASC)`; a `low` row past `low_priority_slot_residency_s` is demoted
     to overflow and stays open, losing only its digit. The board is always sorted by slot ascending
-    and never re-sorted, and a row's slot never moves while it holds one. Reset the allocator and
+    and never re-sorted, and a row's slot never moves while it holds one. **The slot is not the
+    number on the screen.** What is drawn, said and pressed is the LINE: the row's position, 1..N,
+    with no holes, renumbering when a row leaves. A slot leaves holes by design, so the board read
+    1, 3, 4 and "accept 3" meant the second line down. Because positions move, the render snapshot
+    carries the row id per line and a press resolves through that, never through the live board. Reset the allocator and
     its reissue order on `deployment.entered`. Source:
     `Decision_WarCommandSlotsAreLeastRecentlyReleased`, `Caveat_WarCommandSlotsResetOnDeploymentChange`.
 11. **Never add a bare voice alias without running the phonetic collision test.** It is

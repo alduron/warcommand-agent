@@ -316,6 +316,12 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     private static string Qualifier(BoardRow row, Catalog? catalog) =>
         ModifierLabels.Line(row.Modifiers, row.QuantityRequested, catalog);
 
+    /// <summary>The board's line number, falling back to the slot when a caller has not one.</summary>
+    private static string Number(int? line, BoardRow row) =>
+        line is { } n
+            ? n.ToString(CultureInfo.InvariantCulture)
+            : row.Slot?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+
     private static string FormatCoordinate(MapPoint point) =>
         FormattableString.Invariant($"x{point.X:0.00} y{point.Y:0.00}");
 
@@ -583,7 +589,8 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         DateTimeOffset now,
         decimal? unitsToMeters = null,
         FireContext? fire = null,
-        Catalog? catalog = null)
+        Catalog? catalog = null,
+        int? line = null)
     {
         ArgumentNullException.ThrowIfNull(row);
 
@@ -609,7 +616,9 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
         return new BoardRowViewModel
         {
-            SlotDisplay = row.Slot?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            // The LINE, not the slot. A slot is an allocation token and leaves holes; the number
+            // somebody reads off the board and says out loud is the position on it.
+            SlotDisplay = Number(line, row),
             RoleId = row.TargetRoleIds.Count > 0 ? row.TargetRoleIds[0] : string.Empty,
             TypeAndQualifier = typeAndQualifier.ToUpperInvariant(),
             CoordinatesDisplay = primary,
@@ -677,7 +686,8 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         BoardRow row,
         DateTimeOffset now,
         decimal? unitsToMeters = null,
-        Guid viewerParticipantId = default)
+        Guid viewerParticipantId = default,
+        int? line = null)
     {
         ArgumentNullException.ThrowIfNull(row);
         var primary = row.Points.Count > 0 ? FormatCoordinate(row.Points[0].Point) : string.Empty;
@@ -693,7 +703,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
         return new BoardRowViewModel
         {
-            SlotDisplay = row.Slot?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            SlotDisplay = Number(line, row),
             RoleId = row.TargetRoleIds.Count > 0 ? row.TargetRoleIds[0] : string.Empty,
             TypeAndQualifier = row.OverlayLabel.ToUpperInvariant(),
             CoordinatesDisplay = primary,

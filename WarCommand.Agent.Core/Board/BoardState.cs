@@ -1,4 +1,4 @@
-using WarCommand.Agent.Core.Contracts;
+﻿using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Model;
 
 namespace WarCommand.Agent.Core.Board;
@@ -109,6 +109,29 @@ public sealed class BoardState
 
     /// <summary>The row a spoken digit names, or null when that slot is empty.</summary>
     public BoardRow? BySlot(int slot) => _rows.Values.FirstOrDefault(r => r.Slot == slot && Visible(r));
+
+    /// <summary>
+    /// Every row that draws a number, in the order the board draws them: the claimable rows, then
+    /// the ones in YOURS.
+    /// </summary>
+    /// <remarks>
+    /// The number a person reads and says is the LINE, not the slot. A slot is an allocation
+    /// token: it is stable for a row's life, which is what stops two rows sharing a digit, and it
+    /// leaves holes. Clear the row on 2 and the board used to read 1, 3, 4, so "accept 3" meant
+    /// the second line down and every count anybody did out loud was wrong.
+    /// <para>
+    /// Positions renumber, and that is the point. The board is a list of jobs and the third one
+    /// down is 3.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<BoardRow> Lines => [.. Rows, .. Yours.Where(r => r.HoldsSlot)];
+
+    /// <summary>The row on a line, counting from 1, or null when the board is shorter than that.</summary>
+    public BoardRow? ByLine(int line)
+    {
+        var lines = Lines;
+        return line >= 1 && line <= lines.Count ? lines[line - 1] : null;
+    }
 
     /// <summary>
     /// Upsert by id. Every row-returning frame lands here and reacquires a digit; a row claimed by

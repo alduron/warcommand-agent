@@ -475,13 +475,21 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         // Once, not once per row. It is the same context for every row on the board.
         var fire = FireContextNow();
 
+        // ONE counter down the whole board. The number a person reads is the position, so it runs
+        // 1, 2, 3 through the claimable rows and straight on into YOURS without a gap. It used to
+        // be the allocation slot, which is stable for a row's life and therefore full of holes:
+        // clear the row on 2 and the board read 1, 3, 4.
+        var line = 0;
+
         var rows = board.Rows
             .Select(r => BoardRowViewModel
-                .FromPrimary(r, _viewerId, now, unitsToMeters, fire, _catalog())
+                .FromPrimary(r, _viewerId, now, unitsToMeters, fire, _catalog(), ++line)
                 .WithGlyph(glyphs))
             .ToList();
         var yours = board.Yours
-            .Select(r => BoardRowViewModel.FromSecondary(r, now, unitsToMeters, _viewerId).WithGlyph(glyphs))
+            .Select(r => BoardRowViewModel
+                .FromSecondary(r, now, unitsToMeters, _viewerId, r.HoldsSlot ? ++line : null)
+                .WithGlyph(glyphs))
             .ToList();
         var overflow = board.Overflow;
         var urgent = overflow.Count(r => r.Priority == Priority.Urgent);
@@ -495,16 +503,16 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         // YOURS, and a job you have claimed is exactly that: it keeps its digit and moves down. So
         // the menu had no entry for the one row you actually have work to do on, and DONE could not
         // be pressed on the job you were doing.
+        // Keyed by LINE, the same number the row just drew, so a digit pressed is the row read.
         var slots = new Dictionary<int, SlotState>();
-        foreach (var row in board.Rows.Concat(board.Yours))
+        var pressed = 0;
+        foreach (var row in board.Lines)
         {
-            if (row.Slot is { } digit)
-            {
-                slots[digit] = new SlotState(
-                    row.State,
-                    row.ClaimantParticipantId == _viewerId,
-                    row.RequestedByParticipantId == _viewerId);
-            }
+            slots[++pressed] = new SlotState(
+                row.State,
+                row.ClaimantParticipantId == _viewerId,
+                row.RequestedByParticipantId == _viewerId,
+                row.Id);
         }
 
         _onRendered(new BoardSnapshot(

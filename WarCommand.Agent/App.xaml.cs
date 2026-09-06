@@ -1338,9 +1338,20 @@ public partial class App : Application, IDisposable
             return;
         }
 
-        if (board.BySlot(action.Slot) is not { } row)
+        // THE ROW THAT WAS ON THAT LINE WHEN IT WAS DRAWN, from the render snapshot, falling back
+        // to the live board when there is no snapshot yet.
+        //
+        // Line numbers are positions now, so they move when a row leaves. Resolving the press
+        // against the live board would mean a job that arrived or left between the render somebody
+        // read and the key they pressed silently changes what the digit does. This way a stale
+        // press finds nothing and says so, which is the failure worth having.
+        var pressed = _boardSlots.TryGetValue(action.Slot, out var held) && held.RequestId != Guid.Empty
+            ? board.ById(held.RequestId)
+            : board.ByLine(action.Slot);
+
+        if (pressed is not { } row)
         {
-            log.Info($"No row on slot {action.Slot.ToString(CultureInfo.InvariantCulture)}.");
+            log.Info($"No row on line {action.Slot.ToString(CultureInfo.InvariantCulture)}.");
             _observer?.SetFault($"NO ROW ON {action.Slot.ToString(CultureInfo.InvariantCulture)}");
             return;
         }

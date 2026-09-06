@@ -456,14 +456,29 @@ public sealed record MenuGunPositionCleared : MenuOutcome;
 /// What the MORE page is allowed to offer this person right now. Its digits are fixed: an entry
 /// nobody can use is absent, never renumbered, so a digit learned once stays learned.
 /// </summary>
-/// <summary>What one board slot holds, for deciding which verbs it can honour.</summary>
+/// <summary>What one board line holds, for deciding which verbs it can honour.</summary>
 /// <param name="State">The row's state.</param>
 /// <param name="ClaimedByViewer">True when the viewer is the one holding it.</param>
 /// <param name="RequestedByViewer">True when the viewer is the one who asked for it.</param>
+/// <param name="RequestId">
+/// The row that was on this line when the board was drawn.
+/// </param>
+/// <remarks>
+/// The id is here because the numbers move now. They are positions, so a row leaving the board
+/// renumbers everything under it, and between the render somebody read and the key they pressed
+/// the line can come to mean a different job. Resolving the press against this id rather than
+/// against the live board is what makes the digit mean the row they were looking at.
+/// <para>
+/// The old numbering could not have this problem and did not need the id: a slot was fixed for a
+/// row's life. That is the trade, and it is the right way round. A stale press fails and says so,
+/// where a moved press accepts the wrong job in silence.
+/// </para>
+/// </remarks>
 public readonly record struct SlotState(
     RequestState State,
     bool ClaimedByViewer,
-    bool RequestedByViewer = false);
+    bool RequestedByViewer = false,
+    Guid RequestId = default);
 
 public sealed record MenuContext
 {
