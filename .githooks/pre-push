@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Runs the build and test gates from .github/workflows/ci.yml and refuses the push if either
+# fails. RELEASE, not Debug: Directory.Build.props sets TreatWarningsAsErrors, so a Debug-only
+# check misses the analyzer gate that CI applies.
+# Set SKIP_VERIFY=1 to bypass, which is for a broken toolchain, never for a red step.
+set -euo pipefail
+
+if [ "${SKIP_VERIFY:-0}" = "1" ]; then
+  echo "pre-push: SKIP_VERIFY=1, not verifying." >&2
+  exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+echo "pre-push: running the agent CI locally, Release."
+
+dotnet restore WarCommand.Agent.sln
+dotnet build WarCommand.Agent.sln -c Release --no-restore
+dotnet test WarCommand.Agent.sln -c Release --no-build
+
+echo "pre-push: green."
