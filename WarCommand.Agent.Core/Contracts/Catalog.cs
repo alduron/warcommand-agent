@@ -108,7 +108,7 @@ public sealed record RequestTypeDef
     /// the branch renders <see cref="OverlayLabel"/>.
     /// </summary>
     /// <remarks>
-    /// fortify sits at build.2 and build.3, so BUILD appeared twice under BUILD with nothing to
+    /// resupply sits on six leaves under SUPPLY, so SUPPLY appeared six times with nothing to
     /// tell you which held walls and which held defenses. The branch names itself; the leaves under
     /// it still name the structure.
     /// </remarks>

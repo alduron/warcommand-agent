@@ -2354,10 +2354,10 @@
     "armor": "Near-homophone of 'mortar'. Use 'tank'.",
     "air support": "Shares an unstressed distinguishing syllable with 'air transport'. Use 'close air'.",
     "air transport": "See above. Use 'lift'.",
-    "smoke": "Already a modifier on mortar_fire. For a screening mission use 'screen'.",
+    "smoke": "Already a modifier on shell_mission and the tactical kit. For a screening mission use 'screen'.",
     "fuel": "Already a supply kind on resupply. For one stranded vehicle use 'refuel'.",
     "a t": "Letter names are the worst case for the recognizer and it collides with 'eight'. Use 'anti tank'.",
-    "support": "Ambiguous across air_support, logistics and the Wardogs Support track. Name the effect instead.",
+    "support": "Ambiguous across air_support, the two transports and the Wardogs Support track. Name the effect instead.",
     "left": "FORBIDDEN in the initial class. One feature from 'lift' (same syllables, same L onset, same F-T coda). It is legal in adjust_direction, where 'lift' cannot appear.",
     "right": "FORBIDDEN in the initial class. One feature from 'ride' (same syllables, same AY1, same R onset, coda differing only in voicing). It is legal in adjust_direction, where 'ride' cannot appear.",
     "rover": "Never add it. One feature from the adjust direction 'over': same syllable count, same OW1, same coda, differing only in a null versus R onset. If a ground-vehicle type ever wants this word it must take a two-word form."

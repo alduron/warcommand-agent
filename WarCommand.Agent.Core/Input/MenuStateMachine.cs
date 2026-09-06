@@ -335,7 +335,7 @@ public sealed class MenuTree
                 .ToList();
 
             // A branch that also names a type keeps the bare type reachable on the free digit 0,
-            // because 'fortify' with no structure is legal and must not be voice-only.
+            // because a branch that also names a type keeps the bare type reachable by key.
             if (children.Count > 0 && TypeId is not null && !Children.ContainsKey(0))
             {
                 children.Insert(0, new MenuEntry
