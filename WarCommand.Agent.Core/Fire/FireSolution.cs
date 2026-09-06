@@ -1,4 +1,4 @@
-using WarCommand.Agent.Core.Contracts;
+﻿using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Model;
 
 namespace WarCommand.Agent.Core.Fire;
@@ -124,7 +124,11 @@ public static class FireSolutionCalculator
         ArgumentNullException.ThrowIfNull(profile);
 
         var rules = ballistics.SolutionRules;
-        var azimuth = RoundToNearest(Azimuth(gun.Position, target), rules.RoundAzimuthTo);
+        // The grid bearing, turned by whatever the map's compass disagrees with it by. Served,
+        // because it is a fact about the game and a wrong one is a shot on the wrong grid.
+        var azimuth = RoundToNearest(
+            Wrap(Azimuth(gun.Position, target) + ballistics.MapGeometry.AzimuthOffsetDegrees),
+            rules.RoundAzimuthTo);
         var rangeUnits = RangeUnits(gun.Position, target);
         var stale = staleAfter is { } window ? gun.Stale(now, window) : gun.Stale(now);
         var scale = UnitsToMeters(profile, ballistics, currentMapId);
@@ -197,6 +201,13 @@ public static class FireSolutionCalculator
             RoundToNearest(Azimuth(from, to), roundBearingTo),
             Round(units, 2),
             unitsToMeters is { } scale ? Round(units * scale, 1) : null);
+    }
+
+    /// <summary>Back into 0 to 360 after an offset has taken it out.</summary>
+    public static decimal Wrap(decimal degrees)
+    {
+        var wrapped = degrees % 360m;
+        return wrapped < 0m ? wrapped + 360m : wrapped;
     }
 
     /// <summary>Degrees clockwise from north. Unitless, exact, and needs no map scale.</summary>

@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace WarCommand.Agent.Core.Contracts;
 
@@ -22,6 +22,23 @@ public sealed record MapGeometrySection
 
     /// <summary>'true_north'. Azimuth 0 is north.</summary>
     public string AzimuthReference { get; init; } = "true_north";
+
+    /// <summary>
+    /// Added to the bearing computed from the map grid to get what the game's compass reads.
+    /// </summary>
+    /// <remarks>
+    /// Zero means the grid and the compass agree. That was an ASSUMPTION with nothing behind it:
+    /// the code took atan2 over the readout and called the answer true north. A map can carry a
+    /// convergence between grid north and compass north, and a rotation is invisible in testing
+    /// because every synthetic case is measured with the same atan2 that produced it.
+    /// <para>
+    /// A constant offset shows the same error on an east-west shot as on a north-south one. An
+    /// error that appears only near north is a coordinate, not this: a bearing near north is
+    /// extremely sensitive to x, and 1.33 map units of it swings a 1500 m shot five degrees while
+    /// leaving the range alone.
+    /// </para>
+    /// </remarks>
+    public decimal AzimuthOffsetDegrees { get; init; }
 
     public string AzimuthUnit { get; init; } = "degrees";
 
