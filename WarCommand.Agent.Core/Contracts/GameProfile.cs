@@ -82,6 +82,28 @@ public sealed record MapReadoutSection
     /// </remarks>
     public IReadOnlyList<int> NearWhiteLadder { get; init; } = [];
 
+    /// <summary>The client height every pixel number in this section was measured at.</summary>
+    /// <remarks>
+    /// A game UI scales with vertical resolution: the same HUD is 15px tall at 1440 and 22px at
+    /// 2160. Without this the measured pixels are true on one monitor and quietly wrong on every
+    /// other, and the failure is silence rather than an error.
+    /// </remarks>
+    public int MeasuredAtClientHeight { get; init; } = 1440;
+
+    /// <summary>The readout's own height at <see cref="MeasuredAtClientHeight"/>.</summary>
+    public int LineHeightPx { get; init; } = 15;
+
+    /// <summary>How short a run may be, as a fraction of the nominal line height.</summary>
+    public double BlobHeightMinScale { get; init; } = 0.4;
+
+    /// <summary>How tall a run may be, as a multiple of the nominal line height.</summary>
+    /// <remarks>
+    /// Generous on purpose, and it is what covers the game's own UI scale slider. The decoder is
+    /// scale free after the scan, so a wide window costs a few more candidate blobs; a narrow one
+    /// cost the whole feature on anybody else's monitor.
+    /// </remarks>
+    public double BlobHeightMaxScale { get; init; } = 6.0;
+
     /// <summary>
     /// Rungs derived from the frame itself, as fractions of the brightest near-neutral pixel found
     /// beside the crosshair. Empty means fixed rungs only.

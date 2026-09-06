@@ -88,15 +88,25 @@ public sealed class ReadoutReader
 
         foreach (var blob in blobs)
         {
+            // A run bigger than the atlas was cut at is redrawn at that size first. The solver is
+            // quadratic in the run's width and the glyph margin decays as the run grows, so a
+            // player on a larger UI got slower reads AND a lower score for the same correct text.
+            var (source, box, ink) = NormalisedRun.For(frame, blob, Ink, _readout.LineHeightPx)
+                is { } scaled
+                ? (scaled.Frame, scaled.Blob, NormalisedRun.MaskThreshold)
+                : (frame, blob, Ink);
+
             foreach (var atlas in _atlases)
             {
-                var run = ReadBlob(frame, blob, atlas);
+                var run = ReadBlobAt(source, box, atlas, ink);
                 if (run is null || !_anchored.IsMatch(run.Text))
                 {
                     continue;
                 }
 
-                runs.Add(run);
+                // The run is reported against the blob the CALLER handed in, never the redrawn
+                // copy: its coordinates are what the board and the probe point at.
+                runs.Add(run with { Blob = blob });
                 break;
             }
         }
@@ -221,7 +231,24 @@ public sealed class ReadoutReader
     /// attempts by AVERAGE score rather than total stops a longer split winning by having more
     /// terms to add up.
     /// </remarks>
-    private ReadoutRun? ReadBlob(Frame frame, TextBlob blob, GlyphAtlas atlas)
+    private ReadoutRun? ReadBlob(Frame frame, TextBlob blob, GlyphAtlas atlas) =>
+        ReadBlobAt(frame, blob, atlas, Ink);
+
+    private ReadoutRun? ReadBlobAt(Frame frame, TextBlob blob, GlyphAtlas atlas, int ink)
+    {
+        var saved = _inkThreshold;
+        _inkThreshold = ink;
+        try
+        {
+            return ReadBlobCore(frame, blob, atlas);
+        }
+        finally
+        {
+            _inkThreshold = saved;
+        }
+    }
+
+    private ReadoutRun? ReadBlobCore(Frame frame, TextBlob blob, GlyphAtlas atlas)
     {
         // NOT trimmed here. Trimming the blob before the attempts double-trims: the band is then
         // recomputed on an already-trimmed box, the width shifts, and the pitch every glyph

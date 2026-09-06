@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="WarCommand.app" />
+
+  <!--
+    PER-MONITOR V2, declared here rather than called at startup.
+
+    Every coordinate this agent computes is a Win32 pixel: GetClientRect for the game's rect,
+    GetCursorPos for the crosshair, BitBlt for the frame the readout is decoded from, and the
+    overlay's own placement, which already converts device pixels to DIPs through
+    TransformFromDevice and so assumes the process is aware.
+
+    Without a declaration the process is virtualised on any display not at 100 percent: Windows
+    hands back logical pixels while the desktop copy is physical, the panel captured around the
+    crosshair lands somewhere else, and the tool reads a coordinate that is not the one under the
+    cursor. It is right on the machine it was written on and wrong on a scaled one, which is the
+    worst shape a bug can have.
+
+    The capture probe already set this in code. The shipped agent never did.
+
+    A manifest rather than SetProcessDpiAwarenessContext because awareness has to be settled
+    before the framework creates anything, and by the time OnStartup runs WPF has already asked.
+  -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">permonitorv2,permonitor</dpiAwareness>
+    </windowsSettings>
+  </application>
+
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and 11. -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+</assembly>

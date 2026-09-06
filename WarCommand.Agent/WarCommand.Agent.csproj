@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\WarCommand.Agent.Core\WarCommand.Agent.Core.csproj" />
@@ -17,6 +17,16 @@
     <UseWPF>true</UseWPF>
     <!-- NotifyIcon lives in WinForms; there is no WPF tray icon control. -->
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!--
+      WFAC010 tells a WinForms app to set high DPI through ApplicationHighDpiMode instead of the
+      manifest. This is a WPF app that references WinForms for the tray icon, and it never calls
+      ApplicationConfiguration.Initialize, so that route sets nothing. The manifest is read by the
+      OS before any managed code runs, which is the only point early enough: by the time OnStartup
+      is reached WPF has already asked what the process awareness is.
+    -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
 
     <!-- The process users see in Task Manager, the name on the exe, and the name the installer
          launches. The project and its namespaces stay WarCommand.Agent; only the artefact is

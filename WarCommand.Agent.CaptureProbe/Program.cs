@@ -237,8 +237,15 @@ internal static class Program
             return 1;
         }
 
+        // The geometry this screen resolves to. Every pixel number in the profile was measured on
+        // one 2560x1440 machine, so the first question about any bad read on another one is what
+        // these came out as.
+        var geometry = ReadoutGeometry.For(readout, target.ClientHeight);
+
         Console.WriteLine($"target  {target.ProcessName}  {target.ClientWidth}x{target.ClientHeight}");
         Console.WriteLine($"atlas   {string.Join(", ", reader.Fonts)}  floor {readout.GlyphMarginFloor}");
+        Console.WriteLine(FormattableString.Invariant(
+            $"scale   {geometry.Scale:0.00}x of {readout.MeasuredAtClientHeight}  gap {geometry.GlyphGapPx}  radius {geometry.SearchRadiusPx}  run height {geometry.MinBlobHeight} to {geometry.MaxBlobHeight}"));
         Console.WriteLine();
         Console.WriteLine($"Open the map and hover a point. Reading in {delay}s...");
         Thread.Sleep(delay * 1000);

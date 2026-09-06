@@ -183,7 +183,11 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
         // fixed centre panel clipped it the moment the cursor neared the edge of the map, and the
         // failure looked like a decode problem when nothing had been captured at all.
         var client = GameWindow.ClientRectOnScreen(hwnd);
-        var panel = Around(client, cursor, readout.SearchRadiusPx);
+
+        // Every pixel number in the profile was measured on one monitor. A game UI scales with
+        // vertical resolution, so they are read as a RATIO of the height they were measured at.
+        var geometry = ReadoutGeometry.For(readout, client.Height);
+        var panel = Around(client, cursor, geometry.SearchRadiusPx);
         var frame = DesktopFrameGrabber.Grab(panel);
 
         if (frame is null)
@@ -233,7 +237,12 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
 
         foreach (var threshold in ladder)
         {
-            var candidates = NearWhiteScanner.Scan(frame, threshold, glyphGap: readout.GlyphGapPx);
+            var candidates = NearWhiteScanner.Scan(
+                frame,
+                threshold,
+                minHeight: geometry.MinBlobHeight,
+                maxHeight: geometry.MaxBlobHeight,
+                glyphGap: geometry.GlyphGapPx);
             if (cursor is { } near)
             {
                 // Nearest first, and only a handful of them. A rung low enough to flood the panel
@@ -241,7 +250,7 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
                 // the atlas: without this cap the cheapest rung on the ladder is also the slowest,
                 // on a path that runs corroboration_frames times per key press.
                 candidates = [.. candidates
-                    .Where(b => Near(b, near.X, near.Y, readout))
+                    .Where(b => Near(b, near.X, near.Y, geometry.SearchRadiusPx))
                     .OrderBy(b => Distance(b, near.X, near.Y))
                     .Take(Math.Max(2, readout.ExpectedMatchesPerFrame * 6))];
             }
@@ -378,7 +387,7 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
 
         if (readout.NearWhiteRelativeRatios.Count > 0 && cursor is { } at)
         {
-            var reach = Math.Max(1, readout.SearchRadiusPx / 2);
+            var reach = Math.Max(1, ReadoutGeometry.For(readout, 0).SearchRadiusPx / 2);
             var peak = frame.PeakNearWhite(at.X - reach, at.Y - reach, reach * 2, reach * 2);
 
             foreach (var ratio in readout.NearWhiteRelativeRatios)
@@ -500,8 +509,8 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
         return _reader;
     }
 
-    private static bool Near(TextBlob blob, int x, int y, MapReadoutSection readout) =>
-        Distance(blob, x, y) <= readout.SearchRadiusPx;
+    private static bool Near(TextBlob blob, int x, int y, int radius) =>
+        Distance(blob, x, y) <= radius;
 
     private static double Distance(TextBlob blob, int x, int y)
     {
