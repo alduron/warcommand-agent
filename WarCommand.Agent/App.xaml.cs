@@ -129,6 +129,9 @@ public partial class App : Application, IDisposable
     private WarCommandApiClient? _client;
     private LocalPairingListener? _localLink;
     private string? _currentUserId;
+
+    /// <summary>True once a provider account is held. A guest is not one. See ArmForAccount.</summary>
+    private bool _hasProviderAccount;
     private TokenStore? _tokenStore;
 
     /// <summary>Kept so the credential recovery can run outside startup. See RecoverCredentials.</summary>
@@ -429,6 +432,15 @@ public partial class App : Application, IDisposable
 
         if (_input is not null)
         {
+            return;
+        }
+
+        // A guest holds tokens and can reach /v1/me, but every join answers provider_required, so
+        // arming would build the same surface that accepts a hold and can never submit.
+        if (!_hasProviderAccount)
+        {
+            presenter.ShowEmptyState("Not set up", "warcommand.app  /  sign in to finish");
+            log.Info("Account holds no provider: nothing armed.");
             return;
         }
 
@@ -2345,16 +2357,23 @@ public partial class App : Application, IDisposable
         OnNoDeployment = onNoDeployment,
     });
 
+    /// <summary>The provider-less guest identity. Nothing may be armed for one.</summary>
+    private const string GuestAuthProvider = "guest";
+
     private void AdoptAccount(MeResponse me)
     {
         _currentUserId = me.User.Id.ToString();
+        _hasProviderAccount = me.User.AuthProvider is { Length: > 0 } provider
+            && !string.Equals(provider, GuestAuthProvider, StringComparison.OrdinalIgnoreCase);
         _menuState = _menuState with
         {
             IsPaired = true,
             PairingCode = null,
             Callsign = me.User.Callsign,
         };
-        _tray?.SetTooltip($"WarCommand ({me.User.Callsign})");
+        _tray?.SetTooltip(_hasProviderAccount
+            ? $"WarCommand ({me.User.Callsign})"
+            : "WarCommand - not set up");
     }
 
     /// <summary>
@@ -2527,9 +2546,32 @@ public partial class App : Application, IDisposable
     /// group-scoped and most groups run one deployment at a time, so a same-group-only submenu is
     /// empty in the normal case and the row reads as a switch that cannot switch.
     /// </remarks>
+    /// <summary>How long the tray's switch list is reused before it is read again.</summary>
+    /// <remarks>
+    /// It costs one request PER GROUP, sequentially, and it feeds a tray submenu somebody opens
+    /// between rounds. Reading it on every render made a single config re-read cost nine requests
+    /// on a seven-group account, and the config is re-read on every subscriptions.changed: one
+    /// role toggle became a burst big enough to trip the rate limit on its own.
+    /// </remarks>
+    private static readonly TimeSpan SwitchListFreshFor = TimeSpan.FromMinutes(2);
+
+    private DateTimeOffset _switchListReadAt = DateTimeOffset.MinValue;
+    private Guid _switchListFor;
+
     private async Task LoadSwitchableDeploymentsAsync(
         WarCommandApiClient client, MeResponse me, Guid current, RollingFileLog log)
     {
+        // Where the agent stands has moved, so the list's marks are wrong and it is worth the
+        // requests. Otherwise reuse what the last read found.
+        var now = DateTimeOffset.UtcNow;
+        if (current == _switchListFor && now - _switchListReadAt < SwitchListFreshFor)
+        {
+            return;
+        }
+
+        _switchListReadAt = now;
+        _switchListFor = current;
+
         var found = new List<TrayDeployment>();
         foreach (var membership in me.Memberships.Take(SwitchableGroupLimit))
         {

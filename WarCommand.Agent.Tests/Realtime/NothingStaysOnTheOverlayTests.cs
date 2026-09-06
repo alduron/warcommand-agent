@@ -1,4 +1,4 @@
-using System.Windows.Threading;
+﻿using System.Windows.Threading;
 using WarCommand.Agent.Client.Realtime;
 using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Contracts;
@@ -166,6 +166,40 @@ public sealed class NothingStaysOnTheOverlayTests
         Assert.Equal(2, reloads);
     }
 
+    /// <summary>
+    /// The retry backs off while the reads keep failing.
+    /// </summary>
+    /// <remarks>
+    /// A config read fans out to a request per group. Repeating it every twelve seconds against an
+    /// API that is refusing is how a rate limit becomes permanent: the read that would clear it is
+    /// the read holding it open. The banner is already honest after the first escalation, so
+    /// slowing down costs the reader nothing.
+    /// </remarks>
+    [Fact]
+    public void A_retry_that_keeps_failing_slows_down()
+    {
+        var reloads = 0;
+        var now = DateTimeOffset.UnixEpoch;
+        var (observer, _) = Build(onConfigChanged: () => reloads++, serverNow: () => now);
+
+        observer.OnBoardCleared(BoardClearReason.DeploymentEntered);
+
+        // The promise: honest within twelve seconds, whatever else is true.
+        observer.ExpireNotice(now.AddSeconds(12));
+        Assert.Equal(1, reloads);
+
+        // The second ask is not twelve seconds later.
+        observer.ExpireNotice(now.AddSeconds(24));
+        Assert.Equal(1, reloads);
+
+        observer.ExpireNotice(now.AddSeconds(40));
+        Assert.Equal(2, reloads);
+
+        // Still asking, just not in a burst: an hour of a dead API is not hundreds of reads.
+        observer.ExpireNotice(now.AddHours(1));
+        Assert.Equal(3, reloads);
+    }
+
     /// <summary>A board arriving disarms the watchdog, so a healthy hop never escalates.</summary>
     [Fact]
     public void A_hop_that_lands_never_escalates()
@@ -186,7 +220,8 @@ public sealed class NothingStaysOnTheOverlayTests
     }
 
     private static (BoardRealtimeObserver Observer, BoardPresenter Presenter) Build(
-        Action? onConfigChanged = null)
+        Action? onConfigChanged = null,
+        Func<DateTimeOffset>? serverNow = null)
     {
         var catalog = BundledContracts.Catalog().Current;
         var presenter = new BoardPresenter();
@@ -197,7 +232,8 @@ public sealed class NothingStaysOnTheOverlayTests
             _ => { },
             _ => { },
             onConfigChanged ?? (() => { }),
-            _ => { });
+            _ => { },
+            serverNow: serverNow);
 
         var board = new BoardState(Viewer, catalog.GrammarRules);
         board.EnterDeployment(Deployment, T0, draft: null);

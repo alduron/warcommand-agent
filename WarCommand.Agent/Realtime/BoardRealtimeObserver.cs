@@ -76,6 +76,9 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// to redraw over it. The tick escalates it to the truth and asks for the read again.
     /// </remarks>
     private DateTimeOffset? _transientUntil;
+
+    /// <summary>How long the watchdog waits before asking again. Doubles while the reads fail.</summary>
+    private TimeSpan _transientWait = TimeSpan.FromSeconds(12);
     private GunPosition? _gunPosition;
 
     /// <summary>Creates the observer. The board is attached once a deployment is known.</summary>
@@ -128,6 +131,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         _viewerId = viewerParticipantId;
         _header = header;
         _transientUntil = null;
+        _transientWait = TransientEmptyStateLimit;
         RenderHeader();
     }
 
@@ -436,7 +440,9 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         {
             RenderHeader();
         }
-        _transientUntil = _serverNow() + TransientEmptyStateLimit;
+        // A fresh hop is a fresh chance, so the backoff resets with it.
+        _transientWait = TransientEmptyStateLimit;
+        _transientUntil = _serverNow() + _transientWait;
 
         var (title, detail) = reason switch
         {
@@ -728,6 +734,18 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// </remarks>
     private static readonly TimeSpan TransientEmptyStateLimit = TimeSpan.FromSeconds(12);
 
+    /// <summary>
+    /// The slowest the watchdog asks again once the reads keep failing.
+    /// </summary>
+    /// <remarks>
+    /// The FIRST escalation is always at <see cref="TransientEmptyStateLimit"/>, because that is
+    /// the promise: a banner naming work in flight becomes the truth within twelve seconds. Only
+    /// the retry cadence backs off after that. Re-reading the whole config every twelve seconds
+    /// against an API that is refusing is how a rate limit becomes permanent, since the read that
+    /// would clear it is the read keeping it exhausted and each one costs a request per group.
+    /// </remarks>
+    private static readonly TimeSpan TransientEmptyStateCeiling = TimeSpan.FromMinutes(2);
+
     private void SetFaultCore(string? fault, StatusSeverity severity)
     {
         _notice = fault;
@@ -783,12 +801,16 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         if (_board is not null)
         {
             _transientUntil = null;
+            _transientWait = TransientEmptyStateLimit;
             return;
         }
 
         // Re-armed rather than fired once, because the word says "retrying" and that has to be
-        // true. The config fallback is two minutes; this is the one that keeps the promise.
-        _transientUntil = now + TransientEmptyStateLimit;
+        // true. Backed off while it keeps failing: the banner is already honest by now, so slowing
+        // down costs the reader nothing and stops the retry from holding the limit open.
+        var doubled = _transientWait + _transientWait;
+        _transientWait = doubled > TransientEmptyStateCeiling ? TransientEmptyStateCeiling : doubled;
+        _transientUntil = now + _transientWait;
         _presenter.ShowEmptyState("Board unreachable", "retrying");
         _onConfigChanged();
     }
