@@ -26,6 +26,7 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
     private readonly Func<decimal?> _mapBounds;
 
     private ReadoutReader? _reader;
+    private string _lastGeometry = "no window";
     private string _readerFor = string.Empty;
     private bool _suspended;
 
@@ -88,6 +89,23 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
 
     /// <summary>What each axis was read as, and how many times. For the probe, never for a surface.</summary>
     internal string? LastVoteSummary { get; private set; }
+
+    /// <summary>
+    /// The SHAPE of the last read, for the log: what the screen resolved to and how far the
+    /// decode got. Never a coordinate.
+    /// </summary>
+    /// <remarks>
+    /// A customer has no repo and no probe. When the tool reads nothing, or reads something they
+    /// say is wrong, the only thing that reaches anybody who can act on it is the log they export
+    /// from the settings window, so the log has to carry enough to tell the three failures apart:
+    /// nothing found, found and not decoded, decoded and contested.
+    /// <para>
+    /// Value free on purpose, the same rule the log bundle follows. How many runs were found,
+    /// how many decoded, the best margin and how many distinct readings each axis had says which
+    /// of those it is without recording where anybody was standing.
+    /// </para>
+    /// </remarks>
+    public string? LastDiagnostic { get; private set; }
 
     /// <inheritdoc />
     public Task<MapPoint?> TryReadAsync(CancellationToken ct)
@@ -187,6 +205,8 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
         // Every pixel number in the profile was measured on one monitor. A game UI scales with
         // vertical resolution, so they are read as a RATIO of the height they were measured at.
         var geometry = ReadoutGeometry.For(readout, client.Height);
+        _lastGeometry = FormattableString.Invariant(
+            $"client {client.Width}x{client.Height}, {geometry.Scale:0.00}x of {readout.MeasuredAtClientHeight}, gap {geometry.GlyphGapPx}, radius {geometry.SearchRadiusPx}, run {geometry.MinBlobHeight}-{geometry.MaxBlobHeight}");
         var panel = Around(client, cursor, geometry.SearchRadiusPx);
         var frame = DesktopFrameGrabber.Grab(panel);
 
@@ -282,6 +302,12 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
             }
         }
 
+        // Set BEFORE the refusal, because the read that finds nothing is the one somebody is
+        // reporting. A diagnostic only written on success describes the case nobody complains about.
+        LastVoteSummary = Summarise("x", xVotes) + "  |  " + Summarise("y", yVotes);
+        LastDiagnostic = FormattableString.Invariant(
+            $"{_lastGeometry}, rungs {ladder.Count}, runs {work.Count}, x {Shape(xVotes)}, y {Shape(yVotes)}");
+
         if (xVotes.Count == 0 || yVotes.Count == 0)
         {
             // Both halves or nothing, at every threshold on the ladder. One axis is not a
@@ -290,8 +316,6 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
             LastRefusal = "NO COORDS";
             return null;
         }
-
-        LastVoteSummary = Summarise("x", xVotes) + "  |  " + Summarise("y", yVotes);
 
         if (Consensus(xVotes) is not { } xAgreed || Consensus(yVotes) is not { } yAgreed)
         {
@@ -319,6 +343,15 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
             point.RawText,
             Confidence(margin, agreeing, opposed));
     }
+
+    /// <summary>
+    /// One axis, with no value in it: how many readings, how many distinct, and the best margin.
+    /// </summary>
+    private static string Shape(List<Vote> votes) =>
+        votes.Count == 0
+            ? "none"
+            : FormattableString.Invariant(
+                $"{votes.Count} read, {votes.Select(v => v.Text).Distinct(StringComparer.Ordinal).Count()} distinct, best margin {votes.Max(v => v.Margin):0.00}");
 
     /// <summary>One axis' readings and their counts, best first.</summary>
     private static string Summarise(string axis, List<Vote> votes) =>

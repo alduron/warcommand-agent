@@ -803,12 +803,19 @@ public partial class App : Application, IDisposable
             // Nothing advances. The level stays open and says so, and the user presses again
             // somewhere the readout is legible.
             _observer?.SetFault($"{source.LastRefusal ?? "NO COORDS"}  NOT READ, TRY AGAIN");
-            log.Info($"Screen read refused: {source.LastRefusal}.");
+
+            // WARN, not INFO, and with the shape of the failure on it. A refused read is the one
+            // thing a customer reports and the one thing they cannot describe: they have no repo
+            // and no probe, so this line is the whole diagnosis, and at INFO it would be dropped
+            // from the default log and never reach the zip they export.
+            log.Warn($"Screen read refused: {source.LastRefusal}. {source.LastDiagnostic}");
             RenderMenu(presenter);
             return;
         }
 
-        log.Info("Coordinate read from the map.");
+        // The successful read carries the same shape at INFO, so a verbose session shows what a
+        // good one looks like on that machine next to the bad ones.
+        log.Info($"Coordinate read from the map. {source.LastDiagnostic}");
         _observer?.SetFault(null);
         OnMenuOutcome(menu.Menu.AcceptReadCoordinate(point, DateTimeOffset.UtcNow), presenter, log);
     }
@@ -2151,6 +2158,7 @@ public partial class App : Application, IDisposable
                     $"{s.Bounds.Width}x{s.Bounds.Height}{(s.Primary ? " primary" : string.Empty)}")),
             ],
             LastReadRefusal = app?._mapReadout?.LastRefusal,
+            ReadoutGeometry = app?._mapReadout?.LastDiagnostic,
         };
     }
 

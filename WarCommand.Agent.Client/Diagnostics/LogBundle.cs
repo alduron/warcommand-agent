@@ -41,6 +41,16 @@ public sealed record LogBundleSummary
     /// <summary>Why the last screen read produced nothing, or null. Never a coordinate.</summary>
     public string? LastReadRefusal { get; init; }
 
+    /// <summary>
+    /// What the screen resolved to and how far the last decode got. Never a coordinate.
+    /// </summary>
+    /// <remarks>
+    /// Every pixel in the readout profile was measured on one machine, so the first question
+    /// about a bad read on another one is what those numbers came out as there. This is that
+    /// answer, in the file the customer sends, without asking them to run anything.
+    /// </remarks>
+    public string? ReadoutGeometry { get; init; }
+
     internal string Render(DateTimeOffset at) =>
         string.Join(Environment.NewLine, Lines(at)) + Environment.NewLine;
 
@@ -62,6 +72,11 @@ public sealed record LogBundleSummary
         if (LastReadRefusal is { Length: > 0 } refusal)
         {
             yield return FormattableString.Invariant($"last refusal {refusal}");
+        }
+
+        if (ReadoutGeometry is { Length: > 0 } geometry)
+        {
+            yield return FormattableString.Invariant($"readout      {geometry}");
         }
 
         yield return string.Empty;
