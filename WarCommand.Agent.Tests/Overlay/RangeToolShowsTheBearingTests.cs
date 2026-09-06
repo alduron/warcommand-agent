@@ -82,6 +82,31 @@ public class RangeToolShowsTheBearingTests
         Assert.StartsWith("AZ 45", line, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The board's own RANGE section carries the bearing too, out of range included.
+    /// </summary>
+    /// <remarks>
+    /// This is the surface a gun crew reads: it stays on screen with the key released, which is
+    /// exactly when they are dialling. An out-of-range shot returned an EMPTY bracket, so with a
+    /// placeholder table, which is both weapons today, the section showed a range and a refusal
+    /// and no direction at all.
+    /// </remarks>
+    [Fact]
+    public void The_board_section_shows_the_bearing_even_out_of_range()
+    {
+        var menu = OnTheRangePage();
+        menu.Select(T0);
+        menu.AcceptReadCoordinate(At(85.53m, 69.42m), T0);
+        menu.AdoptFireTarget(At(97.56m, 108.62m));
+
+        var section = MenuViewModel.ArtilleryFor(menu);
+
+        Assert.NotNull(section);
+        Assert.Contains("OUT OF RANGE", section.Note, StringComparison.Ordinal);
+        Assert.StartsWith("AZ ", section.Bracket, StringComparison.Ordinal);
+        Assert.Contains("4100", section.Bracket, StringComparison.Ordinal);
+    }
+
     /// <summary>Neither end set is a prompt, not a bearing off two nulls.</summary>
     [Fact]
     public void An_unset_tool_asks_for_its_ends()

@@ -405,17 +405,22 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     {
         var parts = new List<string>(5) { FireSolution.BracketLabel };
 
-        if (solution.Status is FireSolutionStatus.OutOfRange)
-        {
-            parts.Add(solution.Message ?? "OUT OF RANGE");
-            return string.Join("  ", parts);
-        }
-
+        // The bearing and the range are rendered whatever the status. Out of range used to return
+        // here with the refusal alone, which threw away the two numbers that were never in doubt:
+        // an azimuth is exact and needs no table, and the range is what the refusal is ABOUT.
+        // A crew told only OUT OF RANGE cannot even tell which way to move to fix it.
         parts.Add(FormattableString.Invariant($"AZ {solution.AzimuthDegrees:0}"));
 
         parts.Add(solution.RangeMeters is { } metres
             ? FormattableString.Invariant($"{metres:0}m")
             : FormattableString.Invariant($"{solution.RangeUnits:0.0}u"));
+
+        if (solution.Status is FireSolutionStatus.OutOfRange)
+        {
+            parts.Add(solution.Message ?? "OUT OF RANGE");
+            parts.Add(solution.SpotterHint);
+            return string.Join("  ", parts);
+        }
 
         if (solution.ElevationMils is { } mils)
         {
@@ -454,13 +459,10 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
         var notes = new List<string>(3);
 
-        if (solution.Status is FireSolutionStatus.OutOfRange)
-        {
-            notes.Add(solution.Message ?? "OUT OF RANGE");
-            notes.Add(solution.SpotterHint);
-            return (string.Empty, string.Join("  ", notes));
-        }
-
+        // The numbers come first and are built whatever the status. Returning an EMPTY bracket for
+        // an out-of-range shot left the section with a range line and a refusal and no bearing at
+        // all, and with a placeholder table that is most shots: the direction was missing from the
+        // one surface that stays on screen while a crew dials, which is where they read it.
         var numbers = new List<string>(4)
         {
             FormattableString.Invariant($"AZ {solution.AzimuthDegrees:0}"),
@@ -468,6 +470,13 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
                 ? FormattableString.Invariant($"{metres:0}m")
                 : FormattableString.Invariant($"{solution.RangeUnits:0.0}u"),
         };
+
+        if (solution.Status is FireSolutionStatus.OutOfRange)
+        {
+            notes.Add(solution.Message ?? "OUT OF RANGE");
+            notes.Add(solution.SpotterHint);
+            return (string.Join("   ", numbers), string.Join("  ", notes));
+        }
 
         if (solution.ElevationMils is { } mils)
         {
