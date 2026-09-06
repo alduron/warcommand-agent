@@ -1,7 +1,8 @@
-using System.Collections.Specialized;
+﻿using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Fire;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
@@ -312,8 +313,8 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     /// AND he read as DANGER_CLOSE: the wrong spelling, and a claim about the row that was not
     /// true. Quantity used to be an else, so a modified request never showed how many were wanted.
     /// </remarks>
-    private static string Qualifier(BoardRow row) =>
-        ModifierLabels.Line(row.Modifiers, row.QuantityRequested);
+    private static string Qualifier(BoardRow row, Catalog? catalog) =>
+        ModifierLabels.Line(row.Modifiers, row.QuantityRequested, catalog);
 
     private static string FormatCoordinate(MapPoint point) =>
         FormattableString.Invariant($"x{point.X:0.00} y{point.Y:0.00}");
@@ -564,16 +565,20 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         return this;
     }
 
+    /// <param name="catalog">
+    /// For the tag words. Null renders the derived form, which mangles every real name in the game.
+    /// </param>
     public static BoardRowViewModel FromPrimary(
         BoardRow row,
         Guid viewerParticipantId,
         DateTimeOffset now,
         decimal? unitsToMeters = null,
-        FireContext? fire = null)
+        FireContext? fire = null,
+        Catalog? catalog = null)
     {
         ArgumentNullException.ThrowIfNull(row);
 
-        var qualifier = Qualifier(row);
+        var qualifier = Qualifier(row, catalog);
         var typeAndQualifier = qualifier.Length == 0 ? row.OverlayLabel : $"{row.OverlayLabel} {qualifier}";
         var primary = row.Points.Count > 0 ? FormatCoordinate(row.Points[0].Point) : string.Empty;
         var second = row.Points.Count > 1 ? FormatCoordinate(row.Points[1].Point) : null;

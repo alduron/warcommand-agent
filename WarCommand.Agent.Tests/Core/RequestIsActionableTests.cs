@@ -1,4 +1,4 @@
-using WarCommand.Agent.Core.Contracts;
+﻿using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 using Xunit;
@@ -52,26 +52,17 @@ public sealed class RequestIsActionableTests
     {
         // A type with kinds under it in the tree but no requirement lets the server discard the
         // choice, which is exactly how BUILD lost TRENCH.
-        var withStructureLeaves = Catalog.StructureKinds
+        var withSupplyLeaves = Catalog.SupplyKinds
             .Where(k => k.MenuPath is not null)
-            .Select(k => k.MenuPath!.Split('.')[0] + "." + k.MenuPath!.Split('.')[1])
+            .Select(k => k.MenuPath!.Split('.')[0])
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        Assert.NotEmpty(withStructureLeaves);
-
-        foreach (var type in Catalog.RequestTypes.Where(t => t.RequiresStructureKind))
-        {
-            Assert.False(
-                string.IsNullOrEmpty(type.DefaultStructureKind),
-                $"{type.Id} requires a structure kind and names no default, so an unqualified request cannot be submitted at all");
-        }
+        Assert.NotEmpty(withSupplyLeaves);
 
         foreach (var type in Catalog.RequestTypes.Where(t => t.RequiresSupplyKind))
         {
-            Assert.False(
-                string.IsNullOrEmpty(type.DefaultSupplyKind),
-                $"{type.Id} requires a supply kind and names no default");
+            Assert.NotEmpty(type.MenuPaths);
         }
     }
 
@@ -129,14 +120,14 @@ public sealed class RequestIsActionableTests
     }
 
     [Fact]
-    public void Fortify_requires_a_structure_kind()
+    public void Resupply_requires_a_supply_kind()
     {
-        var fortify = Catalog.RequestType("fortify");
+        var resupply = Catalog.RequestType("resupply");
 
-        Assert.NotNull(fortify);
+        Assert.NotNull(resupply);
         Assert.True(
-            fortify.RequiresStructureKind,
-            "a build request that does not name what to build cannot be fulfilled by whoever accepts it");
+            resupply.RequiresSupplyKind,
+            "a delivery that does not name what to bring cannot be fulfilled by whoever accepts it");
     }
 
     [Fact]
@@ -169,11 +160,11 @@ public sealed class RequestIsActionableTests
         var tree = MenuTree.Compile(Catalog);
         var menu = new MenuStateMachine(tree, Catalog);
 
-        var trench = Catalog.StructureKinds.First(k => k.Id == "trench");
-        var entry = tree.Find(trench.MenuPath!);
+        var hammers = Catalog.SupplyKinds.First(k => k.Id == "hammers");
+        var entry = tree.Find(hammers.MenuPath!);
 
         Assert.NotNull(entry);
-        Assert.Equal("trench", entry.StructureKindId);
+        Assert.Equal("hammers", entry.SupplyKindId);
 
         menu.Open(DateTimeOffset.UnixEpoch, new MapPoint(1m, 2m, "typed_grid", null, null));
         Assert.NotNull(menu.Options);

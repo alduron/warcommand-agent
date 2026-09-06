@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Model;
 
@@ -190,6 +190,17 @@ public sealed class MenuTree
 
         AttachKinds(categories, catalog.SupplyKinds, supply: true);
         AttachKinds(categories, catalog.StructureKinds, supply: false);
+
+        // A branch that holds items rather than being one takes its label from the catalog. It
+        // is applied AFTER the types, because a type landing on a branch would otherwise leave
+        // its own word there and the group would read as whichever item arrived first.
+        foreach (var (path, label) in catalog.MenuBranchLabels)
+        {
+            if (Walk(categories, path) is { } branch)
+            {
+                branch.Label = label;
+            }
+        }
 
         var root = categories.Values
             .OrderBy(c => c.Digit)
@@ -636,6 +647,9 @@ public sealed class MenuStateMachine
     private readonly MenuOptions _options;
     private readonly List<MenuEntry> _path = [];
     private readonly List<string> _modifiers = [];
+
+    /// <summary>Which page of tags the confirm level is showing. Reset with every draft.</summary>
+    private int _modifierPage;
     private readonly List<int> _digits = [];
 
     private MapPoint? _snapshot;
@@ -817,6 +831,7 @@ public sealed class MenuStateMachine
     {
         _path.Clear();
         _modifiers.Clear();
+        _modifierPage = 0;
         _digits.Clear();
         _points.Clear();
         _selectedSlot = 0;
@@ -1208,6 +1223,7 @@ public sealed class MenuStateMachine
                 // used to keep the snapshot and pop to the branch, so the next pass skipped the
                 // point level entirely and reused a coordinate the user had just backed away from.
                 _modifiers.Clear();
+                _modifierPage = 0;
                 _snapshot = null;
                 _digits.Clear();
                 Level = MenuLevel.Coordinate;
@@ -1503,6 +1519,33 @@ public sealed class MenuStateMachine
     /// <summary>Where the tool is ranging to. Null until a read sets it.</summary>
     public MapPoint? ToolTarget => _toolTarget;
 
+    /// <summary>
+    /// The tool's target follows the fire mission this gun just accepted.
+    /// </summary>
+    /// <remarks>
+    /// A gun crew who accepts a shell mission has already been told where to shoot: the grid is on
+    /// the row they just pressed ACCEPT on. Making them walk into the tool and type it again is
+    /// asking for the number twice and getting it wrong once. The ORIGIN is theirs and is never
+    /// touched, so the bracket is live the moment they have set where the gun is, and it
+    /// recomputes from these two ends on every render.
+    /// <para>
+    /// Returns false when the target is already this point, so an idempotent frame does not
+    /// repaint the overlay.
+    /// </para>
+    /// </remarks>
+    public bool AdoptFireTarget(MapPoint point)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+
+        if (_toolTarget is { } current && current.X == point.X && current.Y == point.Y)
+        {
+            return false;
+        }
+
+        _toolTarget = point;
+        return true;
+    }
+
     private List<MenuEntry> MatchEntries()
     {
         var lines = new List<string>(4);
@@ -1661,13 +1704,21 @@ public sealed class MenuStateMachine
 
         // The chosen ones are marked, because choosing several and seeing one is the same as
         // seeing none: the line stops describing the request you are about to send.
-        return [.. type.Modifiers.Select((m, i) => new MenuEntry
-        {
-            Digit = i + 1,
-            Path = $"{type.Id}.modifier.{m}",
-            Label = ModifierLabels.Of(m),
-            IsChosen = _modifiers.Contains(m),
-        })];
+        // One page of nine at a time. A tag chosen on another page stays chosen and is counted
+        // by ChosenOffPage, so turning the page never silently drops what somebody already picked.
+        return
+        [
+            .. type.Modifiers
+                .Skip(ModifierPage * MaxPageEntries)
+                .Take(MaxPageEntries)
+                .Select((m, i) => new MenuEntry
+                {
+                    Digit = i + 1,
+                    Path = $"{type.Id}.modifier.{m}",
+                    Label = ModifierLabels.Of(m, _catalog),
+                    IsChosen = _modifiers.Contains(m),
+                }),
+        ];
     }
 
     /// <summary>
@@ -1837,8 +1888,51 @@ public sealed class MenuStateMachine
         return new MenuJoinReady(code);
     }
 
+    /// <summary>How many pages of tags this type has. One for nearly everything, two for a weapon.</summary>
+    public int ModifierPageCount
+    {
+        get
+        {
+            var count = SelectedTypeId is { } id ? _catalog.RequestType(id)?.Modifiers.Count ?? 0 : 0;
+            return Math.Max(1, (count + MaxPageEntries - 1) / MaxPageEntries);
+        }
+    }
+
+    /// <summary>The page of tags on screen, zero based.</summary>
+    public int ModifierPage => Math.Min(_modifierPage, Math.Max(0, ModifierPageCount - 1));
+
+    /// <summary>
+    /// Tags chosen but not on the page being shown, so turning the page never hides a choice.
+    /// </summary>
+    public int ChosenOffPage
+    {
+        get
+        {
+            if (SelectedTypeId is not { } id || _catalog.RequestType(id) is not { } type)
+            {
+                return 0;
+            }
+
+            var onPage = type.Modifiers
+                .Skip(ModifierPage * MaxPageEntries)
+                .Take(MaxPageEntries)
+                .ToHashSet(StringComparer.Ordinal);
+
+            return _modifiers.Count(m => !onPage.Contains(m));
+        }
+    }
+
     private MenuOutcome ToggleModifier(int digit)
     {
+        // 0 turns the page. A rifle carries seventeen tags: six models, nine attachments and two
+        // flags. Nine digits cannot reach them, so without this every attachment on every weapon
+        // in the game is unreachable by key, which is the one thing the menu guarantees.
+        if (digit == 0 && ModifierPageCount > 1)
+        {
+            _modifierPage = (_modifierPage + 1) % ModifierPageCount;
+            return new MenuNavigated(Level);
+        }
+
         var entries = ModifierEntries();
         var entry = entries.FirstOrDefault(e => e.Digit == digit);
         if (entry is null)
@@ -2088,6 +2182,7 @@ public sealed class MenuStateMachine
     {
         _path.Clear();
         _modifiers.Clear();
+        _modifierPage = 0;
         _digits.Clear();
         _points.Clear();
         _selectedSlot = 0;

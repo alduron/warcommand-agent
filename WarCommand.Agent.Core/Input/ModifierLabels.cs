@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace WarCommand.Agent.Core.Input;
 
@@ -6,10 +6,14 @@ namespace WarCommand.Agent.Core.Input;
 /// How a modifier id is written on any surface. One derivation, used by the menu and the board.
 /// </summary>
 /// <remarks>
-/// The catalog carries modifier ids and no display names, so the label is derived rather than
-/// looked up: nothing here is a fact about the game, which is why it may live in code at all. The
-/// menu did this inline and the board did not, so a row printed the raw id, DANGER_CLOSE, beside a
-/// menu that had offered DANGER CLOSE.
+/// The catalog carries a display per modifier and it WINS. Deriving one from the id mangles every
+/// real name in this game: t21 reads "T 21", box_mags reads "BOX MAGS", and irangefinder reads
+/// "IRANGEFINDER" where the game says iRANGE. The derivation stays as the fallback for a tag the
+/// catalog has not named, so a new modifier still renders as something rather than throwing.
+/// <para>
+/// The menu did this inline and the board did not, so a row printed the raw id, DANGER_CLOSE,
+/// beside a menu that had offered DANGER CLOSE.
+/// </para>
 /// </remarks>
 public static class ModifierLabels
 {
@@ -20,6 +24,17 @@ public static class ModifierLabels
         return modifierId.Replace('_', ' ').ToUpperInvariant();
     }
 
+    /// <summary>The catalog's word for a tag, or the derived one when it names none.</summary>
+    public static string Of(string modifierId, Contracts.Catalog? catalog)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(modifierId);
+
+        return catalog is not null && catalog.ModifierDisplays.TryGetValue(modifierId, out var display)
+            && !string.IsNullOrWhiteSpace(display)
+            ? display
+            : Of(modifierId);
+    }
+
     /// <summary>
     /// Every modifier on a row, in the order they were chosen, with the quantity after them.
     /// </summary>
@@ -28,7 +43,14 @@ public static class ModifierLabels
     /// is worse than being shown neither, because the row reads as a complete description of the
     /// request and it is not one.
     /// </remarks>
-    public static string Line(IReadOnlyList<string> modifierIds, int? quantity)
+    public static string Line(IReadOnlyList<string> modifierIds, int? quantity) =>
+        Line(modifierIds, quantity, catalog: null);
+
+    /// <summary>The same line, with the catalog's word for each tag.</summary>
+    public static string Line(
+        IReadOnlyList<string> modifierIds,
+        int? quantity,
+        Contracts.Catalog? catalog)
     {
         ArgumentNullException.ThrowIfNull(modifierIds);
 
@@ -37,7 +59,7 @@ public static class ModifierLabels
         {
             if (!string.IsNullOrEmpty(id))
             {
-                parts.Add(Of(id));
+                parts.Add(Of(id, catalog));
             }
         }
 

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Fire;
 using WarCommand.Agent.Core.Input;
@@ -372,6 +372,27 @@ public sealed record MenuViewModel
         return $"{whole}.{fraction}";
     }
 
+    /// <summary>
+    /// The type, plus the page and how many tags are chosen out of sight.
+    /// </summary>
+    /// <remarks>
+    /// A weapon carries seventeen tags across two pages. Without the count, turning the page
+    /// reads as losing what you already picked, and the header stops describing the request.
+    /// </remarks>
+    private static string ConfirmTitle(MenuStateMachine menu)
+    {
+        var type = menu.SelectedTypeId is { } id ? id.ToUpperInvariant() : "CONFIRM";
+        if (menu.ModifierPageCount <= 1)
+        {
+            return type;
+        }
+
+        var page = FormattableString.Invariant($"{menu.ModifierPage + 1}/{menu.ModifierPageCount}");
+        return menu.ChosenOffPage > 0
+            ? FormattableString.Invariant($"{type}  {page}  +{menu.ChosenOffPage} CHOSEN")
+            : FormattableString.Invariant($"{type}  {page}");
+    }
+
     private static string TitleFor(MenuStateMachine menu) => menu.Level switch
     {
         MenuLevel.Root => "REQUEST",
@@ -379,7 +400,7 @@ public sealed record MenuViewModel
         MenuLevel.Branch => menu.Selection?.Label.ToUpperInvariant() ?? "REQUEST",
         MenuLevel.Coordinate => menu.CurrentPointLabel,
         MenuLevel.RangeTool => $"RANGE  {menu.RangeMode.Label}",
-        MenuLevel.Confirm => menu.SelectedTypeId is { } type ? type.ToUpperInvariant() : "CONFIRM",
+        MenuLevel.Confirm => ConfirmTitle(menu),
         MenuLevel.BoardAction => "SLOT  PICK A VERB",
         MenuLevel.More => "TOOLS",
         MenuLevel.Join => "JOIN CODE",

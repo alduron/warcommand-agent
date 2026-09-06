@@ -1,4 +1,4 @@
-using WarCommand.Agent.Core.Grammar;
+﻿using WarCommand.Agent.Core.Grammar;
 using WarCommand.Agent.Speech;
 using WarCommand.Agent.Tests.Core;
 
@@ -64,8 +64,8 @@ public class SpeechGrammarCompilerTests
     {
         var compiled = Everything;
 
-        // wall and all are perfect homophones and never compete: all is legal only after a verb.
-        Assert.True(compiled.For(PositionClass.Initial).Contains("wall"));
+        // A slot word is legal only after a verb, so it can be a homophone of an initial word
+        // and neither has to move. The floor is computed per class for exactly this reason.
         Assert.False(compiled.For(PositionClass.Initial).Contains("all"));
         Assert.True(compiled.For(PositionClass.Slot).Contains("all"));
     }
@@ -73,21 +73,21 @@ public class SpeechGrammarCompilerTests
     [Fact]
     public void Types_whose_target_roles_are_not_enabled_are_absent()
     {
-        var withAntiAir = SpeechGrammarCompiler.Compile(
+        var withMedic = SpeechGrammarCompiler.Compile(
             ContractFixtures.Catalog,
-            GrammarContext.Everything with { EnabledRoleIds = ["mortar", "anti_air"] });
+            GrammarContext.Everything with { EnabledRoleIds = ["mortar", "medic"] });
 
-        var withoutAntiAir = SpeechGrammarCompiler.Compile(
+        var withoutMedic = SpeechGrammarCompiler.Compile(
             ContractFixtures.Catalog,
             GrammarContext.Everything with { EnabledRoleIds = ["mortar"] });
 
-        Assert.True(withAntiAir.For(PositionClass.Initial).Contains("anti air"));
+        Assert.True(withMedic.For(PositionClass.Initial).Contains("medic"));
         Assert.False(
-            withoutAntiAir.For(PositionClass.Initial).Contains("anti air"),
-            "a group with no anti_air cannot mishear anything as 'anti air': the words are not loaded");
+            withoutMedic.For(PositionClass.Initial).Contains("medic"),
+            "a group with no medic cannot mishear anything as 'medic': the words are not loaded");
 
-        Assert.True(withoutAntiAir.For(PositionClass.Initial).Contains("mortar"));
-        Assert.True(withoutAntiAir.RecognizerPhrases.Count < withAntiAir.RecognizerPhrases.Count);
+        Assert.True(withoutMedic.For(PositionClass.Initial).Contains("mortar"));
+        Assert.True(withoutMedic.RecognizerPhrases.Count < withMedic.RecognizerPhrases.Count);
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public class SpeechGrammarCompilerTests
         var everything = Everything;
         var fourRoles = SpeechGrammarCompiler.Compile(
             ContractFixtures.Catalog,
-            GrammarContext.Everything with { EnabledRoleIds = ["mortar", "logistics", "medic", "infantry"] });
+            GrammarContext.Everything with { EnabledRoleIds = ["mortar", "ground_transport", "medic", "infantry"] });
 
         Assert.True(
             fourRoles.AllWords.Count < everything.AllWords.Count,
@@ -126,14 +126,14 @@ public class SpeechGrammarCompilerTests
     {
         var withLogistics = SpeechGrammarCompiler.Compile(
             ContractFixtures.Catalog,
-            GrammarContext.Everything with { EnabledRoleIds = ["logistics"] });
+            GrammarContext.Everything with { EnabledRoleIds = ["ground_transport"] });
 
         var withoutLogistics = SpeechGrammarCompiler.Compile(
             ContractFixtures.Catalog,
             GrammarContext.Everything with { EnabledRoleIds = ["mortar"] });
 
         // 'ammo' is a kind, and the shortcut that lets it be said alone belongs to resupply. With
-        // no logistics role there is no owner, so the shortcut is not in the initial class at all.
+        // no transport role there is no owner, so the shortcut is not in the initial class at all.
         Assert.True(withLogistics.For(PositionClass.Initial).Contains("ammo"));
         Assert.False(withoutLogistics.For(PositionClass.Initial).Contains("ammo"));
 

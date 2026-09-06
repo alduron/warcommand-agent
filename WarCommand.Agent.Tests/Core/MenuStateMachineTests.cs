@@ -46,8 +46,8 @@ public class MenuStateMachineTests
 
         var fire = tree.Root.Single(e => e.Digit == ContractFixtures.Catalog.MenuCategories["fire"]);
         Assert.Equal("FIRE", fire.Label);
-        Assert.Equal("mortar_fire", fire.Children.Single(c => c.Digit == 1).TypeId);
-        Assert.Equal("artillery_fire", fire.Children.Single(c => c.Digit == 2).TypeId);
+        Assert.Equal("shell_mission", fire.Children.Single(c => c.Digit == 1).TypeId);
+        Assert.Equal("armor_support", fire.Children.Single(c => c.Digit == 2).TypeId);
     }
 
     [Fact]
@@ -71,24 +71,27 @@ public class MenuStateMachineTests
     {
         var tree = Tree;
 
-        var hesco = tree.Find("build.2.5")!;
-        Assert.Equal("fortify", hesco.TypeId);
-        Assert.Equal("hesco", hesco.StructureKindId);
-        Assert.Equal("WALL", hesco.Label);
-
-        var ammo = tree.Find("supply.1")!;
+        var ammo = tree.Find("supply.2")!;
         Assert.Equal("resupply", ammo.TypeId);
         Assert.Equal("ammo", ammo.SupplyKindId);
+        Assert.Equal("AMMO", ammo.Label);
+
+        var building = tree.Find("supply.1")!;
+        Assert.Equal("resupply", building.TypeId);
+        Assert.Equal("building", building.SupplyKindId);
     }
 
     [Fact]
-    public void A_branch_that_also_names_a_type_keeps_the_bare_type_reachable()
+    public void A_branch_holds_items_and_is_not_one_itself()
     {
-        // 'fortify' with no structure is legal and must not become voice-only.
-        var bare = Tree.Find("build.2.0")!;
+        // Twenty calibers do not fit nine digits, so AMMO nests. The branch carries no type of
+        // its own: pressing it walks in rather than sending anything.
+        var branch = Tree.Find("ammo.1")!;
+        Assert.Null(branch.TypeId);
+        Assert.Equal("PISTOL", branch.Label);
 
-        Assert.Equal("fortify", bare.TypeId);
-        Assert.Null(bare.StructureKindId);
+        var leaf = Tree.Find("ammo.1.1")!;
+        Assert.Equal("ammo_9mm", leaf.TypeId);
     }
 
     [Fact]
@@ -97,7 +100,7 @@ public class MenuStateMachineTests
         var tree = MenuTree.Compile(ContractFixtures.Catalog, ["mortar"]);
 
         Assert.NotNull(tree.Find("fire.1"));
-        Assert.Null(tree.Find("medical.1"));
+        Assert.Null(tree.Find("infantry.3"));
     }
 
     [Theory]
@@ -294,14 +297,14 @@ public class MenuStateMachineTests
         var menu = Machine();
         menu.Open(T0, Snapshot);
 
-        // fortify sits at build.2 and build.3, so BUILD used to appear twice under BUILD with
-        // nothing saying which held walls and which held defenses.
-        var build = menu.Options.Single(o => o.Label == "BUILD");
-        var labels = build.Children.Select(c => c.Label).ToList();
+        // resupply sits on six leaves under SUPPLY, one per supply kind. Without a label per
+        // leaf all six drew the type's own word and SUPPLY read as SUPPLY six times.
+        var supply = menu.Options.Single(o => o.Label == "SUPPLY");
+        var labels = supply.Children.Select(c => c.Label).ToList();
 
         Assert.Equal(labels.Count, labels.Distinct(StringComparer.Ordinal).Count());
-        Assert.Contains("WALLS", labels);
-        Assert.Contains("DEFENSES", labels);
+        Assert.Contains("BUILDING", labels);
+        Assert.Contains("AMMO", labels);
     }
 
     [Fact]
@@ -483,7 +486,7 @@ public class MenuStateMachineTests
 
         var ready = Assert.IsType<MenuRequestReady>(outcome);
         Assert.Equal(Snapshot, ready.Point);
-        Assert.Equal("mortar_fire", ready.TypeId);
+        Assert.Equal("shell_mission", ready.TypeId);
     }
 
     [Fact]
@@ -514,10 +517,10 @@ public class MenuStateMachineTests
         var menu = Machine();
         menu.Open(T0, Snapshot);
 
-        var outcome = menu.Digit(ContractFixtures.Catalog.MenuCategories["medical"], T0);
+        var outcome = menu.Digit(ContractFixtures.Catalog.MenuCategories["infantry"], T0);
         Assert.IsType<MenuNavigated>(outcome);
 
-        // MEDICAL has two entries; 9 is not one of them.
+        // INFANTRY has four entries; 9 is not one of them.
         Assert.IsType<MenuNothing>(menu.Digit(9, T0));
         Assert.Equal(MenuLevel.Branch, menu.Level);
     }
@@ -543,7 +546,7 @@ public class MenuStateMachineTests
         menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
         menu.Digit(1, T0);
 
-        var urgent = menu.Options.Single(o => string.Equals(o.Label, "URGENT", StringComparison.Ordinal));
+        var urgent = menu.Options.Single(o => string.Equals(o.Label, "Urgent", StringComparison.Ordinal));
         menu.Digit(urgent.Digit, T0);
         Assert.Contains("urgent", menu.Modifiers);
 
@@ -556,8 +559,8 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["build"], T0);
-        menu.Digit(2, T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["ammo"], T0);
+        menu.Digit(1, T0);
         Assert.Equal(MenuLevel.Branch, menu.Level);
 
         menu.Backspace(T0);
@@ -820,10 +823,10 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["move"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["mobility"], T0);
         menu.Digit(1, T0);
 
-        Assert.Equal(2, ContractFixtures.Catalog.RequestType("transport_move")!.Arity);
+        Assert.Equal(2, ContractFixtures.Catalog.RequestType("air_move")!.Arity);
 
         // The snapshot is PICKUP. The draft is not finished, so it waits on the point level for
         // dropoff rather than jumping to confirm.
@@ -841,7 +844,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["move"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["mobility"], T0);
         menu.Digit(1, T0);
 
         var dropoff = new MapPoint(42.5m, 43.5m, "map_readout", null, null);
@@ -852,7 +855,7 @@ public class MenuStateMachineTests
 
         var ready = Assert.IsType<MenuRequestReady>(menu.KeyUp(T0));
 
-        Assert.Equal("transport_move", ready.TypeId);
+        Assert.Equal("air_move", ready.TypeId);
         Assert.Equal(2, ready.Points.Count);
         Assert.Equal(Snapshot, ready.Points[0]);
         Assert.Equal(dropoff, ready.Points[1]);
@@ -886,6 +889,6 @@ public class MenuStateMachineTests
         var ready = Assert.IsType<MenuRequestReady>(menu.KeyUp(T0));
 
         Assert.Equal("resupply", ready.TypeId);
-        Assert.Equal("ammo", ready.SupplyKindId);
+        Assert.Equal("building", ready.SupplyKindId);
     }
 }

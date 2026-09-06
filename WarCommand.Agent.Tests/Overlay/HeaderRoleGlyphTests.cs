@@ -37,7 +37,7 @@ public class HeaderRoleGlyphTests
         var header = new BoardHeader
         {
             Title = "61ST / ALPHA",
-            RoleIds = ["mortar", "logistics", "medic"],
+            RoleIds = ["mortar", "ground_transport", "medic"],
         }.WithGlyph(Catalog());
 
         foreach (var role in header.Roles)

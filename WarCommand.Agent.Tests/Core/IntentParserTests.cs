@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using WarCommand.Agent.Core.Grammar;
 using WarCommand.Agent.Core.Model;
 
@@ -62,29 +62,30 @@ public class IntentParserTests
     }
 
     [Fact]
-    public void The_generated_pair_list_names_both_owners_on_the_flank_menu()
+    public void The_generated_pair_list_names_both_owners_on_a_near_floor_menu()
     {
-        // The whole point of the ambiguous-alias mechanism. Degraded to Empty this shows one option
-        // to confirm, which is a different and much weaker feature.
+        // The whole point of the pair list. Degraded to Empty this shows one option to confirm,
+        // which is a different and much weaker feature.
         var pairs = NearFloorPairs.FromJson(ContractFixtures.NearFloorPairsJson);
         Assert.False(pairs.IsEmpty, "contracts/generated/near-floor-pairs.json did not load");
-        Assert.Equal("forced_menu", pairs.PairFor("flank", "tank")!.Reason);
+        // Above the floor, so the pair itself is only near it. The MENU is forced by the
+        // alias being ambiguous, which is a separate and stronger guarantee.
+        Assert.Equal("near_floor", pairs.PairFor("escort", "transport")!.Reason);
 
         var menu = Assert.IsType<ParsedDisambiguation>(
-            new IntentParser(Loaded, pairs).Parse(Utterance.FromWords("flank", 0.95)));
+            new IntentParser(Loaded, pairs).Parse(Utterance.FromWords("transport", 0.95)));
 
-        Assert.Equal("flank", menu.Alias);
-        Assert.Equal(["flank", "armor_support"], menu.Options.Select(o => o.TypeId));
-        Assert.Equal(["FLANK", "ARMOR"], menu.Options.Select(o => o.Label));
+        Assert.Equal("transport", menu.Alias);
+        Assert.Equal(["ground_move", "vehicle_defense"], menu.Options.Select(o => o.TypeId));
     }
 
     [Fact]
     public void Without_the_pair_list_the_menu_carries_one_option_to_confirm()
     {
         var menu = Assert.IsType<ParsedDisambiguation>(
-            new IntentParser(Loaded, NearFloorPairs.Empty).Parse(Utterance.FromWords("flank", 0.95)));
+            new IntentParser(Loaded, NearFloorPairs.Empty).Parse(Utterance.FromWords("transport", 0.95)));
 
-        Assert.Equal(["flank"], menu.Options.Select(o => o.TypeId));
+        Assert.Equal(["ground_move"], menu.Options.Select(o => o.TypeId));
     }
 
     [Fact]
@@ -137,14 +138,14 @@ public class IntentParserTests
     {
         var utterance = new Utterance
         {
-            Tokens = [new RecognizedToken("sniper", 0.71)],
+            Tokens = [new RecognizedToken("escort", 0.71)],
             Confidence = 0.71,
-            Alternatives = [Utterance.FromWords("spotter", 0.62)],
+            Alternatives = [Utterance.FromWords("transport", 0.62)],
         };
 
-        var menu = Assert.IsType<ParsedDisambiguation>(Parser(Confusables("sniper", "spotter")).Parse(utterance));
+        var menu = Assert.IsType<ParsedDisambiguation>(Parser(Confusables("escort", "transport")).Parse(utterance));
 
-        Assert.Equal(["sniper_support", "spotter_request"], menu.Options.Select(o => o.TypeId));
+        Assert.Equal(["vehicle_defense", "ground_move"], menu.Options.Select(o => o.TypeId));
     }
 
     [Fact]
@@ -152,14 +153,14 @@ public class IntentParserTests
     {
         var utterance = new Utterance
         {
-            Tokens = [new RecognizedToken("sniper", 0.95)],
+            Tokens = [new RecognizedToken("escort", 0.95)],
             Confidence = 0.95,
-            Alternatives = [Utterance.FromWords("spotter", 0.40)],
+            Alternatives = [Utterance.FromWords("transport", 0.40)],
         };
 
-        var parsed = Assert.IsType<ParsedRequest>(Parser(Confusables("sniper", "spotter")).Parse(utterance));
+        var parsed = Assert.IsType<ParsedRequest>(Parser(Confusables("escort", "transport")).Parse(utterance));
 
-        Assert.Equal("sniper_support", parsed.TypeId);
+        Assert.Equal("vehicle_defense", parsed.TypeId);
     }
 
     [Fact]
@@ -180,7 +181,7 @@ public class IntentParserTests
     {
         var parsed = Assert.IsType<ParsedRequest>(Parse("mortar willy pete"));
 
-        Assert.Equal("mortar_fire", parsed.TypeId);
+        Assert.Equal("shell_mission", parsed.TypeId);
         Assert.Equal(["willy_pete"], parsed.Modifiers);
     }
 

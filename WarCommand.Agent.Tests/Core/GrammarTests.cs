@@ -1,4 +1,4 @@
-using WarCommand.Agent.Core.Board;
+﻿using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Grammar;
 using WarCommand.Agent.Core.Model;
 
@@ -31,11 +31,12 @@ public class GrammarTests
     }
 
     [Fact]
-    public void Wall_and_all_are_perfect_homophones_in_different_classes()
+    public void A_slot_word_is_legal_in_its_class_and_nowhere_else()
     {
+        // The floor is computed PER POSITION CLASS, which is the whole reason a slot word can
+        // be a homophone of an initial one and neither has to move.
         var grammar = Everything();
 
-        Assert.True(grammar.Contains(PositionClass.Initial, "wall"));
         Assert.True(grammar.Contains(PositionClass.Slot, "all"));
         Assert.False(grammar.Contains(PositionClass.Initial, "all"));
     }
@@ -86,23 +87,24 @@ public class GrammarTests
     {
         var grammar = Everything();
 
-        Assert.Equal("clear", grammar.LongestMatch(PositionClass.Initial, Words("clear"), 0)!.Token.Id);
-        Assert.Equal("clear_building", grammar.LongestMatch(PositionClass.Initial, Words("clear building"), 0)!.Token.Id);
-        Assert.Equal("uav_recon", grammar.LongestMatch(PositionClass.Initial, Words("drone"), 0)!.Token.Id);
-        Assert.Equal("uav_strike", grammar.LongestMatch(PositionClass.Initial, Words("drone strike"), 0)!.Token.Id);
+        // 'extract' is the ground exfil and 'air extract' is the air one. A shorter alias that
+        // is a prefix of a longer one is resolved here, never by phoneme distance.
+        Assert.Equal("ground_extract", grammar.LongestMatch(PositionClass.Initial, Words("extract"), 0)!.Token.Id);
+        Assert.Equal("air_extract", grammar.LongestMatch(PositionClass.Initial, Words("air extract"), 0)!.Token.Id);
+        Assert.Equal("fire_team", grammar.LongestMatch(PositionClass.Initial, Words("fire team"), 0)!.Token.Id);
     }
 
     [Fact]
-    public void A_type_alias_outranks_a_kind_shortcut_of_the_same_phrase()
+    public void A_supply_kind_is_reachable_by_its_own_word()
     {
+        // Saying "fuel" IS a resupply for fuel. Without the shortcut the fastest way to ask for
+        // the commonest thing in the game is two words and a menu.
         var grammar = Everything();
 
-        var spawn = grammar.LongestMatch(PositionClass.Initial, Words("spawn"), 0)!.Token;
-        var spawnPoint = grammar.LongestMatch(PositionClass.Initial, Words("spawn point"), 0)!.Token;
+        var fuel = grammar.LongestMatch(PositionClass.Initial, Words("fuel"), 0)!.Token;
 
-        Assert.Equal(GrammarTokenKind.KindShortcut, spawn.Kind);
-        Assert.Equal("fortify", spawn.Id);
-        Assert.Equal("spawn_point", spawnPoint.Id);
+        Assert.Equal(GrammarTokenKind.KindShortcut, fuel.Kind);
+        Assert.Equal("resupply", fuel.Id);
     }
 
     [Fact]
@@ -210,12 +212,14 @@ public class GrammarTests
     [Fact]
     public void Ambiguous_aliases_are_loaded_and_flagged()
     {
+        // Bare "transport" is ambiguous by construction: the ground mover and the air mover are
+        // both transport. It is recognised and never resolved by confidence.
         var grammar = Everything();
 
-        var flank = grammar.LongestMatch(PositionClass.Initial, Words("flank"), 0)!.Token;
+        var transport = grammar.LongestMatch(PositionClass.Initial, Words("transport"), 0)!.Token;
 
-        Assert.Equal("flank", flank.Id);
-        Assert.True(flank.Ambiguous);
+        Assert.Equal("ground_move", transport.Id);
+        Assert.True(transport.Ambiguous);
     }
 
     [Fact]

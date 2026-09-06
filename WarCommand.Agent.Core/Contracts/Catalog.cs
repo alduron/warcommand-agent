@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using WarCommand.Agent.Core.Model;
 
 namespace WarCommand.Agent.Core.Contracts;
@@ -224,6 +224,27 @@ public sealed record Catalog : IValidatableContract
     /// <summary>Top-level menu category to digit.</summary>
     public IReadOnlyDictionary<string, int> MenuCategories { get; init; } =
         new Dictionary<string, int>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The word a TAG draws, by its id. Empty falls back to the derived form.
+    /// </summary>
+    /// <remarks>
+    /// A fact about the game, so it is served: the id t21 is written T-21 and box_mags is
+    /// written BOX+MAGS, and no rule over the id produces either.
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonPropertyName("modifiers")]
+    public IReadOnlyDictionary<string, string> ModifierDisplays { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The word a BRANCH draws, by its path. A branch holds items and is not one itself.
+    /// </summary>
+    /// <remarks>
+    /// Twenty calibers do not fit nine digits, so AMMO nests, and a branch with no label of its
+    /// own drew its own path: the PISTOL group read "AMMO.1".
+    /// </remarks>
+    public IReadOnlyDictionary<string, string> MenuBranchLabels { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
 
     public required IReadOnlyList<RequestTypeDef> RequestTypes { get; init; }
 

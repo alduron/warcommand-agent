@@ -1271,6 +1271,59 @@ public partial class App : Application, IDisposable
     /// <remarks>
     /// A claim is never queued: a replayed one takes work somebody else has already finished.
     /// </remarks>
+    /// <summary>
+    /// Keeps the artillery tool's target on the fire mission this gun is holding.
+    /// </summary>
+    /// <remarks>
+    /// Exactly one held mission, or nothing. With two, guessing which one the crew is laying on
+    /// is worse than leaving the tool where they put it.
+    /// </remarks>
+    private void FollowTheFireMission()
+    {
+        if (_menu is not { } menu || _observer?.Board is not { } board)
+        {
+            return;
+        }
+
+        var catalog = BundledContracts.Catalog().Current;
+        var missions = board.Yours
+            .Where(r => r.Points.Count > 0)
+            .Where(r => catalog.RequestType(r.TypeId)?.ComputesSolution is not null)
+            .ToList();
+
+        if (missions.Count == 1)
+        {
+            menu.Menu.AdoptFireTarget(missions[0].Points[0].Point);
+        }
+    }
+
+    /// <summary>
+    /// A gun that accepts a fire mission gets the tool's target filled in from the row.
+    /// </summary>
+    /// <remarks>
+    /// The crew has already been told where to shoot; the grid is on the row they just pressed
+    /// ACCEPT on. Asking them to walk into the tool and type it again is asking for the number
+    /// twice and getting it wrong once. Only for a type the catalog says computes a solution, so
+    /// accepting a delivery never moves a gun's target.
+    /// </remarks>
+    private void AdoptFireTargetFrom(BoardRow row)
+    {
+        if (BundledContracts.Catalog().Current.RequestType(row.TypeId)?.ComputesSolution is null)
+        {
+            return;
+        }
+
+        if (row.Points.Count == 0 || _menu is not { } menu)
+        {
+            return;
+        }
+
+        if (menu.Menu.AdoptFireTarget(row.Points[0].Point))
+        {
+            _observer?.Render();
+        }
+    }
+
     private void RunBoardVerb(MenuBoardAction action, RollingFileLog log)
     {
         if (_realtime is not { } realtime || _observer?.Board is not { } board)
@@ -1283,6 +1336,11 @@ public partial class App : Application, IDisposable
             log.Info($"No row on slot {action.Slot.ToString(CultureInfo.InvariantCulture)}.");
             _observer?.SetFault($"NO ROW ON {action.Slot.ToString(CultureInfo.InvariantCulture)}");
             return;
+        }
+
+        if (action.VerbId == "accept")
+        {
+            AdoptFireTargetFrom(row);
         }
 
         var sent = action.VerbId switch
@@ -2659,6 +2717,11 @@ public partial class App : Application, IDisposable
                 // One reference assignment, on the dispatcher. The hook thread reads it and never
                 // touches BoardState.
                 _boardSlots = snapshot.Slots;
+
+                // The tool follows the mission on every render, not only on the accept: a
+                // spotter's correction moves the grid afterwards and the crew must not have to
+                // walk back into the tool and type it again.
+                FollowTheFireMission();
             },
             serverNow: ServerNow,
             // The roster frame is the only correction these two ever get. COPY INVITE read a code
@@ -3203,7 +3266,9 @@ public partial class App : Application, IDisposable
         var unitsToMeters = BundledContracts.GameProfile().Current.DefaultUnitsToMeters;
 
         var rows = board.Rows
-            .Select(r => BoardRowViewModel.FromPrimary(r, viewerId, now, unitsToMeters).WithGlyph(glyphs))
+            .Select(r => BoardRowViewModel
+                .FromPrimary(r, viewerId, now, unitsToMeters, catalog: BundledContracts.Catalog().Current)
+                .WithGlyph(glyphs))
             .ToList();
         var yours = board.Yours
             .Select(r => BoardRowViewModel.FromSecondary(r, now, unitsToMeters, viewerId).WithGlyph(glyphs))

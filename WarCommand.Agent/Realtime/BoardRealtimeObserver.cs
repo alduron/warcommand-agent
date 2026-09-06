@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Windows.Threading;
 using WarCommand.Agent.Client.Realtime;
 using WarCommand.Agent.Core.Board;
@@ -477,7 +477,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
 
         var rows = board.Rows
             .Select(r => BoardRowViewModel
-                .FromPrimary(r, _viewerId, now, unitsToMeters, fire)
+                .FromPrimary(r, _viewerId, now, unitsToMeters, fire, _catalog())
                 .WithGlyph(glyphs))
             .ToList();
         var yours = board.Yours

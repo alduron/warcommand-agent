@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Overlay;
@@ -31,7 +31,7 @@ internal static class OverlayDemo
         PeopleCount = 31,
         Where = "Bakurani",
         Right = "invite 921585",
-        RoleIds = ["mortar", "logistics"],
+        RoleIds = ["mortar", "ground_transport"],
         Hint = OverlayHint.Resolve(new HintState { PttLabel = "Mouse5" }),
     }.WithGlyph(Glyphs);
 
@@ -97,7 +97,7 @@ internal static class OverlayDemo
         new BoardRowViewModel
         {
             SlotDisplay = string.Empty,
-            RoleId = "logistics",
+            RoleId = "ground_transport",
             TypeAndQualifier = "AMMO",
             CoordinatesDisplay = "x82.91 y66.04",
             Requester = "Kite",

@@ -1,14 +1,14 @@
 {
-  "version": 2,
+  "version": 3,
   "generated_note": "SOURCE OF TRUTH. The API validates against this, the web renders from it, and the agent compiles its speech grammar from it. Run scripts/contracts.ps1 after editing. Never hand-edit the generated copies.",
-  "game_note": "Roles and types are derived from what Wardogs actually contains. Wardogs has no fixed classes; it has six XP tracks (Assault, Medic, Recon, Support, Driver, Pilot) and players buy the kit for the job. A WarCommand role is 'who do I ask for this', not a class the game enforces.",
+  "game_note": "Rebuilt from the owner's in-game menu list. A category is a place to look, an item is the request, and everything else is a tag on it. The game has far more distinct things than a request type each, and a tag is what a board row can show and a shopping list can group.",
   "roles": [
     {
       "id": "mortar",
       "display": "Mortar",
       "ticket_prefix": "MTR",
       "color_group": "fire",
-      "game_note": "FOB-built mortars. Wardogs mortars want a separate spotter, which is why spotter_request exists.",
+      "game_note": "FOB-built mortars. Fires on a Shell request.",
       "icon": {
         "d1": "M3 20C7 6 17 6 21 20",
         "d2": "M3 20h4M17 20h4"
@@ -19,7 +19,7 @@
       "display": "Artillery",
       "ticket_prefix": "ART",
       "color_group": "fire",
-      "game_note": "SPH-2 self-propelled gun.",
+      "game_note": "SPH-2 self-propelled gun. Fires on a Shell request.",
       "icon": {
         "d1": "M4 17 19 8",
         "d2": "M6 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4M4 17h3"
@@ -37,101 +37,25 @@
       }
     },
     {
-      "id": "anti_air",
-      "display": "Anti-Air",
-      "ticket_prefix": "AAA",
-      "color_group": "fire",
-      "game_note": "Flakpanzer Gepard, and FOB-built AA.",
-      "icon": {
-        "d1": "M9 3v9M15 3v9",
-        "d2": "M5 20h14l-3-8H8z"
-      }
-    },
-    {
       "id": "air_support",
-      "display": "Air Support",
+      "display": "Attack Chopper",
       "ticket_prefix": "CAS",
       "color_group": "fire",
-      "game_note": "AH-6M (miniguns), AH-6R (rockets), Havoc, armed UH-1Y.",
+      "game_note": "Armed rotary wing. The owner calls this CAS.",
       "icon": {
         "d1": "M12 3 14 12l7 3-7 1-2 5-2-5-7-1 7-3z",
         "d2": ""
       }
     },
     {
-      "id": "air_transport",
-      "display": "Air Transport",
-      "ticket_prefix": "LFT",
-      "color_group": "move",
-      "game_note": "MH-6 (6 seats), UH-1Y (9 seats).",
+      "id": "stingray",
+      "display": "Stingray",
+      "ticket_prefix": "STG",
+      "color_group": "fire",
+      "game_note": "The Stingray weapon system, built at a FOB and crewed.",
       "icon": {
-        "d1": "M3 6h18",
-        "d2": "M12 6v4M6 14h12l-2 5H8z"
-      }
-    },
-    {
-      "id": "ground_transport",
-      "display": "Ground Transport",
-      "ticket_prefix": "TPT",
-      "color_group": "move",
-      "game_note": "Bobcat, Dune Buggy, Kodiak, Humvee.",
-      "icon": {
-        "d1": "M3 8h10v8H3z",
-        "d2": "M13 11h4l3 3v2h-7zM7 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M17 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"
-      }
-    },
-    {
-      "id": "logistics",
-      "display": "Logistics",
-      "ticket_prefix": "LOG",
-      "color_group": "move",
-      "game_note": "Ural family and supply pallets. The Support and Driver tracks.",
-      "icon": {
-        "d1": "M4 7h16v13H4z",
-        "d2": "M4 12h16M12 7v13"
-      }
-    },
-    {
-      "id": "engineer",
-      "display": "Engineer",
-      "ticket_prefix": "ENG",
-      "color_group": "build",
-      "game_note": "FOB construction and vehicle repair. Wardogs calls this the Support track; 'engineer' reads better on a 380px overlay.",
-      "icon": {
-        "d1": "M12 3 20 7.5v9L12 21 4 16.5v-9z",
-        "d2": "M12 9.5 15.5 11.5v3L12 16.5 8.5 14.5v-3z"
-      }
-    },
-    {
-      "id": "medic",
-      "display": "Medic",
-      "ticket_prefix": "MED",
-      "color_group": "medic",
-      "icon": {
-        "d1": "M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6z",
-        "d2": ""
-      }
-    },
-    {
-      "id": "recon",
-      "display": "Recon",
-      "ticket_prefix": "RCN",
-      "color_group": "recon",
-      "game_note": "Binoculars, monocular, rangefinder, IR rangefinder, and marking.",
-      "icon": {
-        "d1": "M7 20a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M17 20a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7",
-        "d2": "M7 13V5h3v8M17 13V5h-3v8M10 9h4"
-      }
-    },
-    {
-      "id": "uav",
-      "display": "UAV",
-      "ticket_prefix": "UAV",
-      "color_group": "recon",
-      "game_note": "Wardogs has both recon UAVs and FPV strike drones. Separated from recon because a drone operator is sitting still somewhere safe flying a camera, which is a different person doing a different job from a scout with binoculars.",
-      "icon": {
-        "d1": "M5 5h4M15 5h4M7 5v4M17 5v4",
-        "d2": "M9 9h6v6H9z"
+        "d1": "M9 3v9M15 3v9",
+        "d2": "M5 20h14l-3-8H8z"
       }
     },
     {
@@ -139,10 +63,65 @@
       "display": "Infantry",
       "ticket_prefix": "INF",
       "color_group": "fire",
-      "game_note": "The Assault track. The target for maneuver requests: flank, hold, breach, anti-tank.",
+      "game_note": "Rifleman. Fireteam work, smoke screens, and the requester for most mobility.",
       "icon": {
         "d1": "M12 7a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5",
         "d2": "M8 22v-6l-2-3 3-3h6l3 3-2 3v6"
+      }
+    },
+    {
+      "id": "sniper",
+      "display": "Sniper",
+      "ticket_prefix": "SNP",
+      "color_group": "recon",
+      "game_note": "Overwatch: counter-sniper and cover. Replaced recon, which nothing targeted.",
+      "icon": {
+        "d1": "M7 20a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M17 20a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7",
+        "d2": "M7 13V5h3v8M17 13V5h-3v8M10 9h4"
+      }
+    },
+    {
+      "id": "medic",
+      "display": "Medic",
+      "ticket_prefix": "MED",
+      "color_group": "medic",
+      "game_note": "Revives and heals. Targeted by Infantry > Medical.",
+      "icon": {
+        "d1": "M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6z",
+        "d2": ""
+      }
+    },
+    {
+      "id": "ground_transport",
+      "display": "Ground Transport",
+      "ticket_prefix": "TPT",
+      "color_group": "move",
+      "game_note": "Trucks. Half of the delivery pair, and ground mobility.",
+      "icon": {
+        "d1": "M3 8h10v8H3z",
+        "d2": "M13 11h4l3 3v2h-7zM7 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M17 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"
+      }
+    },
+    {
+      "id": "air_transport",
+      "display": "Air Transport",
+      "ticket_prefix": "LFT",
+      "color_group": "move",
+      "game_note": "Transport choppers. The other half of the delivery pair, plus paradrop and air extraction.",
+      "icon": {
+        "d1": "M3 6h18",
+        "d2": "M12 6v4M6 14h12l-2 5H8z"
+      }
+    },
+    {
+      "id": "builder",
+      "display": "Builder",
+      "ticket_prefix": "BLD",
+      "color_group": "build",
+      "game_note": "FOBs, defenses, emplacements and drills. Was engineer.",
+      "icon": {
+        "d1": "M12 3 20 7.5v9L12 21 4 16.5v-9z",
+        "d2": "M12 9.5 15.5 11.5v3L12 16.5 8.5 14.5v-3z"
       }
     },
     {
@@ -150,10 +129,8 @@
       "display": "Command",
       "ticket_prefix": "CMD",
       "color_group": "command",
-      "receives_all": true,
       "grant_only": true,
-      "note": "Subscribing to command receives every request in the SUBSCRIBER'S DEPLOYMENT regardless of target role. Never group-wide.",
-      "grant_only_note": "Requires groups.memberships.can_command, set by owner or admin through role.command.grant. Subscription decides what you receive; a capability decides what you may see. Self-service command is the one privilege escalation this product could plausibly introduce, and it also degrades the subscriber's own board to 100 percent of the deployment's traffic on nine slots.",
+      "game_note": "The lead. No request targets it: it is who may restart a match and hand out roles, which is why it is grant_only and off the join default.",
       "icon": {
         "d1": "M12 3 5 6v6c0 4 3 7 7 8 4-1 7-4 7-8V6z",
         "d2": "M9 12h6M12 9v6"
@@ -164,175 +141,48 @@
     "mortar",
     "artillery",
     "armor",
-    "anti_air",
     "air_support",
-    "air_transport",
-    "ground_transport",
-    "logistics",
-    "engineer",
+    "stingray",
+    "infantry",
+    "sniper",
     "medic",
-    "recon",
-    "uav",
-    "infantry"
+    "ground_transport",
+    "air_transport",
+    "builder"
   ],
   "default_enabled_roles_note": "Roles a group has on by default. The join default is every ENABLED role EXCEPT those marked grant_only, so a member who joins with no role_ids never lands on the command board. command is deliberately absent from this list as well as grant-gated: a role that is enabled but grant_only is still a role an admin can hand out without a group setting change.",
-  "structure_kinds": [
-    {
-      "id": "sandbags",
-      "display": "Sandbags",
-      "overlay_label": "SANDBAG",
-      "hammer": "small",
-      "spoken_aliases": [
-        "sandbags",
-        "sandbag"
-      ],
-      "menu_path": "build.2.1"
-    },
-    {
-      "id": "wire",
-      "display": "Barbed Wire",
-      "overlay_label": "WIRE",
-      "hammer": "small",
-      "spoken_aliases": [
-        "wire",
-        "barbed wire"
-      ],
-      "menu_path": "build.2.2"
-    },
-    {
-      "id": "barrier",
-      "display": "Barrier",
-      "overlay_label": "BARRIER",
-      "hammer": "small",
-      "spoken_aliases": [
-        "barrier",
-        "barriers"
-      ],
-      "menu_path": "build.2.3"
-    },
-    {
-      "id": "trench",
-      "display": "Trench",
-      "overlay_label": "TRENCH",
-      "hammer": "small",
-      "spoken_aliases": [
-        "trench",
-        "trenches"
-      ],
-      "menu_path": "build.2.4"
-    },
-    {
-      "id": "hesco",
-      "display": "HESCO Wall",
-      "overlay_label": "WALL",
-      "hammer": "medium",
-      "spoken_aliases": [
-        "wall",
-        "walls",
-        "hesco"
-      ],
-      "menu_path": "build.2.5"
-    },
-    {
-      "id": "gate",
-      "display": "Gate",
-      "overlay_label": "GATE",
-      "hammer": "medium",
-      "spoken_aliases": [
-        "gate",
-        "door"
-      ],
-      "menu_path": "build.2.6"
-    },
-    {
-      "id": "aa_gun",
-      "display": "AA Gun",
-      "overlay_label": "AA GUN",
-      "hammer": "large",
-      "spoken_aliases": [
-        "anti air gun",
-        "ack ack"
-      ],
-      "menu_path": "build.3.1"
-    },
-    {
-      "id": "mortar_pit",
-      "display": "Mortar",
-      "overlay_label": "MTR PIT",
-      "hammer": "large",
-      "spoken_aliases": [
-        "mortar pit",
-        "mortar emplacement"
-      ],
-      "menu_path": "build.3.2"
-    },
-    {
-      "id": "sniper_tower",
-      "display": "Sniper Tower",
-      "overlay_label": "TOWER",
-      "hammer": "large",
-      "spoken_aliases": [
-        "tower",
-        "sniper tower"
-      ],
-      "menu_path": "build.3.3"
-    },
-    {
-      "id": "drill_rig",
-      "display": "Drill Rig",
-      "overlay_label": "DRILL",
-      "hammer": "large",
-      "spoken_aliases": [
-        "drill",
-        "drill rig"
-      ],
-      "menu_path": "build.3.4"
-    },
-    {
-      "id": "spawn",
-      "display": "Spawn",
-      "overlay_label": "SPAWN",
-      "hammer": "vehicle",
-      "spoken_aliases": [
-        "spawn",
-        "spawn point"
-      ],
-      "menu_path": "build.3.5"
-    }
-  ],
+  "structure_kinds": [],
   "menu_categories": {
-    "fire": 1,
-    "air": 2,
-    "move": 3,
-    "supply": 4,
-    "medical": 5,
-    "build": 6,
+    "supply": 1,
+    "utility": 2,
+    "weapons": 3,
+    "ammo": 4,
+    "fire": 5,
+    "mobility": 6,
     "infantry": 7,
-    "recon": 8,
-    "intel": 9
+    "vehicle": 8,
+    "build": 9
   },
   "menu_note": "The request menu tree in 06-overlay-ux.md is GENERATED from these paths, not hand-drawn. A path is category.slot, or category.slot.slot for the third level under build. A type may appear at more than one leaf on purpose: EXTRACT sits under AIR, MOVE and MEDICAL because somebody under fire should find it down whichever branch they guessed first, and a duplicate entry costs one line of a static menu. Two DIFFERENT types may never share a leaf, which scripts/contracts.ps1 enforces.",
-  "structure_kinds_note": "Wardogs builds through hammer tiers: small does sandbags, wire and barriers; medium does HESCO walls, gates and doors; large does AA guns, mortars, sniper towers and drill rigs. Spawn support is vehicle-based rather than hammered. UNVERIFIED against a live build menu; the game is not out. Expect this list to move.",
+  "structure_kinds_note": "Empty. Build items are request types with their own tags now, because Defenses and Emplacement each carry a different option set and a structure kind cannot.",
   "supply_kinds": [
+    {
+      "id": "building",
+      "display": "Building",
+      "overlay_label": "BUILDING",
+      "spoken_aliases": [
+        "building",
+        "building supplies"
+      ],
+      "menu_path": "supply.1"
+    },
     {
       "id": "ammo",
       "display": "Ammo",
       "overlay_label": "AMMO",
       "spoken_aliases": [
         "ammo",
-        "ammunition",
-        "rounds"
-      ],
-      "menu_path": "supply.1"
-    },
-    {
-      "id": "build",
-      "display": "Build",
-      "overlay_label": "BUILD",
-      "spoken_aliases": [
-        "build",
-        "building",
-        "build supplies"
+        "ammunition"
       ],
       "menu_path": "supply.2"
     },
@@ -342,8 +192,7 @@
       "overlay_label": "FUEL",
       "spoken_aliases": [
         "fuel",
-        "gas",
-        "petrol"
+        "diesel"
       ],
       "menu_path": "supply.3"
     },
@@ -353,51 +202,1210 @@
       "overlay_label": "MECH",
       "spoken_aliases": [
         "mechanical",
-        "mech",
-        "parts"
+        "mech parts"
       ],
       "menu_path": "supply.4"
+    },
+    {
+      "id": "hammers",
+      "display": "Hammers",
+      "overlay_label": "HAMMERS",
+      "spoken_aliases": [
+        "hammers"
+      ],
+      "menu_path": "supply.5"
+    },
+    {
+      "id": "fob",
+      "display": "FOB",
+      "overlay_label": "FOB KIT",
+      "spoken_aliases": [
+        "fob kit"
+      ],
+      "menu_path": "supply.6"
     }
   ],
   "request_types": [
     {
-      "id": "mortar_fire",
-      "display": "Mortar",
-      "overlay_label": "MORTAR",
+      "id": "resupply",
+      "display": "Resupply",
+      "overlay_label": "SUPPLY",
       "target_roles": [
-        "mortar"
+        "ground_transport",
+        "air_transport"
       ],
       "arity": 1,
       "point_labels": [
-        "target"
+        "dropoff"
       ],
-      "ttl_s": 120,
+      "ttl_s": 300,
       "spoken_aliases": [
-        "mortar",
-        "mortars",
-        "mortar fire",
-        "fire mission",
-        "indirect"
+        "resupply",
+        "supplies",
+        "supply run"
       ],
       "modifiers": [
         "urgent",
         "danger_close",
-        "smoke",
-        "he",
-        "willy_pete"
+        "medium",
+        "large"
       ],
-      "takes_quantity": "rounds",
+      "takes_quantity": "pallets",
       "default_priority": "normal",
-      "computes_solution": "l81_mortar",
       "menu_paths": [
-        "fire.1"
-      ]
+        "supply.1",
+        "supply.2",
+        "supply.3",
+        "supply.4",
+        "supply.5",
+        "supply.6"
+      ],
+      "game_note": "Bulk crates. The kind is carried in supply_kind, not in the type.",
+      "kind_shortcut_aliases": true,
+      "requires_supply_kind": true,
+      "default_supply_kind": "building",
+      "kind_note": "A delivery MUST name what to bring, or the provider who accepts it cannot act on it. The default is building supplies, the commonest crate, so an unqualified \"resupply\" is a useful guess rather than an expensive one.",
+      "group_key": "delivery"
     },
     {
-      "id": "artillery_fire",
-      "display": "Artillery",
-      "overlay_label": "ARTY",
+      "id": "gear_armor",
+      "display": "Armor",
+      "overlay_label": "ARMOR",
       "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "body armor",
+        "plate carrier"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "light",
+        "med",
+        "heavy"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "supply.7"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "gear_helmet",
+      "display": "Helmet",
+      "overlay_label": "HELMET",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "helmet"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "light",
+        "med",
+        "heavy"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "supply.8"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "gear_camo",
+      "display": "Camo",
+      "overlay_label": "CAMO",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "camo",
+        "ghillie"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "normal",
+        "dead",
+        "head",
+        "body"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "supply.9"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "utility_medical",
+      "display": "Medical Kit",
+      "overlay_label": "MEDKIT",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "med kit",
+        "medical kit"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "resus",
+        "adrenaline",
+        "health",
+        "defib"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "utility.1"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "utility_tactical",
+      "display": "Tactical",
+      "overlay_label": "TACTICAL",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "tactical",
+        "grenades",
+        "explosives"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "smoke_grenade",
+        "frag",
+        "ied",
+        "c4",
+        "at_mine",
+        "claymore",
+        "bar_mine"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "utility.2"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "utility_recon",
+      "display": "Optics",
+      "overlay_label": "OPTICS",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "optics",
+        "binoculars"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "bino",
+        "mono",
+        "rangefinder",
+        "irangefinder"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "utility.3"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "utility_vehicle",
+      "display": "Vehicle Kit",
+      "overlay_label": "VEHKIT",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "vehicle kit",
+        "repair kit"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "jerry_can",
+        "wrench",
+        "light_drill",
+        "heavy_drill"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "utility.4"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "weapon_rifle",
+      "display": "Rifle",
+      "overlay_label": "RIFLE",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "rifle",
+        "rifles"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "m17s",
+        "t21",
+        "ak74",
+        "galil",
+        "m4",
+        "fal",
+        "with_ammo",
+        "with_mags",
+        "scope",
+        "comp",
+        "flash",
+        "brake",
+        "suppress",
+        "grip",
+        "bipod"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "weapons.1"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "weapon_smg",
+      "display": "SMG",
+      "overlay_label": "SMG",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "sub gun",
+        "submachine gun"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "amp9",
+        "pp19",
+        "mp5",
+        "super45",
+        "with_ammo",
+        "with_mags",
+        "scope",
+        "comp",
+        "flash",
+        "brake",
+        "suppress",
+        "grip",
+        "bipod"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "weapons.2"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "weapon_shotgun",
+      "display": "Shotgun",
+      "overlay_label": "SHOTGUN",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "shotgun"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "mp43",
+        "m500",
+        "with_ammo",
+        "with_mags",
+        "scope",
+        "comp",
+        "flash",
+        "brake",
+        "suppress",
+        "grip",
+        "bipod"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "weapons.3"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "weapon_lmg",
+      "display": "LMG",
+      "overlay_label": "LMG",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "machine gun",
+        "light machine gun"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "m249",
+        "pkm",
+        "with_ammo",
+        "with_mags",
+        "scope",
+        "comp",
+        "flash",
+        "brake",
+        "suppress",
+        "grip",
+        "bipod"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "weapons.4"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "weapon_marksman",
+      "display": "Marksman",
+      "overlay_label": "DMR",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "marksman"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "sks",
+        "svd",
+        "bmr308",
+        "with_ammo",
+        "with_mags",
+        "scope",
+        "comp",
+        "flash",
+        "brake",
+        "suppress",
+        "grip",
+        "bipod"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "weapons.5"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "weapon_sniper",
+      "display": "Sniper",
+      "overlay_label": "SNIPER",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "sniper rifle"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "scout",
+        "mosin",
+        "sv98",
+        "mk22",
+        "amr50",
+        "with_ammo",
+        "with_mags",
+        "scope",
+        "comp",
+        "flash",
+        "brake",
+        "suppress",
+        "grip",
+        "bipod"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "weapons.6"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "weapon_bow",
+      "display": "Bow",
+      "overlay_label": "BOW",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "bow"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "compound",
+        "with_ammo",
+        "with_mags",
+        "scope",
+        "comp",
+        "flash",
+        "brake",
+        "suppress",
+        "grip",
+        "bipod"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "weapons.7"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "weapon_sidearm",
+      "display": "Sidearm",
+      "overlay_label": "SIDEARM",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "sidearm",
+        "pistol"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "ggx17",
+        "judge",
+        "m1911",
+        "ggx18",
+        "deagle",
+        "with_ammo",
+        "with_mags",
+        "scope",
+        "comp",
+        "flash",
+        "brake",
+        "suppress",
+        "grip",
+        "bipod"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "weapons.8"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "weapon_launcher",
+      "display": "Launcher",
+      "overlay_label": "LAUNCHER",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "launcher"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "k9333",
+        "rpg7",
+        "maaws",
+        "mgl40",
+        "with_ammo",
+        "with_mags",
+        "scope",
+        "comp",
+        "flash",
+        "brake",
+        "suppress",
+        "grip",
+        "bipod"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "weapons.9"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_9mm",
+      "display": "9mm",
+      "overlay_label": "9MM",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "nine mil"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "box",
+        "mags",
+        "box_mags",
+        "fmj",
+        "hp",
+        "ap"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.1.1"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_45",
+      "display": ".45",
+      "overlay_label": ".45",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "forty five"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "box",
+        "mags",
+        "box_mags",
+        "fmj",
+        "hp",
+        "ap"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.1.2"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_50ae",
+      "display": ".50AE",
+      "overlay_label": ".50AE",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "box",
+        "mags",
+        "box_mags",
+        "fmj",
+        "hp",
+        "ap"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.1.3"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_colt",
+      "display": "Colt",
+      "overlay_label": "COLT",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "colt"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "box",
+        "mags",
+        "box_mags",
+        "fmj",
+        "hp",
+        "ap"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.1.4"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_556",
+      "display": "5.56x45",
+      "overlay_label": "5.56",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "five five six"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "box",
+        "mags",
+        "box_mags",
+        "fmj",
+        "hp",
+        "ap"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.2.1"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_545",
+      "display": "5.45x39",
+      "overlay_label": "5.45",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "five four five"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "box",
+        "mags",
+        "box_mags",
+        "fmj",
+        "hp",
+        "ap"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.2.2"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_762x39",
+      "display": "7.62x39",
+      "overlay_label": "7.62x39",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "box",
+        "mags",
+        "box_mags",
+        "fmj",
+        "hp",
+        "ap"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.2.3"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_762x54",
+      "display": "7.62x54",
+      "overlay_label": "7.62x54",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "box",
+        "mags",
+        "box_mags",
+        "fmj",
+        "hp",
+        "ap"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.2.4"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_308",
+      "display": ".308",
+      "overlay_label": ".308",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "three oh eight"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "box",
+        "mags",
+        "box_mags",
+        "fmj",
+        "hp",
+        "ap"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.2.5"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_50cal",
+      "display": ".50CAL",
+      "overlay_label": ".50CAL",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "fifty cal"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "box",
+        "mags",
+        "box_mags",
+        "fmj",
+        "hp",
+        "ap"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.2.6"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_buck",
+      "display": "Buck",
+      "overlay_label": "BUCK",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "buckshot"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.3.1"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_slug",
+      "display": "Slug",
+      "overlay_label": "SLUG",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "slugs"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.3.2"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_40mm",
+      "display": "40mm",
+      "overlay_label": "40MM",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "forty mike mike"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.4.1"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_155mm",
+      "display": "155mm",
+      "overlay_label": "155MM",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.4.2"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_84mm",
+      "display": "84mm",
+      "overlay_label": "84MM",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.4.3"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_93mm",
+      "display": "93mm",
+      "overlay_label": "93MM",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.4.4"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_35x228mm",
+      "display": "35x228mm",
+      "overlay_label": "35MM",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.4.5"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_120heat",
+      "display": "120mm HEAT",
+      "overlay_label": "120HEAT",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.4.6"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_arrow",
+      "display": "Arrow",
+      "overlay_label": "ARROW",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "arrows"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.5.1"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "ammo_batt",
+      "display": "Batt",
+      "overlay_label": "BATT",
+      "target_roles": [
+        "ground_transport",
+        "air_transport"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "battery"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "normal",
+      "menu_paths": [
+        "ammo.5.2"
+      ],
+      "group_key": "delivery"
+    },
+    {
+      "id": "shell_mission",
+      "display": "Shell",
+      "overlay_label": "SHELL",
+      "target_roles": [
+        "mortar",
         "artillery"
       ],
       "arity": 1,
@@ -406,78 +1414,27 @@
       ],
       "ttl_s": 120,
       "spoken_aliases": [
-        "artillery",
-        "arty",
-        "big guns"
+        "shell",
+        "fire mission",
+        "indirect",
+        "mortar",
+        "mortars",
+        "arty"
       ],
       "modifiers": [
         "urgent",
         "danger_close",
+        "he",
         "smoke",
-        "he"
+        "willy_pete"
       ],
       "takes_quantity": "rounds",
       "default_priority": "normal",
-      "computes_solution": "sph2",
+      "computes_solution": "l81_mortar",
       "menu_paths": [
-        "fire.2"
-      ]
-    },
-    {
-      "id": "gun_run",
-      "display": "Gun Run",
-      "overlay_label": "GUNS",
-      "target_roles": [
-        "air_support"
+        "fire.1"
       ],
-      "arity": 1,
-      "point_labels": [
-        "target"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "close air",
-        "gun run",
-        "strafe",
-        "cas"
-      ],
-      "modifiers": [
-        "urgent",
-        "danger_close"
-      ],
-      "default_priority": "normal",
-      "game_note": "AH-6M miniguns or armed UH-1Y. Anti-infantry.",
-      "alias_note": "Never alias to bare 'air support'. It collides with 'air transport'.",
-      "menu_paths": [
-        "air.1"
-      ]
-    },
-    {
-      "id": "rocket_run",
-      "display": "Rocket Run",
-      "overlay_label": "ROCKETS",
-      "target_roles": [
-        "air_support"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "target"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "rockets",
-        "rocket run",
-        "rocket strike"
-      ],
-      "modifiers": [
-        "urgent",
-        "danger_close"
-      ],
-      "default_priority": "normal",
-      "game_note": "AH-6R rockets or Havoc. Anti-armour and anti-structure. Split from gun_run because the airframe and the effect differ.",
-      "menu_paths": [
-        "air.2"
-      ]
+      "game_note": "One request both gun roles take. The tool brackets from whichever gun accepts."
     },
     {
       "id": "armor_support",
@@ -490,136 +1447,74 @@
       "point_labels": [
         "target"
       ],
-      "ttl_s": 120,
+      "ttl_s": 180,
       "spoken_aliases": [
         "tank",
-        "tanks",
-        "armor support",
-        "tracks"
+        "armor support"
       ],
       "modifiers": [
-        "urgent"
+        "urgent",
+        "danger_close"
       ],
       "default_priority": "normal",
-      "alias_note": "Bare 'armor' is FORBIDDEN as an alias. It is a near-homophone of 'mortar'.",
       "menu_paths": [
-        "fire.3"
+        "fire.2"
       ]
     },
     {
-      "id": "anti_tank",
-      "display": "Anti-Tank",
-      "overlay_label": "AT",
+      "id": "close_air",
+      "display": "CAS",
+      "overlay_label": "CAS",
       "target_roles": [
-        "infantry",
-        "armor",
         "air_support"
       ],
       "arity": 1,
       "point_labels": [
         "target"
       ],
-      "ttl_s": 120,
+      "ttl_s": 180,
       "spoken_aliases": [
-        "anti tank",
-        "enemy armor",
-        "launcher"
+        "close air",
+        "gun run",
+        "cas"
       ],
       "modifiers": [
-        "urgent"
+        "urgent",
+        "danger_close"
       ],
-      "default_priority": "urgent",
-      "alias_note": "Never alias to 'A T'. Letter names are the worst case for the recognizer, and it collides with 'eight'.",
+      "default_priority": "normal",
       "menu_paths": [
-        "fire.4",
-        "infantry.7"
+        "fire.3"
       ]
     },
     {
-      "id": "anti_air_cover",
-      "display": "Anti-Air",
-      "overlay_label": "AA",
+      "id": "stingray_fire",
+      "display": "Stingray",
+      "overlay_label": "STINGRAY",
       "target_roles": [
-        "anti_air"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "area"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "anti air",
-        "air cover",
-        "enemy air"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "urgent",
-      "game_note": "Flakpanzer Gepard or FOB AA.",
-      "menu_paths": [
-        "fire.5"
-      ]
-    },
-    {
-      "id": "smoke_screen",
-      "display": "Smoke Screen",
-      "overlay_label": "SCREEN",
-      "target_roles": [
-        "mortar",
-        "artillery"
+        "stingray"
       ],
       "arity": 1,
       "point_labels": [
         "target"
       ],
-      "ttl_s": 120,
+      "ttl_s": 180,
       "spoken_aliases": [
-        "screen",
-        "smoke screen"
+        "stingray"
       ],
       "modifiers": [
-        "urgent"
+        "urgent",
+        "danger_close"
       ],
-      "default_priority": "urgent",
-      "alias_note": "Bare 'smoke' is FORBIDDEN here. It is already a modifier on mortar_fire and the two would be indistinguishable.",
-      "menu_paths": [
-        "fire.6"
-      ]
-    },
-    {
-      "id": "transport_move",
-      "display": "Transport",
-      "overlay_label": "TRANSPORT",
-      "target_roles": [
-        "ground_transport",
-        "air_transport"
-      ],
-      "arity": 2,
-      "point_labels": [
-        "pickup",
-        "dropoff"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "transport",
-        "ride",
-        "taxi",
-        "pickup"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "takes_quantity": "passengers",
       "default_priority": "normal",
       "menu_paths": [
-        "move.1"
+        "fire.4"
       ]
     },
     {
-      "id": "air_transport_move",
-      "display": "Air Lift",
-      "overlay_label": "LIFT",
+      "id": "air_move",
+      "display": "Air Transport",
+      "overlay_label": "AIRLIFT",
       "target_roles": [
         "air_transport"
       ],
@@ -628,264 +1523,160 @@
         "pickup",
         "dropoff"
       ],
-      "ttl_s": 120,
+      "ttl_s": 300,
       "spoken_aliases": [
-        "lift",
-        "air lift",
-        "helo",
-        "bird"
+        "airlift",
+        "lift"
       ],
       "modifiers": [
-        "urgent"
+        "urgent",
+        "danger_close",
+        "paradrop"
       ],
       "takes_quantity": "passengers",
       "default_priority": "normal",
       "menu_paths": [
-        "air.3",
-        "move.2"
+        "mobility.1"
       ]
     },
     {
-      "id": "paradrop",
-      "display": "Paradrop",
-      "overlay_label": "PARADROP",
+      "id": "air_extract",
+      "display": "Air Extraction",
+      "overlay_label": "AIR EXFIL",
       "target_roles": [
         "air_transport"
       ],
       "arity": 1,
       "point_labels": [
-        "drop zone"
+        "pickup"
       ],
-      "ttl_s": 120,
+      "ttl_s": 300,
       "spoken_aliases": [
-        "paradrop",
-        "para",
-        "jump",
-        "drop us"
+        "air extract"
       ],
       "modifiers": [
-        "urgent"
+        "urgent",
+        "danger_close"
       ],
-      "takes_quantity": "jumpers",
-      "default_priority": "normal",
-      "game_note": "Basic Parachute is real gear and helicopter exits are a normal insertion method.",
+      "takes_quantity": "passengers",
+      "default_priority": "urgent",
       "menu_paths": [
-        "air.4",
-        "move.4"
+        "mobility.2"
       ]
     },
     {
-      "id": "extraction",
-      "display": "Extraction",
-      "overlay_label": "EXTRACT",
+      "id": "ground_move",
+      "display": "Ground Transport",
+      "overlay_label": "RIDE",
       "target_roles": [
-        "air_transport",
+        "ground_transport"
+      ],
+      "arity": 2,
+      "point_labels": [
+        "pickup",
+        "dropoff"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "ride",
+        "pick up"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "takes_quantity": "passengers",
+      "default_priority": "normal",
+      "menu_paths": [
+        "mobility.3"
+      ],
+      "ambiguous_aliases": [
+        "transport"
+      ],
+      "alias_note": "Bare \"transport\" is ambiguous by construction: the ground mover and the air mover are both transport. It is recognised and never resolved by confidence, so it always draws the two-item menu rather than guessing which one somebody meant."
+    },
+    {
+      "id": "ground_extract",
+      "display": "Ground Extraction",
+      "overlay_label": "EXFIL",
+      "target_roles": [
         "ground_transport"
       ],
       "arity": 1,
       "point_labels": [
         "pickup"
       ],
-      "ttl_s": 120,
+      "ttl_s": 300,
       "spoken_aliases": [
         "extract",
-        "extraction",
-        "evac",
-        "get us out"
+        "exfil"
       ],
       "modifiers": [
         "urgent",
-        "hot"
+        "danger_close"
       ],
       "takes_quantity": "passengers",
       "default_priority": "urgent",
       "menu_paths": [
-        "air.5",
-        "move.3",
-        "medical.2"
+        "mobility.4"
       ]
     },
     {
-      "id": "resupply",
-      "display": "Resupply",
-      "overlay_label": "SUPPLY",
+      "id": "fire_team",
+      "display": "Fireteam",
+      "overlay_label": "FIRETEAM",
       "target_roles": [
-        "logistics"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "dropoff"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "resupply",
-        "supplies",
-        "supply"
-      ],
-      "requires_supply_kind": true,
-      "default_supply_kind": "ammo",
-      "modifiers": [
-        "urgent"
-      ],
-      "takes_quantity": "pallets",
-      "default_priority": "normal",
-      "game_note": "Four supply kinds: ammo, build, fuel, mechanical. Saying a kind alias alone ('ammo', 'fuel') resolves to this type with that kind set.",
-      "kind_shortcut_aliases": true,
-      "menu_paths": [
-        "supply.1",
-        "supply.2",
-        "supply.3",
-        "supply.4"
-      ]
-    },
-    {
-      "id": "refuel",
-      "display": "Refuel",
-      "overlay_label": "REFUEL",
-      "target_roles": [
-        "logistics"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "vehicle"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "refuel",
-        "fuel up",
-        "dry"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "normal",
-      "game_note": "Fuel Can, or Fuel Supplies at a FOB. Distinct from resupply because it is one stranded vehicle, not a position.",
-      "alias_note": "Bare 'fuel' belongs to the resupply supply kind, not here.",
-      "menu_paths": [
-        "supply.5"
-      ]
-    },
-    {
-      "id": "vehicle_repair",
-      "display": "Repair",
-      "overlay_label": "REPAIR",
-      "target_roles": [
-        "engineer",
-        "logistics"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "vehicle"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "repair",
-        "wrench",
-        "mechanic",
-        "busted"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "normal",
-      "game_note": "Repair Tool plus Mechanical Supplies.",
-      "menu_paths": [
-        "build.4"
-      ]
-    },
-    {
-      "id": "fob_build",
-      "display": "Build FOB",
-      "overlay_label": "FOB",
-      "target_roles": [
-        "engineer",
-        "logistics"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "site"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "fob",
-        "forward base",
-        "build a base"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "normal",
-      "game_note": "Forward Operating Base costs $2,500 and defines the build radius. A real, expensive team decision.",
-      "menu_paths": [
-        "build.1"
-      ]
-    },
-    {
-      "id": "fortify",
-      "display": "Fortify",
-      "overlay_label": "BUILD",
-      "target_roles": [
-        "engineer"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "site"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "fortify",
-        "build here",
-        "dig in here"
-      ],
-      "requires_structure_kind": true,
-      "default_structure_kind": "sandbags",
-      "kind_shortcut_aliases": true,
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "low",
-      "game_note": "One type covering every buildable. Saying a structure alias alone ('wall', 'tower', 'anti air gun') resolves here with that kind set. Same pattern as resupply and its four supply kinds, and for the same reason: eleven request types for one field would bloat the grammar without telling a builder anything the qualifier does not.",
-      "menu_paths": [
-        "build.2",
-        "build.3"
-      ],
-      "menu_path_labels": {
-        "build.2": "WALLS",
-        "build.3": "DEFENSES"
-      },
-      "menu_path_labels_note": "A type on two branches renders overlay_label on both, so BUILD appeared twice under BUILD with no way to tell which held walls and which held defenses. A branch names itself here; the leaves under it still name the structure.",
-      "kind_note": "A build request MUST name what to build. It was requires_structure_kind false, so the server discarded the structure the requester picked and every fortify row on every board read BUILD with nothing to build: the provider who accepted it could not act on it. The default is sandbags, the cheapest thing, so an unqualified 'build' is a small commitment rather than a guess at an expensive one."
-    },
-    {
-      "id": "demolition",
-      "display": "Demolition",
-      "overlay_label": "DEMO",
-      "target_roles": [
-        "engineer",
         "infantry"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "objective"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "fireteam",
+        "fire team"
+      ],
+      "modifiers": [
+        "urgent",
+        "clear",
+        "hold",
+        "breach"
+      ],
+      "takes_quantity": "bodies",
+      "default_priority": "normal",
+      "menu_paths": [
+        "infantry.1"
+      ]
+    },
+    {
+      "id": "overwatch",
+      "display": "Overwatch",
+      "overlay_label": "OVERWATCH",
+      "target_roles": [
+        "sniper"
       ],
       "arity": 1,
       "point_labels": [
         "target"
       ],
-      "ttl_s": 120,
+      "ttl_s": 300,
       "spoken_aliases": [
-        "demo",
-        "charges",
-        "blow it"
+        "overwatch"
       ],
       "modifiers": [
-        "urgent"
+        "urgent",
+        "counter",
+        "cover"
       ],
       "default_priority": "normal",
-      "game_note": "C4, IED, AT mines, Remote Detonator.",
       "menu_paths": [
-        "build.5"
+        "infantry.2"
       ]
     },
     {
       "id": "medic_request",
-      "display": "Medic",
+      "display": "Medical",
       "overlay_label": "MEDIC",
       "target_roles": [
         "medic"
@@ -894,408 +1685,333 @@
       "point_labels": [
         "casualty"
       ],
-      "ttl_s": 120,
+      "ttl_s": 180,
       "spoken_aliases": [
         "medic",
-        "corpsman",
-        "casualty",
-        "man down"
+        "corpsman"
       ],
       "modifiers": [
         "urgent"
       ],
       "default_priority": "urgent",
-      "menu_paths": [
-        "medical.1"
-      ]
-    },
-    {
-      "id": "flank",
-      "display": "Flank",
-      "overlay_label": "FLANK",
-      "target_roles": [
-        "infantry"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "axis"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "push",
-        "push here",
-        "assault here"
-      ],
-      "ambiguous_aliases": [
-        "flank"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "normal",
-      "alias_note": "Primary was 'flank' and it failed the phonetic floor against 'tank': one syllable each, same stressed vowel AE1, same NG-K coda, differing only in onset. 'tank' is the incumbent so it kept the short form. 'flank' is retained as an ambiguous alias, which means it is recognised but always disambiguated through the menu instead of guessed.",
-      "menu_paths": [
-        "infantry.2"
-      ]
-    },
-    {
-      "id": "hold_position",
-      "display": "Hold",
-      "overlay_label": "HOLD",
-      "target_roles": [
-        "infantry"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "position"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "hold",
-        "hold here",
-        "defend"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "normal",
       "menu_paths": [
         "infantry.3"
       ]
     },
     {
-      "id": "breach",
-      "display": "Breach",
-      "overlay_label": "BREACH",
-      "target_roles": [
-        "infantry",
-        "engineer"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "entry"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "breach",
-        "open it"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "normal",
-      "game_note": "Halligan Bar, or C4 on a door.",
-      "menu_paths": [
-        "infantry.5"
-      ]
-    },
-    {
-      "id": "fire_team",
-      "display": "Fire Team",
-      "overlay_label": "FIRETEAM",
+      "id": "smoke_screen",
+      "display": "Smoke Screen",
+      "overlay_label": "SMOKE",
       "target_roles": [
         "infantry"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "position"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "fire team",
-        "need bodies",
-        "send infantry"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "takes_quantity": "bodies",
-      "default_priority": "normal",
-      "game_note": "Bodies on a position. The most common thing anybody actually shouts for and the one the catalog was missing.",
-      "menu_paths": [
-        "infantry.1"
-      ]
-    },
-    {
-      "id": "clear_building",
-      "display": "Clear Building",
-      "overlay_label": "CLEAR",
-      "target_roles": [
-        "infantry"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "structure"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "clear building",
-        "clear it",
-        "room clear"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "normal",
-      "alias_note": "Bare 'clear' is FORBIDDEN. It is already the command verb that dismisses overlay messages.",
-      "menu_paths": [
-        "infantry.4"
-      ]
-    },
-    {
-      "id": "suppress",
-      "display": "Suppress",
-      "overlay_label": "SUPPRESS",
-      "target_roles": [
-        "infantry",
-        "armor"
       ],
       "arity": 1,
       "point_labels": [
         "target"
       ],
-      "ttl_s": 120,
+      "ttl_s": 300,
       "spoken_aliases": [
-        "suppress",
-        "suppressing fire",
-        "pin them"
+        "smoke screen",
+        "screen"
       ],
       "modifiers": [
         "urgent"
       ],
       "default_priority": "urgent",
-      "game_note": "Suppression is worthless minutes later, which is why nothing waits longer than the flat 120 s.",
       "menu_paths": [
-        "fire.7",
-        "infantry.6"
+        "infantry.4"
       ]
     },
     {
-      "id": "sniper_support",
-      "display": "Sniper",
-      "overlay_label": "SNIPER",
-      "target_roles": [
-        "recon"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "target"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "sniper",
-        "marksman",
-        "long shot"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "normal",
-      "game_note": "SVD marksman rifle and the AMR 50 anti-materiel rifle sit on the Recon track, and sniper towers are a large-hammer buildable.",
-      "menu_paths": [
-        "fire.8",
-        "recon.4"
-      ]
-    },
-    {
-      "id": "escort",
-      "display": "Escort",
+      "id": "vehicle_defense",
+      "display": "Vehicle Defense",
       "overlay_label": "ESCORT",
       "target_roles": [
-        "infantry",
         "armor",
+        "stingray",
+        "artillery",
+        "air_support",
         "ground_transport",
-        "air_support"
+        "air_transport"
       ],
-      "arity": 2,
+      "arity": 1,
       "point_labels": [
-        "from",
-        "to"
+        "vehicle"
       ],
-      "ttl_s": 120,
+      "ttl_s": 300,
       "spoken_aliases": [
-        "convoy",
-        "cover us"
-      ],
-      "ambiguous_aliases": [
-        "escort"
+        "escort",
+        "convoy"
       ],
       "modifiers": [
-        "urgent"
+        "urgent",
+        "danger_close",
+        "air_threat",
+        "ground_threat"
       ],
       "default_priority": "normal",
-      "game_note": "A logistics run that needs protection. Arity 2 because the route is the request, not a point on it.",
-      "alias_note": "Primary was 'escort' and it scored near the floor against 'extract': two syllables each, both stressed on EH1. 'extract' is the incumbent. 'convoy' has a different stressed vowel and a different onset.",
       "menu_paths": [
-        "move.5"
+        "vehicle.1"
       ]
     },
     {
-      "id": "spawn_point",
-      "display": "Spawn Point",
-      "overlay_label": "SPAWN",
+      "id": "vehicle_refuel",
+      "display": "Refuel",
+      "overlay_label": "REFUEL",
       "target_roles": [
-        "logistics",
-        "ground_transport"
+        "armor",
+        "stingray",
+        "artillery",
+        "air_support",
+        "ground_transport",
+        "air_transport"
       ],
       "arity": 1,
       "point_labels": [
-        "site"
+        "vehicle"
       ],
-      "ttl_s": 120,
+      "ttl_s": 300,
       "spoken_aliases": [
-        "spawn point",
-        "bring the spawn",
-        "rally"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "normal",
-      "game_note": "Spawn support is vehicle-based and has to be driven somewhere, which makes it a transport ask rather than a build ask.",
-      "menu_paths": [
-        "move.6"
-      ]
-    },
-    {
-      "id": "recon_request",
-      "display": "Recon",
-      "overlay_label": "RECON",
-      "target_roles": [
-        "recon"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "area"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "recon",
-        "scout",
-        "eyes on",
-        "sweep"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "low",
-      "menu_paths": [
-        "recon.1"
-      ]
-    },
-    {
-      "id": "uav_recon",
-      "display": "UAV Recon",
-      "overlay_label": "UAV",
-      "target_roles": [
-        "uav",
-        "recon"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "area"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "drone",
-        "uav recon",
-        "eye in the sky",
-        "overwatch"
-      ],
-      "modifiers": [
-        "urgent"
-      ],
-      "default_priority": "normal",
-      "game_note": "Recon UAV. Eyes on an area from something nobody has to walk into.",
-      "alias_note": "Never alias to the letters 'u a v'. Letter names are the recognizer's worst case. 'drone' is the primary.",
-      "menu_paths": [
-        "recon.3"
-      ]
-    },
-    {
-      "id": "uav_strike",
-      "display": "Drone Strike",
-      "overlay_label": "FPV",
-      "target_roles": [
-        "uav"
-      ],
-      "arity": 1,
-      "point_labels": [
-        "target"
-      ],
-      "ttl_s": 120,
-      "spoken_aliases": [
-        "drone strike",
-        "fpv",
-        "fpv drone"
+        "refuel"
       ],
       "modifiers": [
         "urgent",
         "danger_close"
       ],
       "default_priority": "normal",
-      "game_note": "FPV strike drone. Separate from uav_recon because one asks somebody to look and the other asks them to spend the drone.",
-      "alias_note": "Bare 'drone' belongs to uav_recon. The strike form always needs the second word.",
       "menu_paths": [
-        "air.6",
-        "recon.5"
+        "vehicle.2"
       ]
     },
     {
-      "id": "spotter_request",
-      "display": "Spotter",
-      "overlay_label": "SPOTTER",
+      "id": "vehicle_repair",
+      "display": "Repair",
+      "overlay_label": "REPAIR",
       "target_roles": [
-        "recon",
-        "infantry"
+        "armor",
+        "stingray",
+        "artillery",
+        "air_support",
+        "ground_transport",
+        "air_transport",
+        "builder"
       ],
       "arity": 1,
       "point_labels": [
-        "target"
+        "vehicle"
       ],
-      "ttl_s": 120,
+      "ttl_s": 300,
       "spoken_aliases": [
-        "spotter",
-        "spot for me",
-        "mark it"
+        "repair"
       ],
       "modifiers": [
-        "urgent"
+        "urgent",
+        "danger_close"
       ],
       "default_priority": "normal",
-      "game_note": "Wardogs mortars work as a two-part team with a protected crew and a separate spotter who can see the target. This request is that pairing.",
       "menu_paths": [
-        "recon.2"
+        "vehicle.3"
       ]
     },
     {
-      "id": "intel_marker",
-      "display": "Intel",
-      "overlay_label": "CONTACT",
+      "id": "build_fob",
+      "display": "FOB",
+      "overlay_label": "FOB",
       "target_roles": [
-        "command"
+        "builder"
       ],
       "arity": 1,
       "point_labels": [
-        "contact"
+        "site"
       ],
-      "ttl_s": 120,
+      "ttl_s": 300,
       "spoken_aliases": [
-        "contact",
-        "enemy",
-        "intel"
+        "fob"
       ],
-      "alias_note": "Bare 'spotted' is FORBIDDEN here. S P AA1 T IH0 D against spotter_request's primary 'spotter' S P AA1 T ER0: same syllable count, same stressed vowel, same onset, differing only in coda. One feature of four, and the phonetic floor refuses it. The two route to opposite work, an FYI to command against pairing a spotter with a fire mission, and 'spotter' is the incumbent because it is the type's own name. intel_marker keeps 'contact' as its primary plus 'enemy' and 'intel', so nothing is lost.",
       "modifiers": [
-        "armor_contact",
-        "infantry_contact",
-        "air_contact"
+        "urgent",
+        "danger_close"
       ],
-      "default_priority": "normal",
-      "auto_complete_on_claim": true,
-      "note": "An FYI to command, not work to be done. Claiming it acknowledges and closes it.",
+      "default_priority": "low",
       "menu_paths": [
-        "intel.1"
+        "build.1"
+      ]
+    },
+    {
+      "id": "build_apc_spawn",
+      "display": "APC Spawn",
+      "overlay_label": "APC",
+      "target_roles": [
+        "builder"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "site"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "apc spawn"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "low",
+      "menu_paths": [
+        "build.2"
+      ]
+    },
+    {
+      "id": "build_defenses",
+      "display": "Defenses",
+      "overlay_label": "DEFENSES",
+      "target_roles": [
+        "builder"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "site"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "defenses",
+        "fortify"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "fort",
+        "outpost",
+        "spike"
+      ],
+      "default_priority": "low",
+      "menu_paths": [
+        "build.3"
+      ]
+    },
+    {
+      "id": "build_weapons",
+      "display": "Emplacement",
+      "overlay_label": "EMPLACE",
+      "target_roles": [
+        "builder"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "site"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "emplacement"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close",
+        "ciws",
+        "stingray_emplacement",
+        "mortar_emplacement"
+      ],
+      "default_priority": "low",
+      "menu_paths": [
+        "build.4"
+      ]
+    },
+    {
+      "id": "build_repairs",
+      "display": "Repairs",
+      "overlay_label": "REPAIRS",
+      "target_roles": [
+        "builder"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "site"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "base repairs",
+        "fix the base"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "low",
+      "menu_paths": [
+        "build.5"
+      ]
+    },
+    {
+      "id": "build_builders",
+      "display": "Builders",
+      "overlay_label": "BUILDERS",
+      "target_roles": [
+        "builder"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "site"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "builders"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "takes_quantity": "bodies",
+      "default_priority": "low",
+      "menu_paths": [
+        "build.6"
+      ]
+    },
+    {
+      "id": "build_planners",
+      "display": "Planners",
+      "overlay_label": "PLANNERS",
+      "target_roles": [
+        "builder"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "site"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "planners"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "low",
+      "menu_paths": [
+        "build.7"
+      ]
+    },
+    {
+      "id": "build_drill",
+      "display": "Drill",
+      "overlay_label": "DRILL",
+      "target_roles": [
+        "builder"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "site"
+      ],
+      "ttl_s": 300,
+      "spoken_aliases": [
+        "drill"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "low",
+      "menu_paths": [
+        "build.8"
       ]
     }
   ],
@@ -1606,7 +2322,7 @@
       "rounds out": "R AW1 N D Z AW1 T",
       "on the way": "AA1 N DH AH0 W EY1"
     },
-    "worked_example": "flank is F L AE1 NG K and tank is T AE1 NG K. Same syllable count, same stressed vowel AE1, same NG-K coda, differing only in onset. One feature of four. REFUSED.",
+    "worked_example": "lmg is EH2 L EH2 M JH IY1 and smg is EH2 S EH2 M JH IY1. Same syllable count, same stressed vowel IY1, same JH-IY coda, differing only in the onset of the first letter. One feature of four. REFUSED, which is why weapon_lmg says \"machine gun\" and weapon_smg says \"sub gun\". Nobody spells a weapon class out loud under fire anyway.",
     "worked_example_2": "left is L EH1 F T and lift is L IH1 F T. One syllable each, same L onset, same F-T coda, differing only in the stressed vowel. One feature of four. REFUSED in the initial class, which is why the adjust directions live in their own position class instead. right versus ride fails the same way on coda voicing alone.",
     "cross_class_note": "The floor is computed PER POSITION CLASS. Moving a token to a class where its rival cannot appear is a legitimate fix and is not the same as suppressing the check: the recognizer genuinely never chooses between them. Moving a token to dodge a floor failure without checking it against its NEW class is the way to reintroduce the bug somewhere else."
   },
@@ -1629,7 +2345,9 @@
     "invite_code_digits": 6,
     "low_priority_slot_residency_s": 60,
     "coalesce_radius_units": 0.5,
-    "coalesce_window_s": 60
+    "coalesce_window_s": 60,
+    "claim_group_radius_units": 2.0,
+    "claim_group_max_extra": 5
   },
   "grammar_rules_note": "slot_quarantine_s was DELETED, not retuned. Nine slots with a 20 s quarantine admitted at most nine rows per 20 s no matter how fast providers cleared them, capping the board at 0.45 rows per second while overflow grew. Allocation is now least-recently-released: a digit is never reissued until all eight others have been, which is strictly better collision protection than a 20 s hold at zero dead time. ttl_s is a flat 120 s on every type: it is how long a request waits for a taker, not how long the job stays useful, and an unclaimed row that nobody wanted in two minutes is re-requested rather than left to rot. A claimed row does not expire at all. low_priority_slot_residency_s demotes a low-priority row to overflow after 60 s while leaving it OPEN, so it yields its digit at the halfway mark rather than holding one for its whole life; it must stay strictly below ttl_s or demotion never fires. coalesce_radius_units and coalesce_window_s are the submit-time dedup window: same type, same deployment, a point inside 0.50 units, created inside 60 s, attaches the new participant as a co-requester and returns the existing request. The quantity qualifier renders it as MORTAR x5. Same participant supersedes instead of coalescing.",
   "forbidden_aliases": {
@@ -1645,5 +2363,111 @@
     "rover": "Never add it. One feature from the adjust direction 'over': same syllable count, same OW1, same coda, differing only in a null versus R onset. If a ground-vehicle type ever wants this word it must take a two-word form."
   },
   "color_groups_note": "A colour group answers what the role DOES, so a queue glyph reads without its label: fire, recon, move, build, medic, command. It is not the domain the role sits in.",
-  "icon_note": "Two SVG path `d` strings on a 24x24 viewBox, stroke only, no fill. d2 may be empty. Served, never compiled in, so a glyph can be corrected without shipping a client."
+  "icon_note": "Two SVG path `d` strings on a 24x24 viewBox, stroke only, no fill. d2 may be empty. Served, never compiled in, so a glyph can be corrected without shipping a client.",
+  "menu_branch_labels": {
+    "ammo.1": "PISTOL",
+    "ammo.2": "RIFLE",
+    "ammo.3": "SHOTGUN",
+    "ammo.4": "HEAVY",
+    "ammo.5": "OTHER"
+  },
+  "menu_branch_labels_note": "A label for a branch that holds items rather than being one. Without it a branch draws the label of whichever item landed on it first.",
+  "modifiers": {
+    "adrenaline": "Adrenaline",
+    "air_threat": "Air",
+    "ak74": "AK74",
+    "amp9": "AMP9",
+    "amr50": "AMR 50",
+    "ap": "AP",
+    "at_mine": "AT",
+    "bar_mine": "Bar",
+    "bino": "Bino",
+    "bipod": "Bipod",
+    "bmr308": "BMR-308",
+    "body": "Body",
+    "box": "Box",
+    "box_mags": "Box+Mags",
+    "brake": "Brake",
+    "breach": "Breach",
+    "c4": "C4",
+    "ciws": "CIWS",
+    "claymore": "Claymore",
+    "clear": "Clear",
+    "comp": "Comp",
+    "compound": "Compound",
+    "counter": "Counter",
+    "cover": "Cover",
+    "danger_close": "Danger close",
+    "dead": "Dead",
+    "deagle": "DEAGLE",
+    "defib": "Defib",
+    "fal": "FAL",
+    "flash": "Flash",
+    "fmj": "FMJ",
+    "fort": "Fort",
+    "frag": "Frag",
+    "galil": "GALIL",
+    "ggx17": "GGX 17",
+    "ggx18": "GGX 18",
+    "grip": "Grip",
+    "ground_threat": "Ground",
+    "he": "HE",
+    "head": "Head",
+    "health": "Health",
+    "heavy": "Heavy",
+    "heavy_drill": "H Drill",
+    "hold": "Hold",
+    "hp": "HP",
+    "ied": "IED",
+    "irangefinder": "iRange",
+    "jerry_can": "Fuel",
+    "judge": "Judge",
+    "k9333": "9K333",
+    "large": "Large",
+    "light": "Light",
+    "light_drill": "L Drill",
+    "m17s": "17s",
+    "m1911": "M1911",
+    "m249": "M249",
+    "m4": "M4",
+    "m500": "M500",
+    "maaws": "MAAWS",
+    "mags": "Mags",
+    "med": "Medium",
+    "medium": "Medium",
+    "mgl40": "MGL-40",
+    "mk22": "MK22",
+    "mono": "Mono",
+    "mortar_emplacement": "Mortar",
+    "mosin": "Mosin",
+    "mp43": "MP43",
+    "mp5": "MP5",
+    "normal": "Normal",
+    "outpost": "Outpost",
+    "paradrop": "Paradrop",
+    "pkm": "PKM",
+    "pp19": "PP-19",
+    "rangefinder": "Range",
+    "resus": "RESUS",
+    "rpg7": "RPG-7",
+    "scope": "Scope",
+    "scout": "Scout",
+    "sks": "SKS",
+    "smoke": "Smoke",
+    "smoke_grenade": "Smoke",
+    "spike": "Spike",
+    "stingray_emplacement": "Stingray",
+    "super45": "Super-45",
+    "suppress": "Suppress",
+    "sv98": "SV98",
+    "svd": "SVD",
+    "t21": "T-21",
+    "urgent": "Urgent",
+    "willy_pete": "Willy Pete",
+    "with_ammo": "Ammo",
+    "with_mags": "Mags",
+    "wrench": "Wrench"
+  },
+  "modifiers_note": "The word a tag draws as. ModifierLabels derives one mechanically from the id when this has no entry, which mangles every real name in this game: t21 reads \"T 21\" and box_mags reads \"BOX MAGS\". Anything a person reads on a board row belongs here.",
+  "claim_grouping_note": "Types sharing a group_key are ONE errand when they are at the same grid. Accepting one takes the others too, up to claim_group_max_extra, inside claim_group_radius_units. A squad needing a rifle, ammunition and a medkit at the same building files three requests because they are three different things, and the driver who takes one is driving to all three: without this the other two sit open behind somebody already standing there. The radius is wider than the coalesce radius on purpose. Coalescing merges the SAME ask from two people; this gathers DIFFERENT asks at one place, and a building is bigger than a grid rounding error."
 }
