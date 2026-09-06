@@ -29,6 +29,16 @@ public sealed record HintState
     /// <summary>Same deployment across a game-session boundary, and nothing has been touched since.</summary>
     public bool SameMatchDoubt { get; init; }
 
+    /// <summary>
+    /// The key bound to BACK, which walks up one level. Never the word BACKSPACE.
+    /// </summary>
+    /// <remarks>
+    /// The hint printed BACKSPACE as a literal while the bound key was A, so the one cell whose
+    /// job is naming a key named one that does nothing and told the reader to press it. ESC stays
+    /// a literal because it is not rebindable.
+    /// </remarks>
+    public string? BackLabel { get; init; }
+
     /// <summary>In a group, on no board. An ordinary state, and one with an answer.</summary>
     public bool OnNoDeployment { get; init; }
 }
@@ -67,11 +77,18 @@ public static class OverlayHint
         // the three keys that are not on screen: the ones that move you back out.
         if (state.MenuLevel != MenuLevel.Closed)
         {
+            // The BOUND keys, never the words BACKSPACE and ESC. Those were literals while the
+            // defaults were A and Escape, so the one cell whose job is naming a key named the
+            // wrong one, and BACK was described as "up" rather than as what the key is called.
+            // ESC is not rebindable, so it stays a literal. BACK is, and printing BACKSPACE for
+            // a key bound to A named a key that does nothing.
+            var back = state.BackLabel ?? "BACK";
+
             return state.MenuLevel switch
             {
-                MenuLevel.Coordinate or MenuLevel.Join => "BACKSPACE FIXES  ESC CLOSES",
+                MenuLevel.Coordinate or MenuLevel.Join => $"{back} FIXES  ESC CLOSES",
                 MenuLevel.Confirm => "RELEASE SENDS  ESC DISCARDS",
-                _ => "BACKSPACE UP  ESC CLOSES",
+                _ => $"{back} BACK  ESC CLOSES",
             };
         }
 

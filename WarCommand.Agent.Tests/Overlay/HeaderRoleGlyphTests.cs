@@ -1,6 +1,5 @@
-using System.Linq;
+﻿using System.Linq;
 using WarCommand.Agent.Core.Contracts;
-using WarCommand.Agent.Dev;
 using WarCommand.Agent.Overlay;
 
 namespace WarCommand.Agent.Tests.Overlay;
@@ -21,7 +20,14 @@ public class HeaderRoleGlyphTests
     [Fact]
     public void Every_header_role_carries_a_served_glyph()
     {
-        var header = OverlayDemo.Header;
+        var header = new BoardHeader
+        {
+            Title = "61ST / ALPHA",
+            PeopleCount = 31,
+            Where = "Bakurani",
+            Right = "invite 921585",
+            RoleIds = ["mortar", "ground_transport"],
+        }.WithGlyph(Catalog());
 
         Assert.NotEmpty(header.Roles);
         foreach (var role in header.Roles)

@@ -1,4 +1,4 @@
-using System.Windows.Threading;
+﻿using System.Windows.Threading;
 using WarCommand.Agent.Client.Realtime;
 using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Contracts;
@@ -42,7 +42,11 @@ public sealed class AWholeSessionTests
                 _ => { },
                 _ => { },
                 () => { },
-                snapshot => Slots = snapshot.Slots);
+                snapshot =>
+                {
+                    Slots = snapshot.Slots;
+                    Pages = snapshot.Pages;
+                });
 
             Observer.Attach(Board, Viewer, new BoardHeader { Title = "61ST / ALPHA" });
 
@@ -62,13 +66,16 @@ public sealed class AWholeSessionTests
         internal IReadOnlyDictionary<int, SlotState> Slots { get; private set; } =
             new Dictionary<int, SlotState>();
 
-        internal string? OnScreenFault => Presenter.Header?.Fault;
+        internal int Pages { get; private set; } = 1;
+
+        internal string? OnScreenFault => Presenter.Status.Count > 0 ? Presenter.Status[0].Text : null;
 
         /// <summary>What the hold key does: reads the snapshot the last render left behind.</summary>
         internal MenuContext ContextNow() => new()
         {
             OccupiedSlots = [.. Slots.Keys.Order()],
             Slots = Slots,
+            BoardPages = Pages,
         };
 
         /// <summary>The verbs the overlay offers on a digit, exactly as a person would see them.</summary>
@@ -145,6 +152,63 @@ public sealed class AWholeSessionTests
         Assert.Contains("release", verbs);
         Assert.DoesNotContain("start", verbs);
         Assert.DoesNotContain("accept", verbs);
+    }
+
+    /// <summary>
+    /// A saturated board: twelve requests, nine digits, and the last three reachable anyway.
+    /// </summary>
+    /// <remarks>
+    /// Walking off the bottom of the board used to wrap onto the row you started from, and rows
+    /// ten to twelve drew as a "...3 more" count that answered to no key at all. The window moves
+    /// now, and a row on page two is pressed exactly like a row on page one.
+    /// </remarks>
+    [Fact]
+    public void Walking_off_the_bottom_of_a_full_board_reaches_the_rows_past_nine()
+    {
+        var session = new Session();
+        for (var n = 1; n <= 12; n++)
+        {
+            session.Observer.OnRequestSubmitted(
+                Row($"MTR-{n.ToString(System.Globalization.CultureInfo.InvariantCulture)}", Mate));
+        }
+
+        // Nine on screen, three behind, two pages.
+        Assert.Equal(9, session.Presenter.Rows.Count);
+        Assert.Equal(3, session.Presenter.OverflowCount);
+        Assert.Equal(2, session.Pages);
+
+        var tenth = session.Board.Overflow[0];
+        Assert.DoesNotContain(session.Slots.Values, s => s.RequestId == tenth.Id);
+
+        var menu = session.Machine;
+        menu.OpenOnBoard(T0, session.ContextNow());
+        Assert.Equal(MenuLevel.Board, menu.Level);
+
+        // Walk down past the last row. One press too many is the page turn.
+        var outcome = MenuOutcome.None;
+        for (var step = 0; step < 12 && outcome is not MenuBoardPaged; step++)
+        {
+            outcome = menu.Scroll(1, T0);
+        }
+
+        var paged = Assert.IsType<MenuBoardPaged>(outcome);
+        Assert.Equal(1, paged.Delta);
+
+        // The composition root's half: move the board, redraw, hand the open menu the new page.
+        Assert.True(session.Observer.TurnPage(paged.Delta));
+        menu.RefreshContext(session.ContextNow());
+
+        // Page two draws the three that were behind, and every one of them holds a digit the
+        // menu will act on.
+        Assert.Equal(3, session.Presenter.Rows.Count);
+        Assert.Equal(3, session.Slots.Count);
+        Assert.Contains(session.Slots.Values, s => s.RequestId == tenth.Id);
+        Assert.Equal(MenuLevel.Board, menu.Level);
+        Assert.NotNull(menu.HighlightedSlot);
+
+        // And it is a row you can actually take, not a line of reference text.
+        var verbs = session.VerbsOn(menu.HighlightedSlot!.Value);
+        Assert.Contains("accept", verbs);
     }
 
     [Fact]

@@ -25,14 +25,23 @@ public class OverlayHintTests
     }
 
     [Theory]
-    [InlineData(MenuLevel.Root, "BACKSPACE UP  ESC CLOSES")]
-    [InlineData(MenuLevel.More, "BACKSPACE UP  ESC CLOSES")]
-    [InlineData(MenuLevel.Coordinate, "BACKSPACE FIXES  ESC CLOSES")]
-    [InlineData(MenuLevel.Join, "BACKSPACE FIXES  ESC CLOSES")]
+    [InlineData(MenuLevel.Root, "A BACK  ESC CLOSES")]
+    [InlineData(MenuLevel.More, "A BACK  ESC CLOSES")]
+    [InlineData(MenuLevel.Coordinate, "A FIXES  ESC CLOSES")]
+    [InlineData(MenuLevel.Join, "A FIXES  ESC CLOSES")]
     [InlineData(MenuLevel.Confirm, "RELEASE SENDS  ESC DISCARDS")]
     public void An_open_menu_draws_its_own_digits_so_the_hint_names_the_way_out(MenuLevel level, string expected)
     {
-        Assert.Equal(expected, OverlayHint.Resolve(new HintState { PttLabel = "Mouse5", MenuLevel = level }));
+        // BackLabel is the BOUND key. The hint printed the literal word BACKSPACE while the
+        // default binding was A, so it named a key that does nothing.
+        Assert.Equal(
+            expected,
+            OverlayHint.Resolve(new HintState
+            {
+                PttLabel = "Mouse5",
+                BackLabel = "A",
+                MenuLevel = level,
+            }));
     }
 
     [Fact]

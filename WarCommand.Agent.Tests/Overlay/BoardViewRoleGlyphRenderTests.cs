@@ -4,7 +4,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 using ShapePath = System.Windows.Shapes.Path;
-using WarCommand.Agent.Dev;
+using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Overlay;
 
 namespace WarCommand.Agent.Tests.Overlay;
@@ -17,8 +17,56 @@ public class BoardViewRoleGlyphRenderTests
 {
     private static readonly Color Neutral = Color.FromRgb(0xB4, 0xB6, 0xB8);
 
+    private static readonly RoleGlyphSource Glyphs =
+        new(BundledContracts.Catalog().Current.Role);
+
+    /// <summary>
+    /// Rows on two different roles, resolved through the served catalog.
+    /// </summary>
+    /// <remarks>
+    /// Two roles at least, and roles whose hues differ: one hue on every row is exactly what a
+    /// broken lookup looks like, so a single-role fixture would pass while the board was grey.
+    /// </remarks>
+    private static IReadOnlyList<BoardRowViewModel> Rows { get; } =
+    [
+        new BoardRowViewModel
+        {
+            SlotDisplay = "1",
+            RoleId = "mortar",
+            TypeAndQualifier = "MORTAR",
+            CoordinatesDisplay = "x85.53 y69.42",
+            Requester = "Ghost",
+            AgeDisplay = "12s",
+            TicketCode = "MTR-14",
+        }.WithGlyph(Glyphs),
+        new BoardRowViewModel
+        {
+            SlotDisplay = "2",
+            RoleId = "medic",
+            TypeAndQualifier = "MEDIC",
+            CoordinatesDisplay = "x12.10 y44.02",
+            Requester = "Wolf",
+            AgeDisplay = "4s",
+            TicketCode = "MED-02",
+        }.WithGlyph(Glyphs),
+    ];
+
+    private static IReadOnlyList<BoardRowViewModel> Yours { get; } =
+    [
+        new BoardRowViewModel
+        {
+            SlotDisplay = "3",
+            RoleId = "ground_transport",
+            TypeAndQualifier = "TRANSPORT",
+            CoordinatesDisplay = "x51.00 y61.40",
+            Requester = "Bear",
+            AgeDisplay = "31s",
+            TicketCode = "TPT-16",
+        }.WithGlyph(Glyphs),
+    ];
+
     [Fact]
-    public void The_demo_board_paints_a_glyph_and_a_role_hue_on_every_row()
+    public void The_board_paints_a_glyph_and_a_role_hue_on_every_row()
     {
         OnStaThread(() =>
         {
@@ -27,7 +75,7 @@ public class BoardViewRoleGlyphRenderTests
             Assert.NotEmpty(paths);
 
             // One or two paths per row: d2 is empty for some roles and the row draws d1 alone.
-            var rows = OverlayDemo.Rows.Count + OverlayDemo.SecondaryStrip.Count;
+            var rows = Rows.Count + Yours.Count;
             var painted = paths.Where(p => p.Data is not null).ToList();
             Assert.InRange(painted.Count, rows, rows * 2);
 
@@ -58,7 +106,7 @@ public class BoardViewRoleGlyphRenderTests
     private static List<ShapePath> RenderedGlyphPaths()
     {
         var view = new BoardView();
-        view.RenderBoard(OverlayDemo.Rows, OverlayDemo.SecondaryStrip, 0, 0);
+        view.RenderBoard(Rows, Yours, 0, 0);
 
         view.Measure(new Size(400, 900));
         view.Arrange(new Rect(0, 0, 400, 900));

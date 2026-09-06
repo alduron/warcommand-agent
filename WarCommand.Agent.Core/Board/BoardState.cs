@@ -42,6 +42,7 @@ public sealed class BoardState
     private readonly HashSet<Guid> _mutedRequesters = [];
     private readonly HashSet<Guid> _demoted = [];
     private readonly TimeSpan _lowPriorityResidency;
+    private int _page;
 
     public BoardState(Guid viewerParticipantId, GrammarRulesDef rules)
     {
@@ -124,9 +125,54 @@ public sealed class BoardState
     /// down is 3.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<BoardRow> Lines => [.. Rows, .. Yours.Where(r => r.HoldsSlot)];
+    public IReadOnlyList<BoardRow> Lines =>
+        [.. AllLines.Skip(Page * PageSize).Take(PageSize)];
 
-    /// <summary>The row on a line, counting from 1, or null when the board is shorter than that.</summary>
+    /// <summary>
+    /// Every actionable row on every page, in board order: the claimable rows, the ones in YOURS
+    /// that hold a digit, then overflow.
+    /// </summary>
+    /// <remarks>
+    /// Overflow is on the end rather than absent. A digit is a scarce resource and nine is all
+    /// there are, but a row past nine was unreachable by ANY route: it drew as part of a
+    /// <c>...12 more</c> count, answered to no number, and the only thing that ever brought it
+    /// back was a digit falling free. On a saturated board that is a queue nobody can work.
+    /// </remarks>
+    private IReadOnlyList<BoardRow> AllLines =>
+        [.. Rows, .. Yours.Where(r => r.HoldsSlot), .. Overflow];
+
+    /// <summary>Lines on one page. Nine, because that is how many digits there are.</summary>
+    public int PageSize => Allocator.MaxSlots;
+
+    /// <summary>Pages the board currently spans. Always at least one, an empty board included.</summary>
+    public int PageCount => Math.Max(1, (AllLines.Count + PageSize - 1) / PageSize);
+
+    /// <summary>
+    /// Which page of nine the digits address, from 0. Clamped on read, so a page emptied by
+    /// expiry or a claim never leaves the board showing nothing.
+    /// </summary>
+    public int Page
+    {
+        get => Math.Min(_page, PageCount - 1);
+        private set => _page = Math.Max(0, value);
+    }
+
+    /// <summary>Moves the window one page, wrapping at both ends. Returns the page now shown.</summary>
+    /// <remarks>
+    /// Wrapping rather than stopping: the board is walked with one key held under fire, and a key
+    /// that stops dead at the end of a list reads as a key that stopped working.
+    /// </remarks>
+    public int TurnPage(int delta)
+    {
+        var count = PageCount;
+        Page = ((Page + delta) % count + count) % count;
+        return Page;
+    }
+
+    /// <summary>Back to the first page. What a fresh look at the board should start from.</summary>
+    public void ResetPage() => Page = 0;
+
+    /// <summary>The row on a line of the CURRENT page, counting from 1, or null when there is none.</summary>
     public BoardRow? ByLine(int line)
     {
         var lines = Lines;
@@ -383,6 +429,7 @@ public sealed class BoardState
         _mutedRequesters.Clear();
         _demoted.Clear();
         Allocator.Reset();
+        _page = 0;
         DeploymentId = deploymentId;
 
         return new DeploymentChange(deploymentId, aborted, dropped);

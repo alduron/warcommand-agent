@@ -432,6 +432,16 @@ public sealed record MenuBoardAction(string VerbId, int Slot) : MenuOutcome
 /// </summary>
 public sealed record MenuPanelRequested(string PanelId) : MenuOutcome;
 
+/// <summary>
+/// The board surface was walked off one end, so the window of nine moves. Positive is forward.
+/// </summary>
+/// <remarks>
+/// The machine cannot page the board itself: it holds a digit list, not the rows. It says which
+/// way, the composition root moves <c>BoardState.Page</c> and re-renders, and the next context
+/// carries the new page's slots.
+/// </remarks>
+public sealed record MenuBoardPaged(int Delta) : MenuOutcome;
+
 /// <summary>One role subscription toggled from the ROLES page. The agent asks the server.</summary>
 public sealed record MenuRoleToggled(string RoleId) : MenuOutcome;
 
@@ -484,6 +494,11 @@ public sealed record MenuContext
 {
     /// <summary>Slots holding a row. Only these are selectable at the board level.</summary>
     public IReadOnlyCollection<int> OccupiedSlots { get; init; } = [];
+
+    /// <summary>
+    /// How many pages of nine the board spans. One means the board fits and never pages.
+    /// </summary>
+    public int BoardPages { get; init; } = 1;
 
     /// <summary>
     /// What each occupied slot holds, so the verb list can offer only what the row will accept.
@@ -866,6 +881,29 @@ public sealed class MenuStateMachine
     }
 
     /// <summary>
+    /// Replaces the context under an OPEN menu, after the board moved beneath it.
+    /// </summary>
+    /// <remarks>
+    /// The context is otherwise read once, at open, which is what makes a press resolve against
+    /// what was on screen. A page turn is the one thing that changes the row list without closing
+    /// the menu, so it is the one thing allowed to re-read it.
+    /// </remarks>
+    public void RefreshContext(MenuContext context, bool landOnLastRow = false)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        _context = context;
+
+        var options = Options;
+        if (options.Count == 0)
+        {
+            Highlight = NoHighlight;
+            return;
+        }
+
+        Highlight = landOnLastRow ? options.Count - 1 : Math.Min(Math.Max(Highlight, 0), options.Count - 1);
+    }
+
+    /// <summary>
     /// Moves the highlight. Negative is up the list, positive is down, one per key press.
     /// Scrolling up past the first row of the board rises into the root, which is the one place a
     /// level has somewhere to go rather than clamping.
@@ -894,6 +932,16 @@ public sealed class MenuStateMachine
         }
 
         var next = Highlight + notches;
+
+        // The board is a window over a longer list, so walking off an end is a page turn rather
+        // than a wrap onto the row you started from. Without it a row past nine was reachable by
+        // no key at all: it drew inside a "...12 more" count and answered to no digit.
+        if (Level == MenuLevel.Board && _context.BoardPages > 1 && (next < 0 || next >= options.Count))
+        {
+            var forward = next >= options.Count;
+            Highlight = forward ? 0 : NoHighlight;
+            return new MenuBoardPaged(forward ? 1 : -1);
+        }
 
         // Every end wraps. There are no crossover edges any more: requests, rows and MORE are one
         // list, so moving between them is just moving.

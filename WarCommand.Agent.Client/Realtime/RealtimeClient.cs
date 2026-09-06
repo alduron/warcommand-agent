@@ -668,13 +668,16 @@ public sealed class RealtimeClient : IAsyncDisposable
 
         SetState(RealtimeConnectionState.Connected);
 
-        if (AnotherDeviceOnBoard != payload.AnotherDeviceOnBoard)
-        {
-            AnotherDeviceOnBoard = payload.AnotherDeviceOnBoard;
-            _observer.OnAnotherDeviceOnBoard(payload.AnotherDeviceOnBoard);
-        }
+        // Reported on EVERY ready frame, not only when it differs from what this client last saw.
+        // The observer drops every standing word when the socket leaves Connected, so a reconnect
+        // whose value happens to match the cached one told it nothing and the word never came back:
+        // two devices sharing a participant, and only one of them said so, until a restart.
+        AnotherDeviceOnBoard = payload.AnotherDeviceOnBoard;
 
+        // OnReady FIRST. It clears what the last connection left, and running it after this reset
+        // the word the same frame had just raised.
         _observer.OnReady(payload);
+        _observer.OnAnotherDeviceOnBoard(payload.AnotherDeviceOnBoard);
 
         // On every reconnect, and on the first connect, re-seed over HTTPS using the deployment id
         // the server just sent rather than the one we remembered.
@@ -800,6 +803,14 @@ public sealed class RealtimeClient : IAsyncDisposable
                 catch (WarCommandApiException ex)
                 {
                     _log.Warn($"Board revalidation failed: {ex.Code}.");
+                }
+
+                // Anything else here is an unobserved exception on a pool thread, and revalidation
+                // is the socket's only recovery from a hop or a replay-buffer miss: losing it in
+                // silence leaves the overlay on a transient banner with nothing coming.
+                catch (Exception ex)
+                {
+                    _log.Warn($"Board revalidation faulted: {ex.GetType().Name}.");
                 }
             },
             CancellationToken.None);

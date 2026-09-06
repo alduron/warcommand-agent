@@ -202,6 +202,9 @@ public partial class App : Application, IDisposable
     /// until the agent is restarted.
     /// </remarks>
     private volatile IReadOnlyDictionary<int, SlotState> _boardSlots = new Dictionary<int, SlotState>();
+
+    /// <summary>Pages the last render spanned. Read on the hook thread, same rule as the slots.</summary>
+    private volatile int _boardPages = 1;
     private Composition.VoiceDriver? _voice;
     private RealtimeClient? _realtime;
     private BoardRealtimeObserver? _observer;
@@ -301,7 +304,7 @@ public partial class App : Application, IDisposable
 
         _tray = new TrayIconController { StateProvider = () => _menuState };
         _tray.CommandInvoked += OnTrayCommand;
-        _tray.SetTooltip(profile.IsTrayOnly ? "WarCommand (tray only)" : "WarCommand");
+        _tray.SetTooltip(profile.IsTrayOnly ? "WarCommand (tray only)" : "WarCommand - not set up");
         _tray.ShowLocationHint();
 
         // Verbose is read per line rather than captured, so the switch in settings takes effect
@@ -314,12 +317,6 @@ public partial class App : Application, IDisposable
         {
             // No API, no device registration, no window. The tray's own iteration loop.
             log.Info("Tray-only launch: the startup sequence stops after the icon.");
-            return;
-        }
-
-        if (profile.IsOverlayDemo)
-        {
-            ShowOverlayDemo(log);
             return;
         }
 
@@ -355,85 +352,10 @@ public partial class App : Application, IDisposable
         }
     }
 
-    /// <summary>
-    /// Draws the overlay on the primary monitor with the board from 06-overlay-ux.md and stops
-    /// there. No API, no device registration, no window, no game.
-    /// </summary>
-    /// <remarks>
-    /// Wardogs is not out. Without this loop the surface could only be looked at by somebody who
-    /// has the game, which is nobody, and it would ship unseen. The demo plays the game window
-    /// watcher's part by hand: it hands the controller a Show and no client rect, which is the
-    /// same path a second-monitor user in Dim takes.
-    /// </remarks>
-    private void ShowOverlayDemo(RollingFileLog log)
-    {
-        if (_settings is not { } settings)
-        {
-            return;
-        }
-
-        var surface = new OverlayWindow();
-        var presenter = new BoardPresenter(surface.BoardView);
-        _presenter = presenter;
-
-        var controller = new OverlayController(
-            Dispatcher,
-            settings.Current with { OverlayMode = OverlayMode.AlwaysOn },
-            factory: () => surface,
-            notify: (title, body) => _tray?.ShowNotice(title, body));
-        _overlay = controller;
-
-        controller.OverlayVisibilityChanged(OverlayVisibility.Show);
-
-        presenter.SetHeader(OverlayDemo.Header);
-        presenter.RenderBoard(
-            OverlayDemo.Rows,
-            OverlayDemo.SecondaryStrip,
-            OverlayDemo.OverflowCount,
-            OverlayDemo.OverflowUrgentCount,
-            OverlayDemo.InProgressCount);
-
-        _menuState = _menuState with
-        {
-            OverlayMode = controller.Mode.ToString(),
-            OverlayHint = controller.Hint,
-            OverlayDisplayDeviceName = settings.Current.DisplayDeviceName,
-            Displays = OverlayController.Displays(),
-        };
-
-        // PTT ships unbound on purpose: it is a suggestion the user confirms in the first-run
-        // picker, never applied on their behalf. The demo has no picker and an unbound PTT cannot
-        // be pressed, so it takes the product's OWN suggestion here and nowhere else.
-        if (!_bindings.PttChosen)
-        {
-            _bindings.Rebind(BindingAction.Ptt, BindingSet.SuggestedPtt);
-        }
-
-        // The demo is the only way anybody sees this surface, so it is the only place the hotkeys
-        // can be exercised at all. The gate is satisfied with a fixed probe rather than by relaxing
-        // the foreground rule: the rule stays exactly as written and the probe is the dev seam.
-        _input = Composition.InputComposition.Start(
-            _bindings,
-            new FixedForegroundProbe(gameForeground: true, gameRunning: true),
-            controller,
-            _tray,
-            onHold: (_, held) => presenter.SetHeader(OverlayDemo.Header with { Hint = DemoHint(held) }),
-            log);
-
-        // The same subscription the real path takes. Without it the demo reads the display, the
-        // anchor and the width once at launch and never again, so changing any of them in the
-        // agent window saves to disk and moves nothing. The demo is the only surface anybody sees
-        // before Wardogs ships, so a setting that does not work here does not work at all.
-        settings.Changed += (_, saved) => controller.ApplySettings(saved);
-
-        log.Info(FormattableString.Invariant(
-            $"Overlay demo: drawing on {settings.Current.DisplayDeviceName ?? "the primary monitor"}."));
-    }
 
     /// <summary>
-    /// Brings up the in-game surface and the watcher that decides when it draws. Both are built
-    /// unconditionally: the overlay's own master switch decides whether anything appears, and the
-    /// watcher has to run either way so the tray can say why it does not.
+    /// Places the in-game surface and the watcher that decides when it draws, and arms NOTHING.
+    /// No hook, no menu, no voice and no capture: those wait for <see cref="ArmForAccount"/>.
     /// </summary>
     /// <remarks>
     /// The watcher polls out of process and by window handle only. Nothing here opens the game, and
@@ -479,6 +401,36 @@ public partial class App : Application, IDisposable
             OverlayFocusBehavior.Hide);
         watcher.Start();
         _gameWatcher = watcher;
+
+        // One subscription covers both ways settings move: the Overlay tab and the tray toggle
+        // both go through Save, so neither can change the overlay without the other seeing it.
+        settings.Changed += (_, saved) => controller.ApplySettings(saved);
+
+        presenter.ShowEmptyState("Not set up", "warcommand.app  /  sign in to finish");
+
+        log.Info("Overlay placed. Nothing armed: no account yet.");
+    }
+
+    /// <summary>
+    /// Arms every subsystem that reads input, audio or the screen. Called only once an account is
+    /// held, and again on relink. Idempotent: a second call is a no-op.
+    /// </summary>
+    /// <remarks>
+    /// See Convention_WarCommandAgentArmsNothingWithoutAnAccount and 10-agent-spec.md step 6.
+    /// </remarks>
+    private void ArmForAccount(BoardPresenter presenter, RollingFileLog log)
+    {
+        if (_settings is not { } settings
+            || _gameWatcher is not { } watcher
+            || _overlay is not { } controller)
+        {
+            return;
+        }
+
+        if (_input is not null)
+        {
+            return;
+        }
 
         // Screen capture. Opt-in per binding rule 9 and per screenCaptureEnabled in settings, and
         // one ICoordinateSource among several rather than the mechanism.
@@ -529,13 +481,9 @@ public partial class App : Application, IDisposable
             screenCapture: new Suspendable(readout.Suspend, readout.Resume),
             audioCapture: _voice);
 
-        // One subscription covers both ways settings move: the Overlay tab and the tray toggle
-        // both go through Save, so neither can change the overlay without the other seeing it.
-        settings.Changed += (_, saved) => controller.ApplySettings(saved);
-
         StartBoardTick();
 
-        log.Info("Overlay armed. Watching for a game window.");
+        log.Info("Armed for an account. Hooks, menu, voice and capture are live.");
     }
 
     /// <summary>
@@ -658,6 +606,7 @@ public partial class App : Application, IDisposable
             // What each slot holds, so the verb list offers only what that row will accept. Without
             // it an open row shows DONE and RELEASE, which the server refuses in silence.
             Slots = slots,
+            BoardPages = _boardPages,
             CanRestart = _menuState.CanRestartMatch,
             EnabledRoleIds = _enabledRoleIds,
             SubscribedRoleIds = _subscribedRoleIds,
@@ -944,7 +893,7 @@ public partial class App : Application, IDisposable
             case ParsedCommand { VerbId: "gun_clear" }:
                 _gunPosition = null;
                 _observer?.SetGunPosition(null);
-                _observer?.SetFault("GUN CLEARED");
+                _observer?.SetNote("GUN CLEARED");
                 break;
 
             case ParsedCommand command:
@@ -1000,6 +949,17 @@ public partial class App : Application, IDisposable
                 JoinFromMenu(join.InviteCode, log);
                 break;
 
+            case MenuBoardPaged paged:
+                // The board moves, then the open menu re-reads it. Walking off the bottom of page
+                // one lands on the top of page two; walking off the top of page two lands on the
+                // bottom of page one, which is the row the eye was already travelling towards.
+                if (_observer?.TurnPage(paged.Delta) == true && _menu is { } paging)
+                {
+                    paging.Menu.RefreshContext(MenuContextNow(), landOnLastRow: paged.Delta < 0);
+                }
+
+                break;
+
             case MenuRoleToggled role:
                 ToggleRoleFromMenu(role.RoleId, log);
                 break;
@@ -1026,7 +986,7 @@ public partial class App : Application, IDisposable
                 // Prefixed so a code pasted into game chat is obviously ours and searchable, and
                 // so a bare six digit number cannot be mistaken for a coordinate or a callsign.
                 System.Windows.Clipboard.SetText($"WARCOMMAND:{invite.InviteCode}");
-                _observer?.SetFault($"COPIED WARCOMMAND:{invite.InviteCode}");
+                _observer?.SetNote($"COPIED WARCOMMAND:{invite.InviteCode}");
                 log.Info("Invite code copied from the match page.");
                 break;
 
@@ -1144,6 +1104,8 @@ public partial class App : Application, IDisposable
             || _standingOn is not { } deployment
             || _groupId is not { } group)
         {
+            // Never a bare return: a refusal that only reaches the log is a dead key.
+            _observer?.SetFault(_currentUserId is null ? "NO ACCOUNT  WARCOMMAND.APP" : "NO DEPLOYMENT");
             return;
         }
 
@@ -1525,8 +1487,16 @@ public partial class App : Application, IDisposable
         }
         catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
         {
-            log.Warn($"Role toggle failed: {ex.GetType().Name}");
-            _observer?.SetFault("ROLE REFUSED");
+            // Name what actually happened. Every failure read ROLE REFUSED, which says the server
+            // rejected the change on its merits. A burst that trips the rate limit is not a
+            // refusal, and reporting it as one sends the reader looking for a permission problem
+            // that is not there.
+            var word = ex is WarCommandApiException { Code: ErrorCodes.RateLimited }
+                ? "SLOW DOWN"
+                : "ROLE REFUSED";
+
+            log.Warn($"Role toggle failed: {Describe(ex)}");
+            _observer?.SetFault(word);
 
             // The row already flipped under the finger that pressed it. A refusal has to put it
             // back, or the overlay keeps claiming a subscription the server never accepted.
@@ -1561,6 +1531,7 @@ public partial class App : Application, IDisposable
     private string MenuHint(MenuStateMachine menu) => OverlayHint.Resolve(new HintState
     {
         PttLabel = _bindings[BindingAction.Menu].IsBound ? _bindings[BindingAction.Menu].Label : null,
+        BackLabel = KeyLabel(BindingAction.NavBack),
         MenuLevel = menu.Level,
         OnNoDeployment = _standingOn is null,
     });
@@ -2301,6 +2272,7 @@ public partial class App : Application, IDisposable
 
         var me = await AuthenticateAsync(client, tokenStore, paths, profile, log).ConfigureAwait(true);
         AdoptAccount(me);
+        ArmForAccount(presenter, log);
         StartRealtime(client, me, presenter, log);
         await RenderForAsync(client, me, presenter, log).ConfigureAwait(true);
         StartConfigWatch(client, presenter, log);
@@ -2310,18 +2282,6 @@ public partial class App : Application, IDisposable
     /// Records which account the agent now holds. The loopback hello reports this id, which is how
     /// a page tells that its own account and the agent's have diverged.
     /// </summary>
-    /// <summary>
-    /// The header's hint cell. Contextual: the routes through the menu are not memorable, so the
-    /// header names the one that matters right now and the menu draws the rest.
-    /// </summary>
-    /// <summary>
-    /// The demo's PTT feedback. Nothing is listening yet, so holding the key says so on the header
-    /// rather than pretending to record: that is the one honest thing the surface can report.
-    /// </summary>
-    private string DemoHint(bool held) => held
-        ? "LISTENING"
-        : OverlayHint.Resolve(new HintState { PttLabel = _bindings[BindingAction.Ptt].Label });
-
     /// <summary>
     /// A chord changed under the running agent: re-arm the hook and re-draw the hint that names it.
     /// </summary>
@@ -2381,6 +2341,7 @@ public partial class App : Application, IDisposable
     private string HeaderHint(bool onNoDeployment = false) => OverlayHint.Resolve(new HintState
     {
         PttLabel = _bindings[BindingAction.Menu].IsBound ? _bindings[BindingAction.Menu].Label : null,
+        BackLabel = KeyLabel(BindingAction.NavBack),
         OnNoDeployment = onNoDeployment,
     });
 
@@ -2736,6 +2697,7 @@ public partial class App : Application, IDisposable
                 // One reference assignment, on the dispatcher. The hook thread reads it and never
                 // touches BoardState.
                 _boardSlots = snapshot.Slots;
+                _boardPages = snapshot.Pages;
 
                 // The tool follows the mission on every render, not only on the accept: a
                 // spotter's correction moves the grid afterwards and the crew must not have to
@@ -2773,7 +2735,7 @@ public partial class App : Application, IDisposable
             () => observer.ClaimedRequestIds,
             () => _gameWatcher?.GameIsRunning ?? false);
 
-        var revalidator = new HttpBoardRevalidator((deployment, token) =>
+        var revalidator = new HttpBoardRevalidator(Dispatcher, (deployment, token) =>
             ReseedBoardAsync(client, presenter, deployment, log, token));
 
         try
@@ -2839,7 +2801,13 @@ public partial class App : Application, IDisposable
     {
         _sawFrameRecently = true;
 
-        if (deployment == _standingOn)
+        // The id alone is not the condition. deployment.entered ALWAYS clears the board first, and
+        // an entry made over HTTPS (the tray's switch, or a config re-read that won the race) has
+        // already moved _standingOn to that same id by the time the frame lands. The early return
+        // then skipped the re-read, so the board stayed null and "SWITCHING DEPLOYMENT" sat on the
+        // overlay until the two minute config fallback happened to fire. Standing on the right
+        // deployment with no board is not standing anywhere.
+        if (!BoardRealtimeObserver.NeedsConfigReload(deployment, _standingOn, _observer?.Board is not null))
         {
             return;
         }
@@ -2867,6 +2835,14 @@ public partial class App : Application, IDisposable
         catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
         {
             log.Warn($"Config reload failed: {ex.GetType().Name}");
+
+            // The caller is usually a board.cleared that has already painted a transient banner. A
+            // banner naming a step that failed is a lie about the current state, so say what is
+            // true and let the config fallback retry.
+            if (_observer?.Board is null)
+            {
+                presenter.ShowEmptyState("Board unreachable", "retrying");
+            }
         }
     }
 
@@ -2881,7 +2857,12 @@ public partial class App : Application, IDisposable
         RollingFileLog log,
         CancellationToken cancellationToken)
     {
-        if (_observer?.Board is not { } board)
+        // No board, or a board belonging to the match we just left. Seeding the second one with
+        // rows from another deployment prunes every row it holds and upserts none of them back,
+        // because BoardState.Upsert refuses a row from an id it is not standing on: the reseed
+        // would leave an empty board that nothing else ever refills. Read the config instead,
+        // which is what builds a board for the new deployment.
+        if (_observer?.Board is not { } board || board.DeploymentId != deploymentId)
         {
             await ReloadConfigAsync(client, presenter, log).ConfigureAwait(true);
             return;
@@ -3120,8 +3101,9 @@ public partial class App : Application, IDisposable
     {
         await ShowPairingCodeAsync(client, deviceId, deviceToken, log).ConfigureAwait(true);
         _presenter?.ShowEmptyState("Not set up", _menuState.PairingCode is { } shown
-            ? $"pairing code {shown}, or enter one from the web"
-            : "pair from the web");
+            ? $"warcommand.app  /  or code {shown}"
+            : "warcommand.app  /  sign in to finish");
+        _tray?.ShowNotSetUpHint();
 
         while (!_shutdown.IsCancellationRequested)
         {
@@ -3212,6 +3194,7 @@ public partial class App : Application, IDisposable
             var me = await client.GetMeAsync(_shutdown.Token).ConfigureAwait(true);
             AdoptAccount(me);
             log.Info("Linked to a different account. Reloading.");
+            ArmForAccount(presenter, log);
             await RenderForAsync(client, me, presenter, log).ConfigureAwait(true);
         }
         catch (WarCommandApiException ex)

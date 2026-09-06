@@ -53,10 +53,29 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
 
     private DateTimeOffset _noticeUntil;
 
+    /// <summary>How loudly the pending notice reads. A confirmation is not a fault.</summary>
+    private StatusSeverity _noticeSeverity = StatusSeverity.Fault;
+
     /// <summary>
-    /// A standing condition, shown while it holds and cleared by its own signal, never by time.
+    /// The standing conditions, keyed by source, each one carrying its own way out.
     /// </summary>
-    private string? _condition;
+    /// <remarks>
+    /// It was a single nullable string. Two independent sources wrote it, so each erased the
+    /// other's word in both directions, and nothing dropped it on a hop or a disconnect. The
+    /// header's right cell is the same cell the join code lives in, so a word nobody took down
+    /// covered the invite code for the rest of the session.
+    /// </remarks>
+    private readonly HeaderConditions _conditions = new();
+
+    /// <summary>
+    /// When a transient empty state stops being believable, or null when none is showing.
+    /// </summary>
+    /// <remarks>
+    /// "re-reading the board" describes an operation in flight. If that operation never lands the
+    /// banner is a claim about something that is not happening, and there is no board underneath
+    /// to redraw over it. The tick escalates it to the truth and asks for the read again.
+    /// </remarks>
+    private DateTimeOffset? _transientUntil;
     private GunPosition? _gunPosition;
 
     /// <summary>Creates the observer. The board is attached once a deployment is known.</summary>
@@ -108,11 +127,51 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         _board = board;
         _viewerId = viewerParticipantId;
         _header = header;
+        _transientUntil = null;
         RenderHeader();
     }
 
+    /// <summary>
+    /// Whether a deployment frame obliges the composition root to re-read the config.
+    /// </summary>
+    /// <remarks>
+    /// The id alone is not the condition, and treating it as one is what stuck the overlay on
+    /// "SWITCHING DEPLOYMENT". Every deployment.entered clears the board FIRST, and an entry made
+    /// over HTTPS (the tray's switch, or a config re-read that won the race) has already moved the
+    /// standing id to the frame's by the time it lands. Standing on the right deployment holding
+    /// no board is not standing anywhere.
+    /// </remarks>
+    public static bool NeedsConfigReload(Guid? frameDeployment, Guid? standingOn, bool hasBoard) =>
+        frameDeployment != standingOn || !hasBoard;
+
+    /// <summary>
+    /// Moves the board's window of nine and redraws. Returns false when there is only one page.
+    /// </summary>
+    public bool TurnPage(int delta)
+    {
+        if (_board is not { } board || board.PageCount <= 1)
+        {
+            return false;
+        }
+
+        _ = board.TurnPage(delta);
+        Render();
+        return true;
+    }
+
     /// <summary>Lets go of the board. Standing on no deployment is not a fault, and not a board.</summary>
-    public void Detach() => _board = null;
+    /// <remarks>
+    /// The third guaranteed exit. Standing nowhere is exactly where a word was most likely to be
+    /// stuck: there is no board here to redraw over it and no frame coming to take it down.
+    /// </remarks>
+    public void Detach()
+    {
+        _board = null;
+        if (_conditions.ClearAll())
+        {
+            RenderHeader();
+        }
+    }
 
     /// <summary>Claimed rows, for the presence heartbeat. Empty before a board exists.</summary>
     public IReadOnlyList<Guid> ClaimedRequestIds => _board is null
@@ -121,8 +180,23 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
 
     // --- connection -----------------------------------------------------------------------------
 
-    /// <inheritdoc />
-    public void OnConnectionStateChanged(RealtimeConnectionState state) => OnUi(() => _onState(state));
+    /// <summary>
+    /// The connection moved. Anything the last connection told us stops being vouched for here.
+    /// </summary>
+    /// <remarks>
+    /// One of the three guaranteed exits for a session-scoped condition. A word derived from a
+    /// frame is only as good as the socket that delivered it; keeping it up across a drop states
+    /// something the agent can no longer see. The next ready frame re-asserts whatever still holds.
+    /// </remarks>
+    public void OnConnectionStateChanged(RealtimeConnectionState state) => OnUi(() =>
+    {
+        if (state != RealtimeConnectionState.Connected && _conditions.ClearAll())
+        {
+            RenderHeader();
+        }
+
+        _onState(state);
+    });
 
     /// <inheritdoc />
     public void OnReady(ReadyPayload payload)
@@ -130,11 +204,16 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         ArgumentNullException.ThrowIfNull(payload);
 
         // An empty subscription set is the normal cold-start state, not a fault. The composition
-        // root decides what to seed from; this only clears any stale amber word.
+        // root decides what to seed from; this only clears the words the last connection left.
+        //
+        // BoardStale only: it is derived from a drain age this connection has not measured yet.
+        // AnotherDevice is re-asserted by the ready frame ITSELF, and this used to run after that
+        // and null the whole field, so a reconnect onto a shared participant set the word and
+        // erased it in the same breath.
         OnUi(() =>
         {
             _notice = null;
-            _condition = null;
+            _ = _conditions.Clear(HeaderCondition.BoardStale);
             RenderHeader();
         });
     }
@@ -145,7 +224,17 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// </summary>
     public void OnBoardStalenessChanged(bool stale, double drainAgeSeconds) => OnUi(() =>
     {
-        _condition = stale ? "BOARD MAY BE STALE" : null;
+        // Renewed: it is derived from a drain age the socket keeps measuring. A socket that stops
+        // measuring cannot vouch for the word, so it comes down rather than standing on evidence
+        // nobody is gathering any more.
+        _ = stale
+            ? _conditions.Raise(
+                HeaderCondition.BoardStale,
+                "BOARD MAY BE STALE",
+                StatusSeverity.Warn,
+                ConditionExit.Renewed,
+                _serverNow())
+            : _conditions.Clear(HeaderCondition.BoardStale);
         RenderHeader();
     });
 
@@ -237,7 +326,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     public void OnErrorFrame(ErrorPayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        OnUi(() => SetFaultCore(FaultFor(payload)));
+        OnUi(() => SetFaultCore(FaultFor(payload), StatusSeverity.Fault));
     }
 
     private static string FaultFor(ErrorPayload payload) => payload.Code switch
@@ -330,10 +419,32 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// The hop. Drop every row and reset the allocator including its reissue order, or "accept 4"
     /// claims a request on a server you already left.
     /// </summary>
+    /// <remarks>
+    /// The copy names the reason. All three read "Switching deployment", so a replay-buffer miss
+    /// on a board nobody had left said the match had changed, and a stand-down said it too.
+    /// </remarks>
     public void OnBoardCleared(BoardClearReason reason) => OnUi(() =>
     {
         _board = null;
-        _presenter.ShowEmptyState("Switching deployment", "re-reading the board");
+
+        // One of the three guaranteed exits. A word about the match being left must not follow the
+        // viewer into the next one.
+        //
+        // Cleared AND redrawn. Dropping the state without repainting leaves the last strip on
+        // screen with nothing behind it, which looks exactly like the bug this replaced.
+        if (_conditions.ClearAll())
+        {
+            RenderHeader();
+        }
+        _transientUntil = _serverNow() + TransientEmptyStateLimit;
+
+        var (title, detail) = reason switch
+        {
+            BoardClearReason.DeploymentClosed => ("Deployment closed", "waiting for the next one"),
+            BoardClearReason.ResyncRequired => ("Reconnected", "re-reading the board"),
+            _ => ("Switching deployment", "re-reading the board"),
+        };
+        _presenter.ShowEmptyState(title, detail);
     });
 
     /// <inheritdoc />
@@ -379,7 +490,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// <summary>The credentials on disk are no longer accepted. Say so, and let the root re-register.</summary>
     public void OnCredentialsRejected(string code) => OnUi(() =>
     {
-        SetFaultCore("SIGN IN AGAIN");
+        SetFaultCore("SIGN IN AGAIN", StatusSeverity.Fault);
         _onCredentialsRejected(code);
     });
 
@@ -422,7 +533,17 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// <summary>Another live session holds the same participant, so the digits differ per device.</summary>
     public void OnAnotherDeviceOnBoard(bool present) => OnUi(() =>
     {
-        _condition = present ? "ANOTHER DEVICE ON BOARD" : null;
+        // Session: it arrives on the ready frame and on nothing else, so there is no cadence to
+        // expire against. The hop, the detach and the socket dropping take it down instead, and
+        // the next ready frame re-asserts it.
+        _ = present
+            ? _conditions.Raise(
+                HeaderCondition.AnotherDevice,
+                "ANOTHER DEVICE ON BOARD",
+                StatusSeverity.Warn,
+                ConditionExit.Session,
+                _serverNow())
+            : _conditions.Clear(HeaderCondition.AnotherDevice);
         RenderHeader();
     });
 
@@ -479,22 +600,46 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         // 1, 2, 3 through the claimable rows and straight on into YOURS without a gap. It used to
         // be the allocation slot, which is stable for a row's life and therefore full of holes:
         // clear the row on 2 and the board read 1, 3, 4.
-        var line = 0;
+        // The page IS the numbering. Every line 1..9 comes off this one window, so the digit a row
+        // draws, the digit the menu offers and the digit voice resolves cannot disagree, and a row
+        // on page 2 is as pressable as one on page 1.
+        var page = board.Lines;
+        var line = page
+            .Select((row, index) => (row.Id, Line: index + 1))
+            .ToDictionary(x => x.Id, x => x.Line);
 
-        var rows = board.Rows
+        var inYours = board.Yours.Select(r => r.Id).ToHashSet();
+
+        var rows = page
+            .Where(r => !inYours.Contains(r.Id))
             .Select(r => BoardRowViewModel
-                .FromPrimary(r, _viewerId, now, unitsToMeters, fire, _catalog(), ++line)
+                .FromPrimary(r, _viewerId, now, unitsToMeters, fire, _catalog(), line[r.Id])
                 .WithGlyph(glyphs))
             .ToList();
+
+        // YOURS draws on every page: it is the work in this viewer's hands and it does not belong
+        // to a window over the queue. It carries a digit only while that row is on the page shown,
+        // because a digit naming a row nobody can see is a key that does the wrong thing.
         var yours = board.Yours
             .Select(r => BoardRowViewModel
-                .FromSecondary(r, now, unitsToMeters, _viewerId, r.HoldsSlot ? ++line : null)
+                .FromSecondary(r, now, unitsToMeters, _viewerId, line.TryGetValue(r.Id, out var n) ? n : null)
                 .WithGlyph(glyphs))
             .ToList();
-        var overflow = board.Overflow;
-        var urgent = overflow.Count(r => r.Priority == Priority.Urgent);
 
-        _presenter.RenderBoard(rows, yours, overflow.Count, urgent, board.InProgressCount);
+        // Rows off this page, not rows without a digit. With paging the two stopped being the same
+        // thing: on page 2 of 3 the count is what is still behind and ahead of the window.
+        var offPage = board.Overflow.Count + board.Rows.Count + board.Yours.Count(r => r.HoldsSlot)
+            - page.Count;
+        var urgent = board.Overflow.Count(r => r.Priority == Priority.Urgent);
+
+        _presenter.RenderBoard(
+            rows,
+            yours,
+            Math.Max(0, offPage),
+            urgent,
+            board.InProgressCount,
+            board.Page + 1,
+            board.PageCount);
 
         // Built HERE, on the dispatcher, while nothing else is mutating the board. The menu used to
         // walk BoardState.Rows from the hook thread while socket frames were writing to it, which
@@ -506,7 +651,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         // Keyed by LINE, the same number the row just drew, so a digit pressed is the row read.
         var slots = new Dictionary<int, SlotState>();
         var pressed = 0;
-        foreach (var row in board.Lines)
+        foreach (var row in page)
         {
             slots[++pressed] = new SlotState(
                 row.State,
@@ -516,9 +661,10 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         }
 
         _onRendered(new BoardSnapshot(
-            rows.Count + yours.Count + overflow.Count,
+            board.Rows.Count + board.Yours.Count + board.Overflow.Count,
             rows.Count(r => r.Accent == RowAccent.Mine),
-            slots));
+            slots,
+            board.PageCount));
     }
 
     /// <summary>Replaces the header's hint cell, which the menu owns while it is open.</summary>
@@ -551,7 +697,16 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     });
 
     /// <summary>Shows a fault word in the header, or clears it with null.</summary>
-    public void SetFault(string? fault) => OnUi(() => SetFaultCore(fault));
+    public void SetFault(string? fault) => OnUi(() => SetFaultCore(fault, StatusSeverity.Fault));
+
+    /// <summary>
+    /// A confirmation of something the viewer just did. Same deadline, quieter colour.
+    /// </summary>
+    /// <remarks>
+    /// COPIED and GUN CLEARED are not faults, and drawing them in the fault colour taught people
+    /// to read the strip's loudest colour as noise.
+    /// </remarks>
+    public void SetNote(string note) => OnUi(() => SetFaultCore(note, StatusSeverity.Note));
 
     /// <summary>
     /// How long a notice stays on the header before it takes itself off.
@@ -562,9 +717,21 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// </remarks>
     private static readonly TimeSpan NoticeLifetime = TimeSpan.FromSeconds(6);
 
-    private void SetFaultCore(string? fault)
+    /// <summary>
+    /// How long a transient empty state has to turn into a board before it is disbelieved.
+    /// </summary>
+    /// <remarks>
+    /// Long enough for an ordinary HTTPS re-read on a slow connection, short enough that nobody
+    /// stares at a banner describing work that already failed. On expiry the word becomes honest
+    /// and the read is asked for again, so the overlay recovers on its own even if every other
+    /// path to a re-read is broken.
+    /// </remarks>
+    private static readonly TimeSpan TransientEmptyStateLimit = TimeSpan.FromSeconds(12);
+
+    private void SetFaultCore(string? fault, StatusSeverity severity)
     {
         _notice = fault;
+        _noticeSeverity = severity;
         _noticeUntil = fault is null ? default : DateTimeOffset.UtcNow + NoticeLifetime;
         RenderHeader();
     }
@@ -578,14 +745,53 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     /// </remarks>
     public void ExpireNotice(DateTimeOffset now) => OnUi(() =>
     {
-        if (_notice is null || now < _noticeUntil)
+        // The sweep runs FIRST and unconditionally. A renewed condition whose source went quiet
+        // comes down on the same tick that expires a notice, and neither depends on there being a
+        // board to redraw: standing nowhere is where a word gets stuck.
+        var swept = _conditions.Sweep(now);
+
+        if (_notice is not null && now >= _noticeUntil)
+        {
+            _notice = null;
+            swept = true;
+        }
+
+        if (swept)
+        {
+            RenderHeader();
+        }
+
+        DisbelieveAStuckBanner(now);
+    });
+
+    /// <summary>
+    /// Replaces a transient empty state that never became a board, and asks for the read again.
+    /// </summary>
+    /// <remarks>
+    /// The backstop for every way a re-read can fail to land: a frame that never arrived, a reload
+    /// that threw, a revalidation that died on a pool thread. Whatever the cause, the overlay says
+    /// something true within <see cref="TransientEmptyStateLimit"/> and keeps trying, rather than
+    /// holding a banner about work that stopped.
+    /// </remarks>
+    private void DisbelieveAStuckBanner(DateTimeOffset now)
+    {
+        if (_transientUntil is not { } until || now < until)
         {
             return;
         }
 
-        _notice = null;
-        RenderHeader();
-    });
+        if (_board is not null)
+        {
+            _transientUntil = null;
+            return;
+        }
+
+        // Re-armed rather than fired once, because the word says "retrying" and that has to be
+        // true. The config fallback is two minutes; this is the one that keeps the promise.
+        _transientUntil = now + TransientEmptyStateLimit;
+        _presenter.ShowEmptyState("Board unreachable", "retrying");
+        _onConfigChanged();
+    }
 
     /// <summary>
     /// The bracket context, or null when the viewer has set no gun position.
@@ -615,7 +821,60 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     }
 
     // The notice wins while it lives, then the standing condition shows through again.
-    private void RenderHeader() => _presenter.SetHeader(_header with { Fault = _notice ?? _condition });
+    /// <summary>
+    /// How many status items the strip draws before the rest become a count.
+    /// </summary>
+    /// <remarks>
+    /// Three fits the panel's width at SmallSize without wrapping, and a strip that wraps pushes
+    /// every row of the board down by a line.
+    /// </remarks>
+    private const int StatusShown = 3;
+
+    /// <summary>
+    /// Redraws the header and the status strip. Every path that changes either goes through here.
+    /// </summary>
+    /// <remarks>
+    /// The header's right cell is the JOIN CODE and nothing else now. Status used to be written
+    /// into it, so a word nobody took down covered the six digits somebody was about to read out
+    /// loud, and a second status silently replaced the first instead of appearing beside it.
+    /// </remarks>
+    private void RenderHeader()
+    {
+        _presenter.SetHeader(_header);
+        var (shown, hidden) = StatusNow();
+        _presenter.RenderStatus(shown, hidden);
+    }
+
+    /// <summary>
+    /// Everything standing, worst first: the transient notice, then the keyed conditions.
+    /// </summary>
+    /// <remarks>
+    /// Built fresh on every render rather than mutated, so the strip cannot hold an item whose
+    /// source has gone: what is not still true this instant is not drawn this instant.
+    /// </remarks>
+    private (IReadOnlyList<StatusItem> Shown, int Hidden) StatusNow()
+    {
+        var items = new List<StatusItem>();
+
+        // The notice first. It is the answer to something the viewer just did, so it is the one
+        // they are looking for, and it takes itself off on a deadline.
+        if (_notice is { } notice)
+        {
+            items.Add(new StatusItem(notice, _noticeSeverity));
+        }
+
+        items.AddRange(_conditions.Items());
+
+        List<StatusItem> shown =
+        [
+            .. items
+                .OrderBy(item => item.Severity)
+                .Take(StatusShown)
+                .Select((item, index) => item with { IsFirst = index == 0 }),
+        ];
+
+        return (shown, items.Count - shown.Count);
+    }
 
     private string OverlayLabel(string typeId) =>
         _catalog().RequestType(typeId)?.OverlayLabel ?? typeId.ToUpperInvariant();
@@ -641,4 +900,5 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
 public sealed record BoardSnapshot(
     int OpenCount,
     int MineCount,
-    IReadOnlyDictionary<int, SlotState> Slots);
+    IReadOnlyDictionary<int, SlotState> Slots,
+    int Pages = 1);

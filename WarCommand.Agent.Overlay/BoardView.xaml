@@ -1,4 +1,4 @@
-<UserControl x:Class="WarCommand.Agent.Overlay.BoardView"
+﻿<UserControl x:Class="WarCommand.Agent.Overlay.BoardView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:WarCommand.Agent.Overlay"
@@ -13,6 +13,8 @@
 
             <local:NullToVisibilityConverter x:Key="NullToVisibility" />
             <local:RoleBrushConverter x:Key="RoleBrush" />
+            <local:SeverityBrushConverter x:Key="SeverityBrush" />
+            <local:NotBoolToVisibilityConverter x:Key="NotBoolToVisibility" />
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
             <!-- One row, the anatomy from docs/design/mocks/OverlayRows.dc.html. Every colour comes
@@ -145,6 +147,47 @@
                                                Text="{Binding SecondPointDisplay}" />
                                 </StackPanel>
                             </Grid>
+
+                            <!-- The tags, on their own line and wrapping. They used to ride the type
+                                 label inside the 150-unit column, which a role glyph already takes
+                                 25 of, so a rifle delivery carrying MAGS SCOPE SUPPRESS x2 trimmed
+                                 to 'RIFLE MA...' and the row named a rifle without naming which
+                                 one. Collapsed on a row with no tags, so it costs nothing there. -->
+                            <!-- One bordered chip per tag, wrapping. A tag has to READ as a tag on
+                                 both surfaces: the web draws a chip each and this drew one dim
+                                 run-on line, so the same request looked like two different things
+                                 and the tags were indistinguishable from the meta text beside
+                                 them. Collapsed on a row carrying none. -->
+                            <ItemsControl x:Name="TagLine" Margin="0,2,0,1"
+                                          ItemsSource="{Binding Tags}">
+                                <ItemsControl.Style>
+                                    <Style TargetType="ItemsControl">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding TagsDisplay}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ItemsControl.Style>
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{StaticResource Edge}" BorderThickness="1"
+                                                Margin="0,0,4,2" Padding="5,1,5,2"
+                                                Background="{StaticResource Transparent}">
+                                            <TextBlock Style="{StaticResource Up}"
+                                                       FontSize="{StaticResource SmallSize}"
+                                                       Foreground="{StaticResource Dim}"
+                                                       Text="{Binding}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -350,26 +393,22 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock x:Name="FaultDot" Grid.Column="0" Style="{StaticResource Mono}"
-                                               Foreground="{StaticResource Warn}" Text="&#9679;" Margin="0,0,8,0"
-                                               Visibility="Collapsed" />
-                                    <TextBlock x:Name="HeaderTitle" Grid.Column="1" Style="{StaticResource Up}"
+                                    <TextBlock x:Name="HeaderTitle" Grid.Column="0" Style="{StaticResource Up}"
                                                FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}"
                                                Text="WARCOMMAND" />
-                                    <TextBlock x:Name="HeaderCount" Grid.Column="2" Style="{StaticResource Up}"
+                                    <TextBlock x:Name="HeaderCount" Grid.Column="1" Style="{StaticResource Up}"
                                                FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}"
                                                Margin="8,0,0,0" />
-                                    <TextBlock x:Name="HeaderMap" Grid.Column="3" Style="{StaticResource Up}"
+                                    <TextBlock x:Name="HeaderMap" Grid.Column="2" Style="{StaticResource Up}"
                                                FontSize="{StaticResource SmallSize}" Foreground="{StaticResource Dim}"
                                                Margin="8,0,0,0" />
                                     <!-- The invite code is the one thing on this bar somebody reads
                                          out loud, so it is the largest text on it and carries no
                                          label: six digits in the corner are not mistakable for
                                          anything else. -->
-                                    <TextBlock x:Name="HeaderRight" Grid.Column="4" Style="{StaticResource Up}"
+                                    <TextBlock x:Name="HeaderRight" Grid.Column="3" Style="{StaticResource Up}"
                                                FontSize="{StaticResource InviteSize}" FontWeight="Bold"
                                                Foreground="{StaticResource Squad}"
                                                VerticalAlignment="Center"
@@ -437,6 +476,73 @@
                                                HorizontalAlignment="Right" Margin="8,0,0,0" />
                                 </Grid>
                             </StackPanel>
+                        </Border>
+
+                        <!--
+                            Status. Its own line, because the header's right cell is the JOIN CODE
+                            and a status word written there covered the six digits somebody was
+                            about to read out loud.
+
+                            One line, always. Items sit side by side, worst first, separated by a
+                            hairline, and anything past the third becomes a +N rather than wrapping:
+                            a strip that grows pushes every row of the board down, and the board is
+                            the thing being read. Collapsed entirely when nothing stands, so a
+                            healthy panel pays nothing for it.
+                        -->
+                        <Border x:Name="StatusStrip" Padding="9,0" MinHeight="21"
+                                Visibility="Collapsed"
+                                BorderBrush="{StaticResource Edge}" BorderThickness="0,0,0,1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ItemsControl x:Name="StatusItems" Grid.Column="0"
+                                              VerticalAlignment="Center">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <!-- Never a WrapPanel. A second line here moves every
+                                                 row on the board down by one. -->
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <!-- The divider belongs to the item and hides on
+                                                     the first one, so the strip needs no separator
+                                                     pass and never draws a leading rule. -->
+                                                <Border Width="1" Height="9" Margin="9,0"
+                                                        VerticalAlignment="Center"
+                                                        Background="{StaticResource RowDivider}"
+                                                        Visibility="{Binding IsFirst,
+                                                            Converter={StaticResource NotBoolToVisibility}}" />
+                                                <!-- 5px, the smallest dot that still reads as a
+                                                     colour rather than as punctuation. Drawn rather
+                                                     than typed: a bullet glyph sits differently in
+                                                     every fallback face on the list. -->
+                                                <Ellipse Width="5" Height="5" Margin="0,0,6,0"
+                                                         VerticalAlignment="Center"
+                                                         Fill="{Binding Severity,
+                                                            Converter={StaticResource SeverityBrush}}" />
+                                                <TextBlock FontFamily="{StaticResource CondensedFont}"
+                                                           FontSize="{StaticResource SmallSize}"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{Binding Severity,
+                                                              Converter={StaticResource SeverityBrush}}"
+                                                           Text="{Binding Text}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <!-- What did not fit, as a count. The same idiom as the roster's
+                                     chips and the board's own overflow line. -->
+                                <TextBlock x:Name="StatusMore" Grid.Column="1"
+                                           FontFamily="{StaticResource CondensedFont}"
+                                           FontSize="{StaticResource SmallSize}"
+                                           Foreground="{StaticResource Dim}"
+                                           VerticalAlignment="Center" Margin="10,0,0,0" />
+                            </Grid>
                         </Border>
 
                         <!--
@@ -526,6 +632,9 @@
 
                         <Border x:Name="OverflowRow" Padding="9,5" Visibility="Collapsed">
                             <StackPanel Orientation="Horizontal">
+                                <!-- Which nine of how many. Absent on a board that fits. -->
+                                <TextBlock x:Name="PageText" Style="{StaticResource Up}"
+                                           Foreground="{StaticResource Dim}" Margin="0,0,16,0" />
                                 <TextBlock x:Name="OverflowText" Style="{StaticResource Up}"
                                            Foreground="{StaticResource Dim}" />
                                 <TextBlock x:Name="OverflowUrgentText" Style="{StaticResource Up}"

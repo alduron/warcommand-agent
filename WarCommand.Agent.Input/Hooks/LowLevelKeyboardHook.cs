@@ -45,6 +45,12 @@ public sealed class LowLevelKeyboardHook : IDisposable
     private IntPtr _handle;
     private BindingModifiers _modifiers;
 
+    /// <summary>Virtual keys currently held, so an auto-repeat is not a second press.</summary>
+    private readonly HashSet<int> _down = [];
+
+    /// <summary>Of those, the ones whose press was swallowed. A repeat must be swallowed too.</summary>
+    private readonly HashSet<int> _swallowed = [];
+
     /// <summary>Creates the hook. Nothing is installed until <see cref="Install"/> is called.</summary>
     public LowLevelKeyboardHook(InputBridge bridge, IInputLog? log = null)
     {
@@ -102,7 +108,12 @@ public sealed class LowLevelKeyboardHook : IDisposable
     }
 
     /// <summary>Forgets any held modifier. Called when the hook stops seeing releases.</summary>
-    public void ForgetModifiers() => _modifiers = BindingModifiers.None;
+    public void ForgetModifiers()
+    {
+        _modifiers = BindingModifiers.None;
+        _down.Clear();
+        _swallowed.Clear();
+    }
 
     /// <inheritdoc />
     public void Dispose() => Uninstall();
@@ -147,8 +158,41 @@ public sealed class LowLevelKeyboardHook : IDisposable
             return HookVerdict.PassThrough;
         }
 
+        // ONE dispatch per physical press. Windows delivers auto-repeat as a stream of ordinary
+        // WM_KEYDOWNs with nothing on them to say so, roughly thirty a second once the repeat
+        // delay elapses, and every one of them reached the menu as another press. Holding a digit
+        // on the ROLES panel therefore fired a toggle POST per repeat: the role ended wherever the
+        // last one left it, and the burst tripped the API's rate limit, which the overlay then
+        // reported as ROLE REFUSED. Every digit on every panel had the same problem.
+        //
+        // The repeat is still SWALLOWED when the press was: the game must not receive the key
+        // WarCommand is holding just because the second edge was a repeat.
+        if (transition == KeyTransition.Down)
+        {
+            if (!_down.Add(virtualKey))
+            {
+                return _swallowed.Contains(virtualKey) ? HookVerdict.Swallow : HookVerdict.PassThrough;
+            }
+        }
+        else
+        {
+            _ = _down.Remove(virtualKey);
+        }
+
         var chord = new Chord(_modifiers, key);
         var dispatch = transition == KeyTransition.Down ? _bridge.Handle(chord) : _bridge.HandleUp(chord);
+
+        // Remembered so a repeat of a swallowed key stays swallowed, and forgotten on the release
+        // that ends the press.
+        if (transition == KeyTransition.Down && dispatch.Swallow)
+        {
+            _ = _swallowed.Add(virtualKey);
+        }
+        else if (transition == KeyTransition.Up)
+        {
+            _ = _swallowed.Remove(virtualKey);
+        }
+
         return dispatch.Swallow ? HookVerdict.Swallow : HookVerdict.PassThrough;
     }
 

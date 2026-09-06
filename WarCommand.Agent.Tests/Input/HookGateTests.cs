@@ -55,6 +55,10 @@ public class HookGateTests
         Assert.Equal(HookVerdict.Swallow, hook.Evaluate(0x42, KeyTransition.Down));
         Assert.Equal(HookVerdict.PassThrough, hook.Evaluate(0xA5, KeyTransition.Up));
 
+        // Released, because a second key-down with no key-up between them is an auto-repeat of the
+        // press that is still held, not a new one, and the hook treats it as such.
+        Assert.Equal(HookVerdict.PassThrough, hook.Evaluate(0x42, KeyTransition.Up));
+
         // The same key with no modifier held is not a binding.
         Assert.Equal(HookVerdict.PassThrough, hook.Evaluate(0x42, KeyTransition.Down));
     }

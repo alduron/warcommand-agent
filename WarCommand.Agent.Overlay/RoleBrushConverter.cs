@@ -67,9 +67,20 @@ public sealed class RoleBrushConverter : IValueConverter
         return brush;
     }
 
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is string key ? Token(key) : Fallback;
+
+    /// <summary>
+    /// Any token in <c>Theme/OverlayTokens.xaml</c>, as a brush, or the fallback grey.
+    /// </summary>
+    /// <remarks>
+    /// Shared with <see cref="SeverityBrushConverter"/>. The loading is the awkward part, not the
+    /// mapping, and a second copy of it is a second chance to cache an empty dictionary and paint
+    /// a whole surface grey for the life of the process.
+    /// </remarks>
+    internal static Brush Token(string key)
     {
-        if (value is not string key || key.Length == 0)
+        if (key.Length == 0)
         {
             return Fallback;
         }

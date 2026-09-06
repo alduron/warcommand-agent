@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -86,8 +86,6 @@ public sealed record BoardHeader
     /// <summary>The contextual key hint, from OverlayHint.Resolve. Null draws nothing.</summary>
     public string? Hint { get; init; }
 
-    /// <summary>Names itself: REQUESTS MAY BE STALE, NO MICROPHONE, and so on. Null when healthy.</summary>
-    public string? Fault { get; init; }
 }
 
 /// <summary>
@@ -237,18 +235,9 @@ public partial class BoardView : UserControl
 
         // A fault takes the right-hand slot and turns it amber: it outranks the invite code, which
         // is the one thing on that line somebody can look up later.
-        if (header.Fault is { } fault)
-        {
-            HeaderRight.Text = fault.ToUpperInvariant();
-            HeaderRight.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "Warn");
-            FaultDot.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            HeaderRight.Text = header.Right?.ToUpperInvariant() ?? string.Empty;
-            HeaderRight.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "Squad");
-            FaultDot.Visibility = Visibility.Collapsed;
-        }
+        // The join code, always. Status has its own strip: writing a status word here covered the
+        // six digits somebody was about to read out loud, and one word replaced the next.
+        HeaderRight.Text = header.Right?.ToUpperInvariant() ?? string.Empty;
     }
 
     /// <summary>The cold-start state: paired but on no deployment. Not a fault; see AgentConfig.BelongsToNothing.</summary>
@@ -263,6 +252,7 @@ public partial class BoardView : UserControl
         _secondary.Clear();
         _retiring.Clear();
         OverflowRow.Visibility = Visibility.Collapsed;
+        PageText.Text = string.Empty;
     }
 
     /// <summary>
@@ -275,12 +265,32 @@ public partial class BoardView : UserControl
     /// would rebuild every container on every five-second poll, which is the whole board flashing
     /// because one age went from 11s to 16s.
     /// </remarks>
+    /// <summary>
+    /// Draws the status strip. Empty collapses it, so a healthy board costs no height for it.
+    /// </summary>
+    /// <remarks>
+    /// Its own surface, never the header's right cell. That cell is the JOIN CODE, and a status
+    /// word written there covered six digits somebody was about to read out loud.
+    /// </remarks>
+    public void RenderStatus(IReadOnlyList<StatusItem> items, int hidden = 0)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        StatusItems.ItemsSource = items;
+        StatusMore.Text = hidden > 0
+            ? $"+{hidden.ToString(CultureInfo.InvariantCulture)}"
+            : string.Empty;
+        StatusStrip.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     public void RenderBoard(
         IReadOnlyList<BoardRowViewModel> rows,
         IReadOnlyList<BoardRowViewModel> yours,
         int overflowCount,
         int overflowUrgentCount,
-        int inProgressCount = 0)
+        int inProgressCount = 0,
+        int page = 1,
+        int pageCount = 1)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(yours);
@@ -294,7 +304,15 @@ public partial class BoardView : UserControl
             ? $"{inProgressCount.ToString(CultureInfo.InvariantCulture)} IN PROGRESS"
             : string.Empty;
 
-        OverflowRow.Visibility = overflowCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // The page reading comes first and stays put. It is the answer to "is this all of it",
+        // which is the question a board with a count on it makes you ask.
+        PageText.Text = pageCount > 1
+            ? $"{page.ToString(CultureInfo.InvariantCulture)} OF {pageCount.ToString(CultureInfo.InvariantCulture)}"
+            : string.Empty;
+
+        OverflowRow.Visibility = overflowCount > 0 || pageCount > 1
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         OverflowText.Text = overflowCount > 0
             ? $"...{overflowCount.ToString(CultureInfo.InvariantCulture)} more"
             : string.Empty;

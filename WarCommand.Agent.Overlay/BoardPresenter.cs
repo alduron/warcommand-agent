@@ -1,4 +1,4 @@
-namespace WarCommand.Agent.Overlay;
+﻿namespace WarCommand.Agent.Overlay;
 
 /// <summary>
 /// Fans one board render out to every surface drawing it: the window's Board tab and, when it is
@@ -24,6 +24,7 @@ public sealed class BoardPresenter
     private Action<BoardView>? _last;
 
     private BoardHeader? _header;
+    private Action<BoardView>? _statusStrip;
     private string? _status;
     private MenuViewModel? _menu;
     private ArtilleryViewModel? _artillery;
@@ -47,6 +48,8 @@ public sealed class BoardPresenter
         {
             view.SetStatus(status);
         }
+
+        _statusStrip?.Invoke(view);
 
         if (_menu is { } menu)
         {
@@ -106,8 +109,37 @@ public sealed class BoardPresenter
     /// <summary>The cold-start state, on every surface.</summary>
     public void ShowEmptyState(string title, string hint)
     {
+        EmptyState = (title, hint);
         _last = v => v.ShowEmptyState(title, hint);
         Each(_last);
+    }
+
+    /// <summary>The empty state as last shown, or null when the board is drawing rows.</summary>
+    public (string Title, string Hint)? EmptyState { get; private set; }
+
+    /// <summary>
+    /// Everything currently standing on the status strip, in the order it draws.
+    /// </summary>
+    /// <remarks>
+    /// A list, not a string. Two things being wrong at once is ordinary, and the single-string
+    /// version had the second silently replace the first while covering the join code.
+    /// </remarks>
+    public IReadOnlyList<StatusItem> Status { get; private set; } = [];
+
+    /// <summary>Rows the strip could not fit, as last rendered.</summary>
+    public int StatusHidden { get; private set; }
+
+    /// <summary>
+    /// Replaces the whole strip. Empty, with nothing hidden, takes it off the board entirely.
+    /// </summary>
+    public void RenderStatus(IReadOnlyList<StatusItem> items, int hidden = 0)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        Status = items;
+        StatusHidden = hidden;
+        _statusStrip = v => v.RenderStatus(items, hidden);
+        Each(_statusStrip);
     }
 
     /// <summary>One snapshot of the board, on every surface.</summary>
@@ -116,13 +148,17 @@ public sealed class BoardPresenter
         IReadOnlyList<BoardRowViewModel> yours,
         int overflowCount,
         int overflowUrgentCount,
-        int inProgressCount = 0)
+        int inProgressCount = 0,
+        int page = 1,
+        int pageCount = 1)
     {
         Rows = rows;
         Yours = yours;
+        EmptyState = null;
         OverflowCount = overflowCount;
         InProgressCount = inProgressCount;
-        _last = v => v.RenderBoard(rows, yours, overflowCount, overflowUrgentCount, inProgressCount);
+        _last = v => v.RenderBoard(
+            rows, yours, overflowCount, overflowUrgentCount, inProgressCount, page, pageCount);
         Each(_last);
     }
 

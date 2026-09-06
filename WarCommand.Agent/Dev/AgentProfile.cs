@@ -32,14 +32,6 @@ public sealed class AgentProfile
     public const string TrayOnlyVariable = "WARCOMMAND_TRAY_ONLY";
 
     /// <summary>
-    /// Set to 1 to draw the overlay on the primary monitor with the board from 06-overlay-ux.md,
-    /// and stop there: no API, no device registration, no game. Implies the dev profile. This is
-    /// the overlay's iteration loop, and the only way to look at the surface before the game ships.
-    /// See DEVELOPING.md.
-    /// </summary>
-    public const string OverlayDemoVariable = "WARCOMMAND_OVERLAY_DEMO";
-
-    /// <summary>
     /// Set to 1 to take the cold-start path: activate the device into a brand new guest user of its
     /// own instead of waiting to be paired. Never the default, because the account the agent should
     /// hold is whoever is signed in on the web, guest account included.
@@ -77,7 +69,6 @@ public sealed class AgentProfile
     private AgentProfile(
         bool isDev,
         bool isTrayOnly,
-        bool isOverlayDemo,
         bool isColdStart,
         Uri apiBaseAddress,
         string? pairCode,
@@ -85,7 +76,6 @@ public sealed class AgentProfile
     {
         IsDev = isDev;
         IsTrayOnly = isTrayOnly;
-        IsOverlayDemo = isOverlayDemo;
         IsColdStart = isColdStart;
         ApiBaseAddress = apiBaseAddress;
         PairCode = pairCode;
@@ -96,9 +86,6 @@ public sealed class AgentProfile
 
     /// <summary>Tray only: the startup sequence stops after the icon. Always a dev launch.</summary>
     public bool IsTrayOnly { get; }
-
-    /// <summary>Overlay demo: the surface, drawn with sample rows, and nothing else. Always dev.</summary>
-    public bool IsOverlayDemo { get; }
 
     /// <summary>Mint an account of the agent's own rather than waiting to be paired to one.</summary>
     public bool IsColdStart { get; }
@@ -113,11 +100,10 @@ public sealed class AgentProfile
     public static AgentProfile Resolve()
     {
         var isTrayOnly = IsTruthy(Environment.GetEnvironmentVariable(TrayOnlyVariable));
-        var isOverlayDemo = IsTruthy(Environment.GetEnvironmentVariable(OverlayDemoVariable));
 
         // One build, one tray icon, one switch. The environment variable still wins so the dev
         // scripts keep working, but a normal launch reads the choice the tray wrote.
-        var isDev = isTrayOnly || isOverlayDemo || string.Equals(
+        var isDev = isTrayOnly || string.Equals(
             Environment.GetEnvironmentVariable(ProfileVariable), "dev", StringComparison.OrdinalIgnoreCase)
             || (Environment.GetEnvironmentVariable(ProfileVariable) is null
                 && BackendFile.Read() == AgentBackend.Local);
@@ -134,7 +120,6 @@ public sealed class AgentProfile
         return new AgentProfile(
             isDev,
             isTrayOnly,
-            isOverlayDemo,
             isColdStart,
             apiBaseAddress,
             string.IsNullOrWhiteSpace(pairCode) ? null : pairCode,
