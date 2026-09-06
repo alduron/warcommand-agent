@@ -129,16 +129,23 @@ public sealed record MenuViewModel
             return "NOW SET THE TARGET";
         }
 
-        // The range itself, in the mode it is being judged in, and whether that mode can reach it.
-        // This line used to read BRACKET BELOW, which named a section rather than answering the
-        // question the page was opened to answer.
+        // WHICH WAY, then how far. The bearing came off this line when the readout became a
+        // section of the board, and the board section is not what somebody laying a gun is looking
+        // at: they are on the tool page, holding the key, reading the two numbers they are about
+        // to dial. A range with no bearing answers half the question the page exists for.
+        //
+        // The full bracket, elevation and time of flight and the caveats, stays on the board
+        // section. This is the pair you cannot lay without.
+        var azimuth = FireSolutionCalculator.Azimuth(menu.ToolGun, menu.ToolTarget);
+        var bearing = FormattableString.Invariant($"AZ {azimuth:0}");
+
         var mode = menu.RangeMode;
         if (Metres(menu.ToolGun, menu.ToolTarget) is not { } range)
         {
-            return "MAP UNKNOWN";
+            return FormattableString.Invariant($"{bearing}   MAP UNKNOWN");
         }
 
-        var text = FormattableString.Invariant($"{range:0} M");
+        var text = FormattableString.Invariant($"{bearing}   {range:0} M");
         return mode.IsOutOfRange(range)
             ? FormattableString.Invariant($"{text}   OUT OF REACH")
             : text;
