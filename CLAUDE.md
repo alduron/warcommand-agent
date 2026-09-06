@@ -40,14 +40,21 @@ grammar, `06-overlay-ux.md` before drawing anything, `08-api-realtime.md` before
    that is not a registered hotkey, and do nothing at all unless Wardogs is the foreground window.
 7. **The panic key suspends every hook, capture, draw, and audio capture in one press.** Source:
    `Caveat_GlobalInputBridgeNeedsKillSwitch`.
-8. **Audio and frames never touch disk and never cross the network.** The audio buffer is capped at
+8. **Nothing arms without an account.** No keyboard hook, no menu, no voice, no screen capture and
+   no board tick until `/v1/me` has answered. They are constructed in `ArmForAccount` and nowhere
+   else; `StartOverlay` places the surface and arms nothing. An agent that arms first accepts a
+   push-to-talk hold, walks the whole catalog and then discards the submit, which is what shipped
+   and what a real user hit. Enforced by
+   `WarCommand.Agent.Tests/Architecture/StartupArmingTests.cs`. Source:
+   `Convention_WarCommandAgentArmsNothingWithoutAnAccount`.
+9. **Audio and frames never touch disk and never cross the network.** The audio buffer is capped at
    8 seconds and zeroed on release. There is no debug flag that changes this.
-9. **Screen capture is opt-in and off by default**, and it is one `ICoordinateSource` among several
+10. **Screen capture is opt-in and off by default**, and it is one `ICoordinateSource` among several
    rather than the mechanism. Every M1 coordinate is spoken or typed by a human. Source:
    `Caveat_WardogsEacBlocksMemoryReads`, `Decision_WarCommandM1CoordinateIsSpokenOrTypedGrid`,
    `Convention_WarCommandCoordinateAcquisitionIsBehindAnInterface`, and the M1/M2 split in
    `15-build-order.md`.
-10. **Slots are client-side and never sent to the server.** **There is no quarantine**: a freed
+11. **Slots are client-side and never sent to the server.** **There is no quarantine**: a freed
     digit goes to the back of the reissue queue and allocation is least-recently-released, so a
     digit is never reissued until the other eight have been. When digits are scarce, admit by
     `(priority DESC, created_at ASC)`; a `low` row past `low_priority_slot_residency_s` is demoted
@@ -59,14 +66,14 @@ grammar, `06-overlay-ux.md` before drawing anything, `08-api-realtime.md` before
     carries the row id per line and a press resolves through that, never through the live board. Reset the allocator and
     its reissue order on `deployment.entered`. Source:
     `Decision_WarCommandSlotsAreLeastRecentlyReleased`, `Caveat_WarCommandSlotsResetOnDeploymentChange`.
-11. **Never add a bare voice alias without running the phonetic collision test.** It is
+12. **Never add a bare voice alias without running the phonetic collision test.** It is
     `warcommand-api/tests/unit/test_grammar_collisions.py`, `scripts/contracts.ps1` runs it, and a
     pair below the floor refuses to generate rather than warning. "armor" is forbidden; it collides
     with "mortar". Source: `Convention_WarCommandPhoneticFloorBlocksContractGeneration`,
     `Caveat_VoiceAliasMortarArmorHomophone`.
-12. **Optimistic render, reconcile on response.** A claim renders green immediately; a 409 flashes
+13. **Optimistic render, reconcile on response.** A claim renders green immediately; a 409 flashes
     amber and removes the row. The user never waits on a round trip to see that their voice landed.
-13. **Requests queue offline and replay. Claims do not.** A stale claim would take work somebody else
+14. **Requests queue offline and replay. Claims do not.** A stale claim would take work somebody else
     has already handled. This asymmetry is deliberate. Every queued submit carries the
     `captured_in_deployment_id` it was captured in; on replay the agent drops any whose deployment
     is no longer current and names them on the overlay, and the server rejects the rest with

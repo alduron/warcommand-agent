@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 7,
   "generated_note": "SOURCE OF TRUTH. The API validates against this, the web renders from it, and the agent compiles its speech grammar from it. Run scripts/contracts.ps1 after editing. Never hand-edit the generated copies.",
   "game_note": "Rebuilt from the owner's in-game menu list. A category is a place to look, an item is the request, and everything else is a tag on it. The game has far more distinct things than a request type each, and a tag is what a board row can show and a shopping list can group.",
   "roles": [
@@ -38,25 +38,36 @@
     },
     {
       "id": "air_support",
-      "display": "Attack Chopper",
+      "display": "Air Support",
       "ticket_prefix": "CAS",
       "color_group": "fire",
-      "game_note": "Armed rotary wing. The owner calls this CAS.",
+      "game_note": "Fire delivered from the air. Rotary today; a fixed-wing airframe would be the same job, so the role names the effect and not the airframe.",
       "icon": {
         "d1": "M12 3 14 12l7 3-7 1-2 5-2-5-7-1 7-3z",
         "d2": ""
       }
     },
     {
-      "id": "stingray",
-      "display": "Stingray",
-      "ticket_prefix": "STG",
+      "id": "anti_air",
+      "display": "Anti-Air",
+      "ticket_prefix": "AAA",
       "color_group": "fire",
-      "game_note": "The Stingray weapon system, built at a FOB and crewed.",
       "icon": {
         "d1": "M9 3v9M15 3v9",
         "d2": "M5 20h14l-3-8H8z"
-      }
+      },
+      "game_note": "Can engage aircraft. A Stingray crew, an infantryman with an AA launcher, anyone who can reach air. Never a piece of equipment."
+    },
+    {
+      "id": "anti_armor",
+      "display": "Anti-Armor",
+      "ticket_prefix": "AAR",
+      "color_group": "fire",
+      "icon": {
+        "d1": "M3 12h11l6-2.5v5L14 12",
+        "d2": "M5 9.5v5M8 10.5v3"
+      },
+      "game_note": "Can kill armour. Infantry launchers, a tank crew, a crewed emplacement. Held alongside another role, not instead of one."
     },
     {
       "id": "infantry",
@@ -114,11 +125,22 @@
       }
     },
     {
+      "id": "engineer",
+      "display": "Engineer",
+      "ticket_prefix": "ENG",
+      "color_group": "build",
+      "icon": {
+        "d1": "M14.5 3.5a5 5 0 0 0-3.8 8.2L4 18.4a2 2 0 1 0 2.8 2.8l6.7-6.7a5 5 0 0 0 5.5-7.6l-3 3-2.6-2.6z",
+        "d2": ""
+      },
+      "game_note": "Keeps vehicles running: repair, refuel, rearm. Split back out of builder, which had absorbed it in the v3 rebuild and made every vehicle job fan out to all six crewed roles."
+    },
+    {
       "id": "builder",
       "display": "Builder",
       "ticket_prefix": "BLD",
       "color_group": "build",
-      "game_note": "FOBs, defenses, emplacements and drills. Was engineer.",
+      "game_note": "FOBs, defenses, emplacements and drills. Structures only: keeping a VEHICLE running is engineer.",
       "icon": {
         "d1": "M12 3 20 7.5v9L12 21 4 16.5v-9z",
         "d2": "M12 9.5 15.5 11.5v3L12 16.5 8.5 14.5v-3z"
@@ -142,12 +164,14 @@
     "artillery",
     "armor",
     "air_support",
-    "stingray",
+    "anti_air",
+    "anti_armor",
     "infantry",
     "sniper",
     "medic",
     "ground_transport",
     "air_transport",
+    "engineer",
     "builder"
   ],
   "default_enabled_roles_note": "Roles a group has on by default. The join default is every ENABLED role EXCEPT those marked grant_only, so a member who joins with no role_ids never lands on the command board. command is deliberately absent from this list as well as grant-gated: a role that is enabled but grant_only is still a role an admin can hand out without a group setting change.",
@@ -1488,11 +1512,11 @@
       ]
     },
     {
-      "id": "stingray_fire",
-      "display": "Stingray",
-      "overlay_label": "STINGRAY",
+      "id": "anti_armor_fire",
+      "display": "Anti-Armor",
+      "overlay_label": "ANTI-ARMOR",
       "target_roles": [
-        "stingray"
+        "anti_armor"
       ],
       "arity": 1,
       "point_labels": [
@@ -1500,16 +1524,43 @@
       ],
       "ttl_s": 180,
       "spoken_aliases": [
-        "stingray"
+        "anti armor",
+        "anti tank"
       ],
       "modifiers": [
         "urgent",
         "danger_close"
       ],
-      "default_priority": "normal",
+      "default_priority": "urgent",
       "menu_paths": [
         "fire.4"
-      ]
+      ],
+      "game_note": "Armour seen here. Whoever holds anti_armor answers: a launcher, a tank, a crewed emplacement."
+    },
+    {
+      "id": "anti_air_fire",
+      "display": "Anti-Air",
+      "overlay_label": "ANTI-AIR",
+      "target_roles": [
+        "anti_air"
+      ],
+      "arity": 1,
+      "point_labels": [
+        "target"
+      ],
+      "ttl_s": 180,
+      "spoken_aliases": [
+        "anti air"
+      ],
+      "modifiers": [
+        "urgent",
+        "danger_close"
+      ],
+      "default_priority": "urgent",
+      "menu_paths": [
+        "fire.5"
+      ],
+      "game_note": "Aircraft seen here. Whoever holds anti_air answers, from a FOB launcher or on foot."
     },
     {
       "id": "air_move",
@@ -1728,11 +1779,8 @@
       "overlay_label": "ESCORT",
       "target_roles": [
         "armor",
-        "stingray",
-        "artillery",
         "air_support",
-        "ground_transport",
-        "air_transport"
+        "infantry"
       ],
       "arity": 1,
       "point_labels": [
@@ -1759,12 +1807,7 @@
       "display": "Refuel",
       "overlay_label": "REFUEL",
       "target_roles": [
-        "armor",
-        "stingray",
-        "artillery",
-        "air_support",
-        "ground_transport",
-        "air_transport"
+        "engineer"
       ],
       "arity": 1,
       "point_labels": [
@@ -1788,13 +1831,7 @@
       "display": "Repair",
       "overlay_label": "REPAIR",
       "target_roles": [
-        "armor",
-        "stingray",
-        "artillery",
-        "air_support",
-        "ground_transport",
-        "air_transport",
-        "builder"
+        "engineer"
       ],
       "arity": 1,
       "point_labels": [
@@ -2346,7 +2383,7 @@
     "low_priority_slot_residency_s": 60,
     "coalesce_radius_units": 0.5,
     "coalesce_window_s": 60,
-    "claim_group_radius_units": 2.0,
+    "claim_group_radius_units": 2,
     "claim_group_max_extra": 5
   },
   "grammar_rules_note": "slot_quarantine_s was DELETED, not retuned. Nine slots with a 20 s quarantine admitted at most nine rows per 20 s no matter how fast providers cleared them, capping the board at 0.45 rows per second while overflow grew. Allocation is now least-recently-released: a digit is never reissued until all eight others have been, which is strictly better collision protection than a 20 s hold at zero dead time. ttl_s is a flat 120 s on every type: it is how long a request waits for a taker, not how long the job stays useful, and an unclaimed row that nobody wanted in two minutes is re-requested rather than left to rot. A claimed row does not expire at all. low_priority_slot_residency_s demotes a low-priority row to overflow after 60 s while leaving it OPEN, so it yields its digit at the halfway mark rather than holding one for its whole life; it must stay strictly below ttl_s or demotion never fires. coalesce_radius_units and coalesce_window_s are the submit-time dedup window: same type, same deployment, a point inside 0.50 units, created inside 60 s, attaches the new participant as a co-requester and returns the existing request. The quantity qualifier renders it as MORTAR x5. Same participant supersedes instead of coalescing.",

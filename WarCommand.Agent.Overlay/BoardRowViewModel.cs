@@ -98,7 +98,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     /// <summary>Resource key of the role's brush. Same hue the web paints the same role.</summary>
     public string RoleBrushKey { get; set; } = "RoleCommand";
 
-    /// <summary>Type plus its one qualifier word, uppercase. 'MORTAR SMOKE'.</summary>
+    /// <summary>The type, uppercase. 'MORTAR', 'RIFLE'. Never the tags: those are their own line.</summary>
     public required string TypeAndQualifier
     {
         get => _typeAndQualifier;
@@ -106,6 +106,54 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     }
 
     private string _typeAndQualifier = string.Empty;
+
+    /// <summary>
+    /// Every tag on the row and the quantity, uppercase. 'MAGS SCOPE SUPPRESS x2'. Empty on a
+    /// row that carries none, which collapses the line.
+    /// </summary>
+    /// <remarks>
+    /// Its own line because it does not fit beside the type. The label column is 150 units wide
+    /// and a role glyph takes 25 of them, so a rifle delivery carrying four tags rendered as
+    /// 'RIFLE MA...': the row said a rifle was wanted and dropped every fact about which one.
+    /// A tag line wraps instead, and costs height only on the rows that have tags.
+    /// </remarks>
+    public string TagsDisplay
+    {
+        get => _tagsDisplay;
+        set => Set(ref _tagsDisplay, value);
+    }
+
+    private string _tagsDisplay = string.Empty;
+
+    /// <summary>
+    /// The same tags, one entry each, so the row can draw them as tags rather than as a sentence.
+    /// </summary>
+    /// <remarks>
+    /// A tag has to LOOK like a tag on both surfaces. The web draws a bordered chip per tag and the
+    /// overlay drew one dim run-on line, so the same request read as two different things and the
+    /// tags were indistinguishable from the meta text beside them.
+    /// <para>
+    /// Compared by sequence, not by reference: the board reconciles in place and a fresh list every
+    /// poll would raise a change on every row and rebuild every chip.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<string> Tags
+    {
+        get => _tags;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (_tags.SequenceEqual(value, StringComparer.Ordinal))
+            {
+                return;
+            }
+
+            _tags = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Tags)));
+        }
+    }
+
+    private IReadOnlyList<string> _tags = [];
 
     public required string CoordinatesDisplay
     {
@@ -274,6 +322,8 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         RoleGlyphSecond = other.RoleGlyphSecond;
         RoleBrushKey = other.RoleBrushKey;
         TypeAndQualifier = other.TypeAndQualifier;
+        TagsDisplay = other.TagsDisplay;
+        Tags = other.Tags;
         SolutionDisplay = other.SolutionDisplay;
         CoordinatesDisplay = other.CoordinatesDisplay;
         SecondPointDisplay = other.SecondPointDisplay;
@@ -594,8 +644,10 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     {
         ArgumentNullException.ThrowIfNull(row);
 
-        var qualifier = Qualifier(row, catalog);
-        var typeAndQualifier = qualifier.Length == 0 ? row.OverlayLabel : $"{row.OverlayLabel} {qualifier}";
+        // The tags are their OWN line, never appended to the type. Joined on, a rifle carrying
+        // MAGS SCOPE SUPPRESS x2 overflowed the 150-unit label column and trimmed to 'RIFLE MA...'.
+        var tags = Qualifier(row, catalog);
+        var tagList = ModifierLabels.Words(row.Modifiers, row.QuantityRequested, catalog);
         var primary = row.Points.Count > 0 ? FormatCoordinate(row.Points[0].Point) : string.Empty;
         var second = row.Points.Count > 1 ? FormatCoordinate(row.Points[1].Point) : null;
         var mine = row.IsClaimedBy(viewerParticipantId);
@@ -620,7 +672,9 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
             // somebody reads off the board and says out loud is the position on it.
             SlotDisplay = Number(line, row),
             RoleId = row.TargetRoleIds.Count > 0 ? row.TargetRoleIds[0] : string.Empty,
-            TypeAndQualifier = typeAndQualifier.ToUpperInvariant(),
+            TypeAndQualifier = row.OverlayLabel.ToUpperInvariant(),
+            TagsDisplay = tags.ToUpperInvariant(),
+            Tags = tagList,
             CoordinatesDisplay = primary,
             FirstPointLabel = PointLabel(row, 0),
             SecondPointDisplay = second,

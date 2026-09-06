@@ -125,6 +125,18 @@ public sealed class TrayIconController : ISuspendable, IDisposable
     }
 
     /// <summary>
+    /// The balloon an agent holding no account shows. Names the site, because no other unpaired
+    /// surface does.
+    /// </summary>
+    public void ShowNotSetUpHint()
+    {
+        _notifyIcon.BalloonTipTitle = "Not set up";
+        _notifyIcon.BalloonTipText = "warcommand.app, signed in. Then it finds itself.";
+        _notifyIcon.BalloonTipIcon = ToolTipIcon.Warning;
+        _notifyIcon.ShowBalloonTip(10_000);
+    }
+
+    /// <summary>
     /// A balloon the agent raises for itself: the borderless-windowed prompt, and anything else
     /// the user has to act on while looking at the game rather than at us.
     /// </summary>

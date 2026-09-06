@@ -50,6 +50,19 @@ public static class ModifierLabels
     public static string Line(
         IReadOnlyList<string> modifierIds,
         int? quantity,
+        Contracts.Catalog? catalog) =>
+        string.Join(' ', Words(modifierIds, quantity, catalog));
+
+    /// <summary>
+    /// The same tags, one entry each, for a surface that draws a tag per tag rather than a line.
+    /// </summary>
+    /// <remarks>
+    /// <c>Line</c> is this joined by a space. Kept as the one derivation so an overlay chip
+    /// and an overlay line can never disagree about what the row carries.
+    /// </remarks>
+    public static IReadOnlyList<string> Words(
+        IReadOnlyList<string> modifierIds,
+        int? quantity,
         Contracts.Catalog? catalog)
     {
         ArgumentNullException.ThrowIfNull(modifierIds);
@@ -68,6 +81,6 @@ public static class ModifierLabels
             parts.Add($"x{count.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        return string.Join(' ', parts);
+        return parts;
     }
 }
