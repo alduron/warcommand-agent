@@ -13,11 +13,14 @@ namespace WarCommand.Agent.Tests.Overlay;
 /// </summary>
 public class RowHeightBudgetTests
 {
-    /// <summary>The tallest a row may draw, tags and a second point included.</summary>
-    private const double MaxRowHeight = 64;
+    /// <summary>A row with no tags is one line. This is the common case and it sets the density.</summary>
+    private const double MaxBareRowHeight = 40;
 
-    /// <summary>A bare row and a fully loaded one may not differ by more than one extra line.</summary>
-    private const double MaxTagCost = 20;
+    /// <summary>The worst case: fifteen tags, all drawn. Three lines, never a hidden count.</summary>
+    private const double MaxLoadedRowHeight = 96;
+
+    /// <summary>A second point may cost one line and no more.</summary>
+    private const double MaxOneExtraLine = 20;
 
     private static readonly RoleGlyphSource Glyphs = new(BundledContracts.Catalog().Current.Role);
 
@@ -60,50 +63,54 @@ public class RowHeightBudgetTests
     }
 
     [Fact]
-    public void A_row_carrying_fifteen_tags_stays_inside_the_budget()
+    public void A_row_with_no_tags_is_one_line()
     {
-        Sta.Run(() =>
-        {
-            var height = HeightOf(Row(ManyTags));
-            Assert.InRange(height, 1, MaxRowHeight);
-        });
+        Sta.Run(() => Assert.InRange(HeightOf(Row([])), 1, MaxBareRowHeight));
     }
 
     [Fact]
-    public void Tags_cost_at_most_one_line_of_height()
+    public void A_row_carrying_fifteen_tags_still_fits_the_worst_case_budget()
     {
-        Sta.Run(() =>
-        {
-            var bare = HeightOf(Row([]));
-            var loaded = HeightOf(Row(ManyTags));
-            Assert.InRange(loaded - bare, 0, MaxTagCost);
-        });
+        Sta.Run(() => Assert.InRange(HeightOf(Row(ManyTags)), 1, MaxLoadedRowHeight));
     }
 
     [Fact]
-    public void A_second_point_costs_no_extra_line()
+    public void A_second_point_costs_at_most_one_line()
     {
         Sta.Run(() =>
         {
             var onePoint = HeightOf(Row([]));
             var twoPoints = HeightOf(Row([], "x12.10 y44.02"));
-            Assert.Equal(onePoint, twoPoints, 1);
+            Assert.InRange(twoPoints - onePoint, 0, MaxOneExtraLine);
         });
     }
 
     [Fact]
-    public void Only_the_first_three_tags_draw_and_the_rest_become_one_chip()
+    public void Every_tag_draws_a_chip_of_its_own()
     {
-        var row = Row(ManyTags);
-        Assert.Equal(BoardRowViewModel.MaxVisibleTags + 1, row.VisibleTags.Count);
-        Assert.Equal("+12", row.VisibleTags[^1]);
-    }
+        Sta.Run(() =>
+        {
+            var view = new BoardView();
+            view.RenderBoard([Row(ManyTags)], [], 0, 0);
+            view.Measure(new Size(400, 2000));
+            view.Arrange(new Rect(0, 0, 400, 2000));
+            view.UpdateLayout();
 
-    [Fact]
-    public void A_row_inside_the_cap_draws_every_tag_and_no_counter()
-    {
-        var row = Row(["Mags", "Scope"]);
-        Assert.Equal(["Mags", "Scope"], row.VisibleTags);
+            var found = new List<FrameworkElement>();
+            Walk(view, found);
+            var tagLine = found.OfType<ItemsControl>().FirstOrDefault(e => e.Name == "TagLine");
+            Assert.NotNull(tagLine);
+
+            // The tags ARE the ask. A count standing in for them is the bug this holds shut.
+            var chips = new List<FrameworkElement>();
+            Walk(tagLine!, chips);
+            var words = chips.OfType<TextBlock>().Select(t => t.Text).ToList();
+            Assert.Equal(ManyTags.Length, words.Count);
+            foreach (var tag in ManyTags)
+            {
+                Assert.Contains(tag, words);
+            }
+        });
     }
 
     private static void Walk(DependencyObject node, List<FrameworkElement> found)

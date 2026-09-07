@@ -150,35 +150,10 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
             _tags = value;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Tags)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(VisibleTags)));
         }
     }
 
     private IReadOnlyList<string> _tags = [];
-
-    /// <summary>How many tag chips a row draws before the rest become one +N chip.</summary>
-    public const int MaxVisibleTags = 3;
-
-    /// <summary>
-    /// The chips a row actually draws: the first <see cref="MaxVisibleTags"/>, then +N for the
-    /// rest. Bounded so the tag strip stays on the row's one line.
-    /// </summary>
-    public IReadOnlyList<string> VisibleTags
-    {
-        get
-        {
-            if (_tags.Count <= MaxVisibleTags)
-            {
-                return _tags;
-            }
-
-            return
-            [
-                .. _tags.Take(MaxVisibleTags),
-                string.Create(CultureInfo.InvariantCulture, $"+{_tags.Count - MaxVisibleTags}"),
-            ];
-        }
-    }
 
     public required string CoordinatesDisplay
     {

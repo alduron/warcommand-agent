@@ -73,36 +73,23 @@
                                    Text="{Binding SlotDisplay}" FontFamily="{StaticResource CondensedFont}"
                                    FontWeight="Bold" FontSize="{StaticResource SlotSize}"
                                    Foreground="{StaticResource Ink}" Margin="0,0,8,0" />
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="150" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <!-- Every cell on this line is centred. A child with no
-                                     VerticalAlignment stretches and draws its text at the top of
-                                     the box, which is what put the glyph visibly below its label. -->
-                                <StackPanel Grid.Column="0" Orientation="Horizontal"
-                                            VerticalAlignment="Center">
-                                    <!-- 24x24, the glyph's own box: an 18x18 canvas reserved less
-                                         than the 24-unit paths actually ink, so the icon drew low
-                                         against the type beside it. -->
-                                    <Canvas Width="24" Height="24" Margin="0,0,7,0" VerticalAlignment="Center"
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- One wrap for everything the row says. A fixed 150-unit type column
+                                 left the tags 49 of the panel 380 on a row whose type is one short
+                                 word, which is what forced them into a count. -->
+                            <WrapPanel Grid.Column="0" Orientation="Horizontal">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                            Margin="0,0,8,0">
+                                    <Canvas Width="24" Height="24" Margin="0,0,6,0" VerticalAlignment="Center"
                                             SnapsToDevicePixels="True">
                                         <Canvas.LayoutTransform>
                                             <ScaleTransform ScaleX="0.75" ScaleY="0.75" />
                                         </Canvas.LayoutTransform>
-                                        <!--
-                                            The row label is ALL CAPS, so its ink fills only the cap
-                                            band and sits high in its line box. Centring the two
-                                            boxes therefore leaves the glyph low by half the unused
-                                            descent, measured at 1.5px for LabelSize 14 in
-                                            Bahnschrift Condensed (caps height 0.71 em). The header
-                                            needs no nudge: its label is mixed case, and it measures
-                                            dead level already.
-                                        -->
                                         <Canvas.RenderTransform>
                                             <TranslateTransform Y="{StaticResource GlyphCapNudge}" />
                                         </Canvas.RenderTransform>
@@ -118,11 +105,11 @@
                                     <TextBlock Style="{StaticResource Up}"
                                                FontSize="{StaticResource LabelSize}"
                                                VerticalAlignment="Center"
-                                               Text="{Binding TypeAndQualifier}"
-                                               TextTrimming="CharacterEllipsis" />
+                                               Text="{Binding TypeAndQualifier}" />
                                 </StackPanel>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal"
-                                            VerticalAlignment="Center">
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                            Margin="0,0,8,0">
                                     <TextBlock Style="{StaticResource PointLabel}"
                                                VerticalAlignment="Center"
                                                Text="{Binding FirstPointLabel}" />
@@ -130,28 +117,31 @@
                                                VerticalAlignment="Center"
                                                Text="{Binding CoordinatesDisplay}" />
                                 </StackPanel>
-                                <ItemsControl x:Name="TagLine" Grid.Column="2" Margin="10,0,0,0"
-                                              VerticalAlignment="Center"
-                                              ItemsSource="{Binding VisibleTags}">
-                                    <ItemsControl.Style>
-                                        <Style TargetType="ItemsControl">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding TagsDisplay}" Value="">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </ItemsControl.Style>
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                            Margin="0,0,8,0"
+                                            Visibility="{Binding SecondPointDisplay, Converter={StaticResource NullToVisibility}}">
+                                    <TextBlock Style="{StaticResource PointLabel}"
+                                               VerticalAlignment="Center"
+                                               Text="{Binding SecondPointLabel}" />
+                                    <TextBlock Style="{StaticResource DimMono}"
+                                               VerticalAlignment="Center"
+                                               Text="{Binding SecondPointDisplay}" />
+                                </StackPanel>
+
+                                <!-- EVERY tag, one bordered chip each. The tags ARE the ask: which
+                                     rifle, which round, which size. A count never stands in. -->
+                                <ItemsControl x:Name="TagLine" VerticalAlignment="Center"
+                                              ItemsSource="{Binding Tags}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
-                                            <StackPanel Orientation="Horizontal" />
+                                            <WrapPanel Orientation="Horizontal" />
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Border BorderBrush="{StaticResource Edge}" BorderThickness="1"
-                                                    Margin="0,0,4,0" Padding="4,0,4,0"
+                                                    Margin="0,0,3,1" Padding="3,0,3,0"
                                                     VerticalAlignment="Center"
                                                     Background="{StaticResource Transparent}">
                                                 <TextBlock Style="{StaticResource Up}"
@@ -162,67 +152,39 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock x:Name="StateWord" Grid.Column="3" Style="{StaticResource Up}"
-                                           HorizontalAlignment="Right" VerticalAlignment="Center"
-                                           Text="{Binding StateWord}"
-                                           Foreground="{StaticResource Ink}" Margin="8,0,0,0" />
-                            </Grid>
 
-                            <!-- One dim line for everything that is not the ask itself. The
-                                 second point rides it rather than costing a line of its own. -->
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="80" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0"
-                                            Visibility="{Binding SecondPointDisplay, Converter={StaticResource NullToVisibility}}">
-                                    <TextBlock Style="{StaticResource PointLabel}"
-                                               Text="{Binding SecondPointLabel}" />
-                                    <TextBlock Style="{StaticResource DimMono}"
-                                               Text="{Binding SecondPointDisplay}" />
-                                </StackPanel>
-                                <!--
-                                    No age number. The overlay carries only what changes a decision
-                                    inside the glance, and how old a row is does not: the countdown
-                                    bar already says how long it has left. Age still reaches the
-                                    completion event, the after-action report and the web board,
-                                    which have room for it.
-                                -->
-                                <TextBlock Grid.Column="0" Style="{StaticResource DimMono}"
-                                           Text="{Binding Requester}" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Grid.Column="2" Style="{StaticResource Up}"
-                                           Foreground="{StaticResource Dim}" Margin="16,0,0,0"
+                                <TextBlock Style="{StaticResource DimMono}" VerticalAlignment="Center"
+                                           Margin="0,0,8,0" Text="{Binding Requester}" />
+                                <TextBlock Style="{StaticResource Up}" VerticalAlignment="Center"
+                                           Foreground="{StaticResource Dim}" Margin="0,0,8,0"
                                            Text="{Binding MetaExtra}" />
-                                <TextBlock Grid.Column="3" Style="{StaticResource DimMono}" Margin="16,0,0,0"
-                                           Text="{Binding LegDisplay}" />
-                                <TextBlock Grid.Column="4" Style="{StaticResource DimMono}"
-                                           HorizontalAlignment="Right" Text="{Binding TicketCode}" />
-                            </Grid>
+                                <TextBlock Style="{StaticResource DimMono}" VerticalAlignment="Center"
+                                           Margin="0,0,8,0" Text="{Binding LegDisplay}" />
+                                <TextBlock Style="{StaticResource DimMono}" VerticalAlignment="Center"
+                                           Margin="0,0,8,0" Text="{Binding TicketCode}" />
 
-                            <!-- The opening bracket, on a gunner's own rows only. Its own line
-                                 because it is the longest thing a row can say and it must not push
-                                 the grid off the edge. Empty for everybody not on a gun. -->
-                            <TextBlock x:Name="SolutionLine"
-                                       Foreground="{StaticResource Squad}"
-                                       Text="{Binding SolutionDisplay}"
-                                       TextTrimming="CharacterEllipsis">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DimMono}">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding SolutionDisplay}" Value="">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
+                                <!-- The opening bracket, gunners only. Empty for everybody else. -->
+                                <TextBlock x:Name="SolutionLine" VerticalAlignment="Center"
+                                           Foreground="{StaticResource Squad}"
+                                           Text="{Binding SolutionDisplay}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource DimMono}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SolutionDisplay}" Value="">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </WrapPanel>
 
-                        </StackPanel>
+                            <TextBlock x:Name="StateWord" Grid.Column="1" Style="{StaticResource Up}"
+                                       HorizontalAlignment="Right" VerticalAlignment="Top"
+                                       Text="{Binding StateWord}"
+                                       Foreground="{StaticResource Ink}" Margin="8,0,0,0" />
+                        </Grid>
                     </DockPanel>
                   </Grid>
                 </Border>

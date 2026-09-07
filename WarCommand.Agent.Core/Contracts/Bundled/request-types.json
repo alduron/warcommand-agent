@@ -277,7 +277,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "resupply",
         "supplies",
@@ -304,7 +304,8 @@
       "kind_note": "A delivery MUST name what to bring, or the provider who accepts it cannot act on it. The default is building supplies, the commonest crate, so an unqualified \"resupply\" is a useful guess rather than an expensive one.",
       "group_key": "delivery",
       "multi_taker": null,
-      "multi_taker_note": "null: resolved from the chosen supply kind at submit."
+      "multi_taker_note": "null: resolved from the chosen supply kind at submit.",
+      "ttl_note": "120 while it waits for a driver. A crate the kind marks multi_taker still waits 120: the kind decides who may take it, not how long it sits."
     },
     {
       "id": "weapon_rifle",
@@ -318,7 +319,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "rifle",
         "rifles"
@@ -361,7 +362,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "sub gun",
         "submachine gun"
@@ -402,7 +403,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "shotgun"
       ],
@@ -440,7 +441,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "machine gun",
         "light machine gun"
@@ -479,7 +480,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "marksman"
       ],
@@ -518,7 +519,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "sniper rifle"
       ],
@@ -559,7 +560,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "bow"
       ],
@@ -596,7 +597,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "sidearm",
         "pistol"
@@ -638,7 +639,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "launcher"
       ],
@@ -678,7 +679,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "nine mil"
       ],
@@ -711,7 +712,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "forty five"
       ],
@@ -744,7 +745,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [],
       "modifiers": [
         "urgent",
@@ -775,7 +776,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "colt"
       ],
@@ -808,7 +809,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "five five six"
       ],
@@ -841,7 +842,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "five four five"
       ],
@@ -874,7 +875,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [],
       "modifiers": [
         "urgent",
@@ -905,7 +906,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [],
       "modifiers": [
         "urgent",
@@ -936,7 +937,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "three oh eight"
       ],
@@ -969,7 +970,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "fifty cal"
       ],
@@ -1002,7 +1003,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "buckshot"
       ],
@@ -1029,7 +1030,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "slugs"
       ],
@@ -1056,7 +1057,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "forty mike mike"
       ],
@@ -1083,7 +1084,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [],
       "modifiers": [
         "urgent",
@@ -1108,7 +1109,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [],
       "modifiers": [
         "urgent",
@@ -1133,7 +1134,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [],
       "modifiers": [
         "urgent",
@@ -1158,7 +1159,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [],
       "modifiers": [
         "urgent",
@@ -1183,7 +1184,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [],
       "modifiers": [
         "urgent",
@@ -1208,7 +1209,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "arrows"
       ],
@@ -1235,7 +1236,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "battery"
       ],
@@ -1262,7 +1263,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "body armor",
         "plate carrier"
@@ -1293,7 +1294,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "helmet"
       ],
@@ -1323,7 +1324,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "camo",
         "ghillie"
@@ -1355,7 +1356,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "med kit",
         "medical kit"
@@ -1387,7 +1388,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "tactical",
         "grenades",
@@ -1423,7 +1424,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "optics",
         "binoculars"
@@ -1455,7 +1456,7 @@
       "point_labels": [
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "vehicle kit",
         "repair kit"
@@ -1685,7 +1686,7 @@
         "pickup",
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "lift",
         "airlift",
@@ -1719,7 +1720,7 @@
         "pickup",
         "dropoff"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "air drop"
       ],
@@ -1746,7 +1747,7 @@
       "point_labels": [
         "pickup"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "extract",
         "exfil"
@@ -1774,7 +1775,7 @@
       "point_labels": [
         "casualty"
       ],
-      "ttl_s": 180,
+      "ttl_s": 120,
       "spoken_aliases": [
         "medic",
         "corpsman"
@@ -1800,7 +1801,7 @@
       "point_labels": [
         "vehicle"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "refuel"
       ],
@@ -1825,7 +1826,7 @@
       "point_labels": [
         "vehicle"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "repair"
       ],
@@ -1850,7 +1851,7 @@
       "point_labels": [
         "site"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "fob"
       ],
@@ -1875,7 +1876,7 @@
       "point_labels": [
         "site"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "apc spawn"
       ],
@@ -1900,7 +1901,7 @@
       "point_labels": [
         "site"
       ],
-      "ttl_s": 300,
+      "ttl_s": 600,
       "spoken_aliases": [
         "defenses",
         "fortify"
@@ -1928,7 +1929,7 @@
       "point_labels": [
         "site"
       ],
-      "ttl_s": 300,
+      "ttl_s": 600,
       "spoken_aliases": [
         "emplacement"
       ],
@@ -1956,7 +1957,7 @@
       "point_labels": [
         "site"
       ],
-      "ttl_s": 300,
+      "ttl_s": 600,
       "spoken_aliases": [
         "base repairs",
         "fix the base"
@@ -1982,7 +1983,7 @@
       "point_labels": [
         "site"
       ],
-      "ttl_s": 300,
+      "ttl_s": 600,
       "spoken_aliases": [
         "builders"
       ],
@@ -2008,7 +2009,7 @@
       "point_labels": [
         "site"
       ],
-      "ttl_s": 300,
+      "ttl_s": 600,
       "spoken_aliases": [
         "planners"
       ],
@@ -2033,7 +2034,7 @@
       "point_labels": [
         "site"
       ],
-      "ttl_s": 300,
+      "ttl_s": 120,
       "spoken_aliases": [
         "drill"
       ],
@@ -2507,5 +2508,6 @@
   "claim_grouping_note": "Types sharing a group_key are ONE errand when they are at the same grid. Accepting one takes the others too, up to claim_group_max_extra, inside claim_group_radius_units. A squad needing a rifle, ammunition and a medkit at the same building files three requests because they are three different things, and the driver who takes one is driving to all three: without this the other two sit open behind somebody already standing there. The radius is wider than the coalesce radius on purpose. Coalescing merges the SAME ask from two people; this gathers DIFFERENT asks at one place, and a building is bigger than a grid rounding error.",
   "supply_kinds_note": "multi_taker and modifiers are per KIND, not per type. resupply is one request type spanning six crates: hammers come in three sizes and a FOB kit comes in one, and four of the six are jobs several drivers can run at once. The row stores the resolved value at submit.",
   "multi_taker_note": "multi_taker true means MANY people may accept the row: it stays on every board collecting takers instead of leaving on the first claim. False is the single-claimant path. Null on resupply only, where the chosen supply kind decides.",
-  "catalog_v5_note": "v5. Outcome-first: a request names the effect wanted at a point, not the role that fills it. Retired: air_extract, air_move, anti_air_fire, anti_armor_fire, armor_support, close_air, fire_team, ground_extract, ground_move, overwatch, shell_mission, smoke_screen. Renamed: utility_medical->medical, utility_tactical->tactical, utility_recon->recon, utility_vehicle->vehicle. Every one needs a migration; stored type ids are never validated on read."
+  "catalog_v5_note": "v5. Outcome-first: a request names the effect wanted at a point, not the role that fills it. Retired: air_extract, air_move, anti_air_fire, anti_armor_fire, armor_support, close_air, fire_team, ground_extract, ground_move, overwatch, shell_mission, smoke_screen. Renamed: utility_medical->medical, utility_tactical->tactical, utility_recon->recon, utility_vehicle->vehicle. Every one needs a migration; stored type ids are never validated on read.",
+  "ttl_note": "ttl_s is the wait for a TAKER and nothing else. A single-taker row stops ageing the moment somebody accepts it, because there is no time limit on doing the job. A multi_taker row keeps ageing while it collects people, or it would never clean itself up."
 }
