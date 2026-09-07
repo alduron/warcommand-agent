@@ -27,6 +27,7 @@ using WarCommand.Agent.Dev;
 using WarCommand.Agent.Game;
 using WarCommand.Agent.Input;
 using WarCommand.Agent.Input.Bindings;
+using WarCommand.Agent.Input.Devices;
 using WarCommand.Agent.Speech;
 using WarCommand.Agent.Speech.Capture;
 using WarCommand.Agent.Realtime;
@@ -166,6 +167,10 @@ public partial class App : Application, IDisposable
 
     /// <summary>The session log. Set once in OnStartup, unlike _updateLog which installed builds own.</summary>
     private RollingFileLog? _log;
+
+    /// <summary>What this session did, tallied for the export. Never a coordinate, never a word said.</summary>
+    private readonly SupportCounters _counters = new();
+
     private WasapiAudioCapture? _audioDevices;
     private DispatcherTimer? _configTimer;
 
@@ -393,10 +398,21 @@ public partial class App : Application, IDisposable
             // fullscreen, so the balloon rides along with it.
             notify: (title, body) => Notify("OVERLAY NEEDS BORDERLESS WINDOWED", (title, body)));
 
-        controller.StateChanged += (_, _) => _menuState = _menuState with
+        controller.StateChanged += (_, _) =>
         {
-            OverlayMode = controller.Mode.ToString(),
-            OverlayHint = controller.Hint,
+            _menuState = _menuState with
+            {
+                OverlayMode = controller.Mode.ToString(),
+                OverlayHint = controller.Hint,
+            };
+
+            // The overlay going away ends the session the menu's remembered rows belonged to.
+            // Held-key to held-key they survive, so BACK and the next open both land where the
+            // user left off; across a panic, a mode change or a closed game they do not.
+            if (!controller.IsDrawing)
+            {
+                _menu?.Menu.ForgetPositions();
+            }
         };
         _overlay = controller;
 
@@ -412,7 +428,11 @@ public partial class App : Application, IDisposable
         var watcher = new GameWindowWatcher(
             BundledContracts.GameProfile().Current,
             controller,
-            OverlayFocusBehavior.Hide);
+            OverlayFocusBehavior.Hide,
+            // Whether the game was ever seen is the first fact a screen-read report needs, and it
+            // went to a null sink: NO GAME WINDOW in an export said nothing about whether the
+            // window had been found once and lost, or never found at all.
+            new Diagnostics.InputLogBridge(log));
         watcher.Start();
         _gameWatcher = watcher;
 
@@ -481,15 +501,17 @@ public partial class App : Application, IDisposable
         // The roles THIS player enabled, not the catalog's defaults. Pruning the vocabulary against
         // the defaults dropped the request types of every role the player had turned on.
         _voice = new Composition.VoiceDriver(
-            EnsureAudioDevices() ?? (IAudioCapture)new WasapiAudioCapture(),
+            EnsureAudioDevices() ?? (IAudioCapture)new WasapiAudioCapture(SpeechEvents()),
             () => BundledContracts.Catalog().Current,
             () => _observer?.Board,
             () => _enabledRoleIds,
             // Streaming recognition raises this from the decode task, mid-hold. Everything it
             // reaches is a WPF object, so it hops the dispatcher before it touches anything.
             parsed => Dispatcher.BeginInvoke(() => OnParsedSpeech(parsed, log)),
-            new SilentHoldMonitor(BundledContracts.GameProfile().Current.Speech),
-            log);
+            new SilentHoldMonitor(BundledContracts.GameProfile().Current.Speech, SpeechEvents()),
+            log,
+            SpeechEvents(),
+            _counters);
 
         _input = Composition.InputComposition.Start(
             _bindings,
@@ -503,6 +525,13 @@ public partial class App : Application, IDisposable
             // assembly must not take a dependency on the input layer.
             screenCapture: new Suspendable(readout.Suspend, readout.Resume),
             audioCapture: _voice);
+
+        // The settings window captures HOTAS presses from the same reader the bridge dispatches
+        // from, so a button bound there is the button the hook resolves.
+        if (_window is { } settingsWindow)
+        {
+            settingsWindow.DeviceButtons = _input.Devices;
+        }
 
         StartBoardTick();
 
@@ -859,6 +888,7 @@ public partial class App : Application, IDisposable
             // and no probe, so this line is the whole diagnosis, and at INFO it would be dropped
             // from the default log and never reach the zip they export.
             log.Warn($"Screen read refused: {source.LastRefusal}. {source.LastDiagnostic}");
+            _counters.ScreenReadRefused(source.LastRefusal);
             RenderMenu(presenter);
             return;
         }
@@ -866,6 +896,7 @@ public partial class App : Application, IDisposable
         // The successful read carries the same shape at INFO, so a verbose session shows what a
         // good one looks like on that machine next to the bad ones.
         log.Info($"Coordinate read from the map. {source.LastDiagnostic}");
+        _counters.ScreenReadAccepted();
         _observer?.SetFault(null);
         OnMenuOutcome(menu.Menu.AcceptReadCoordinate(point, DateTimeOffset.UtcNow), presenter, log);
     }
@@ -963,6 +994,20 @@ public partial class App : Application, IDisposable
             case ParsedCommand { VerbId: "help" or "match" or "people" or "range" or "join" } panelCommand
                 when _menu is { } panelMenu:
                 panelMenu.OpenPanel(panelCommand.VerbId);
+                RenderMenuNow();
+                break;
+
+            // The three surfaces the overlay names at rest: "W REQUEST  S BOARD  E TOOLS". Two of
+            // those words had no spoken route at all, and "board" had one that cycles the overlay
+            // display rather than opening the surface. Routed through MenuDriver so a spoken
+            // surface is the same act as its key, not a second implementation beside it.
+            case ParsedCommand { VerbId: "surface_request" } when _menu is { } requestMenu:
+                requestMenu.Scroll(-1);
+                RenderMenuNow();
+                break;
+
+            case ParsedCommand { VerbId: "surface_tools" } when _menu is { } toolsMenu:
+                toolsMenu.Tools();
                 RenderMenuNow();
                 break;
 
@@ -1861,7 +1906,10 @@ public partial class App : Application, IDisposable
 
         try
         {
-            var capture = new WasapiAudioCapture();
+            // The device seam, connected. NoInputDevice, CaptureOpened, CaptureDeviceLost and the
+            // fall back to default were all recorded into a null sink, so an export from a machine
+            // with an unplugged headset looked exactly like one from a machine that works.
+            var capture = new WasapiAudioCapture(SpeechEvents());
             _audioDevices = capture;
             return capture;
         }
@@ -1893,6 +1941,7 @@ public partial class App : Application, IDisposable
         // the next launch: you bound a key, the overlay disagreed, and neither was wrong.
         var window = new AgentWindow(settings, EnsureAudioDevices(), _bindings);
         window.BindingsChanged += (_, _) => OnBindingsChanged();
+        window.DeviceButtons = _input?.Devices;
         window.Closing += OnWindowClosing;
         _window = window;
         MainWindow = window;
@@ -2255,6 +2304,18 @@ public partial class App : Application, IDisposable
 
         return new LogBundleSummary
         {
+            InputDevice = app?._audioDevices?.Device?.FriendlyName ?? "none",
+            SpeechModel = app?._voice switch
+            {
+                null => "not built",
+                { IsReady: true } => "loaded",
+                { Fault: { } fault } => fault,
+                _ => "not loaded yet",
+            },
+            SpeechWarning = app?._voice?.Warning,
+            ContractsInForce = string.Join(", ", InForce(app)),
+            ScreenReads = app?._counters.Reads(),
+            VoiceHolds = app?._counters.Holds(),
             AgentVersion = AgentVersion,
             WindowsVersion = Environment.OSVersion.VersionString,
             Backend = app?._menuState.Backend ?? "unknown",
@@ -2271,6 +2332,38 @@ public partial class App : Application, IDisposable
             ReadoutGeometry = app?._mapReadout?.LastDiagnostic,
         };
     }
+
+    /// <summary>
+    /// Whether each served contract is the one we shipped or one the API replaced it with.
+    /// </summary>
+    /// <remarks>
+    /// Binding rule 5: no fact about the game is a constant, so every threshold, glyph and pattern
+    /// the readout decodes with is whatever this machine last fetched. A machine still on the
+    /// bundle because its config fetch never succeeded reads the screen with different numbers than
+    /// one that adopted the served profile, and the two produce identical-looking logs unless this
+    /// is in the file.
+    /// </remarks>
+    private static IEnumerable<string> InForce(App? app)
+    {
+        yield return Named("game-profile", BundledContracts.GameProfile().ETag);
+        yield return Named("request-types", BundledContracts.Catalog().ETag);
+        yield return Named("ballistics", BundledContracts.Ballistics().ETag);
+
+        static string Named(string what, string? etag) =>
+            etag is { Length: > 0 } served
+                ? FormattableString.Invariant($"{what} served {served}")
+                : what + " bundled";
+    }
+
+    /// <summary>
+    /// The speech assembly's log seam, pointed at the session file.
+    /// </summary>
+    /// <remarks>
+    /// Concrete rather than <see cref="ISpeechLog"/> on purpose: CA1859 is an error in this repo
+    /// and fails the build on a private member returning an interface.
+    /// </remarks>
+    private Diagnostics.SpeechLogBridge SpeechEvents() =>
+        new(_log ?? (IClientLog)NullClientLog.Instance);
 
     private void InstallCrashHandlers(RollingFileLog log)
     {
@@ -2454,6 +2547,16 @@ public partial class App : Application, IDisposable
 
             _ = _bindings.Rebind(action, chord);
         }
+
+        // The second row has no defaults and cannot collide with the first, so it adopts straight.
+        foreach (var (name, label) in settings.SecondaryBindings)
+        {
+            if (Enum.TryParse<BindingAction>(name, out var action)
+                && DeviceButton.TryParse(label, out var button))
+            {
+                _ = _bindings.RebindSecondary(action, button);
+            }
+        }
     }
 
     /// <summary>The chords, as settings stores them. Unbound actions are simply absent.</summary>
@@ -2462,6 +2565,16 @@ public partial class App : Application, IDisposable
         ArgumentNullException.ThrowIfNull(bindings);
 
         return bindings.All
+            .Where(pair => pair.Value.IsBound)
+            .ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.Label, StringComparer.Ordinal);
+    }
+
+    /// <summary>The HOTAS buttons, as settings stores them. An unbound action is simply absent.</summary>
+    internal static Dictionary<string, string> StoredSecondaryBindings(BindingSet bindings)
+    {
+        ArgumentNullException.ThrowIfNull(bindings);
+
+        return bindings.AllSecondary
             .Where(pair => pair.Value.IsBound)
             .ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.Label, StringComparer.Ordinal);
     }

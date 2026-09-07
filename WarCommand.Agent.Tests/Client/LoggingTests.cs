@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using WarCommand.Agent.Client.Diagnostics;
 using WarCommand.Agent.Client.Storage;
 using Xunit;
@@ -149,6 +149,9 @@ public class LogBundleTests : IDisposable
         GameRunning = true,
         Connection = "Online",
         Displays = ["1920x1080 primary", "2560x1440"],
+        InputDevice = "Headset Microphone",
+        SpeechModel = "loaded",
+        ContractsInForce = "game-profile served \"w/9f\", request-types bundled, ballistics bundled",
         LastReadRefusal = "AMBIGUOUS READ",
     };
 

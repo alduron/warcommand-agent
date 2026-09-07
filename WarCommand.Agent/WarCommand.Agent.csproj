@@ -19,6 +19,10 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
 
+    <!-- RawInputDeviceSource reads HID reports through hid.dll, whose usage list is a raw pointer
+         pair. Confined to that one file; nothing else here is unsafe. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
     <!--
       WFAC010 tells a WinForms app to set high DPI through ApplicationHighDpiMode instead of the
       manifest. This is a WPF app that references WinForms for the tray icon, and it never calls

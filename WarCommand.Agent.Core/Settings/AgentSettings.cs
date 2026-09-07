@@ -178,6 +178,14 @@ public sealed record AgentSettings
     public IReadOnlyDictionary<string, string> Bindings { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The chosen HOTAS button per binding action, keyed by the action's name and holding a device
+    /// button label. Separate from <see cref="Bindings"/> on purpose: a stick and a keyboard are two
+    /// rows, and a pilot who binds one is not giving up the other.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> SecondaryBindings { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
     /// <summary>The width the overlay actually renders at, clamped to what the mocks support.</summary>
     public int ClampedWidth => Math.Clamp(WidthPx, 300, 560);
 }

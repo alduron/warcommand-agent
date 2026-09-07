@@ -1,7 +1,8 @@
-using WarCommand.Agent.Client.Diagnostics;
+﻿using WarCommand.Agent.Client.Diagnostics;
 using WarCommand.Agent.Game;
 using WarCommand.Agent.Input;
 using WarCommand.Agent.Input.Bindings;
+using WarCommand.Agent.Input.Devices;
 using WarCommand.Agent.Input.Hooks;
 using WarCommand.Agent.Tray;
 
@@ -25,10 +26,16 @@ public sealed class InputComposition : IDisposable
     private readonly IClientLog _log;
     private bool _disposed;
 
-    private InputComposition(InputBridge bridge, PanicSwitch panic, HookHost hooks, IClientLog log)
+    private InputComposition(
+        InputBridge bridge,
+        PanicSwitch panic,
+        HookHost hooks,
+        IDeviceButtonSource devices,
+        IClientLog log)
     {
         Bridge = bridge;
         Panic = panic;
+        Devices = devices;
         _hooks = hooks;
         _log = log;
     }
@@ -36,6 +43,13 @@ public sealed class InputComposition : IDisposable
     public InputBridge Bridge { get; }
 
     public PanicSwitch Panic { get; }
+
+    /// <summary>
+    /// The HOTAS buttons. It is NOT registered with Panic: the stick has to keep being read while
+    /// suspended or a panic pressed on the stick could never be released from it, and the bridge
+    /// already refuses everything but Panic while it is engaged.
+    /// </summary>
+    public IDeviceButtonSource Devices { get; }
 
     /// <summary>True once the low-level hook is actually installed.</summary>
     public bool IsRunning => _hooks.IsRunning;
@@ -60,6 +74,7 @@ public sealed class InputComposition : IDisposable
     /// </param>
     /// <param name="screenCapture">The frame grabber, so Panic stops it. Null on a surface with none.</param>
     /// <param name="audioCapture">The microphone path, so Panic closes it. Null on a surface with none.</param>
+    /// <param name="devices">HOTAS buttons. Null takes the Raw Input reader, which is what ships.</param>
     public static InputComposition Start(
         BindingSet bindings,
         IForegroundProbe foreground,
@@ -69,7 +84,8 @@ public sealed class InputComposition : IDisposable
         IClientLog log,
         MenuDriver? menu = null,
         ISuspendable? screenCapture = null,
-        ISuspendable? audioCapture = null)
+        ISuspendable? audioCapture = null,
+        IDeviceButtonSource? devices = null)
     {
         ArgumentNullException.ThrowIfNull(bindings);
         ArgumentNullException.ThrowIfNull(foreground);
@@ -77,9 +93,15 @@ public sealed class InputComposition : IDisposable
         ArgumentNullException.ThrowIfNull(onHold);
         ArgumentNullException.ThrowIfNull(log);
 
-        var panic = new PanicSwitch();
-        var bridge = new InputBridge(bindings, panic, foreground);
-        var hooks = new HookHost(bridge);
+        // The input layer's own seam, connected to the exported file. Every IInputLog parameter
+        // below is optional and none of them was ever passed one, so hooks installing, panic, the
+        // game window coming and going and the exclusive-fullscreen refusal all went to a null
+        // sink. A report of "no hotkeys" arrived with nothing about hotkeys in the log.
+        var events = new WarCommand.Agent.Diagnostics.InputLogBridge(log);
+
+        var panic = new PanicSwitch(events);
+        var bridge = new InputBridge(bindings, panic, foreground, events);
+        var hooks = new HookHost(bridge, events);
 
         var chords = new ChordRouter(overlay, panic, log);
 
@@ -108,12 +130,22 @@ public sealed class InputComposition : IDisposable
         panic.Register(PanicSubsystem.TrayIndicator, (ISuspendable?)tray ?? NotBuiltYet.Instance);
         panic.Arm();
 
+        // The second binding row. Edges go through the same dispatch the keyboard uses, so a HOTAS
+        // button is gated on the game, on Panic and on the hold exactly as its key twin is.
+        var buttons = devices ?? new RawInputDeviceSource();
+        buttons.ButtonChanged += (_, e) =>
+        {
+            var at = DateTimeOffset.UtcNow;
+            _ = e.Down ? bridge.HandleDevice(e.Button, at) : bridge.HandleDeviceUp(e.Button, at);
+        };
+        buttons.Start();
+
         hooks.Start();
         log.Info(hooks.IsRunning
             ? $"Input armed. Menu {Label(bindings, BindingAction.Menu)}, PTT {Label(bindings, BindingAction.Ptt)}, board {Label(bindings, BindingAction.Board)}, panic {Label(bindings, BindingAction.Panic)}."
             : "Input did NOT arm: the low-level hook is not installed.");
 
-        return new InputComposition(bridge, panic, hooks, log);
+        return new InputComposition(bridge, panic, hooks, buttons, log);
     }
 
     private static string Label(BindingSet bindings, BindingAction action) =>
@@ -128,6 +160,7 @@ public sealed class InputComposition : IDisposable
 
         _disposed = true;
         _hooks.Dispose();
+        Devices.Dispose();
         _log.Info("Input disarmed.");
     }
 

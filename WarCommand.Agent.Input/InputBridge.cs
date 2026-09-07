@@ -1,4 +1,5 @@
-using WarCommand.Agent.Input.Bindings;
+﻿using WarCommand.Agent.Input.Bindings;
+using WarCommand.Agent.Input.Devices;
 
 namespace WarCommand.Agent.Input;
 
@@ -223,15 +224,29 @@ public sealed class InputBridge
 
     /// <summary>A press.</summary>
     public InputDispatch Handle(Chord chord, DateTimeOffset at)
-    {
-        var action = _bindings.Resolve(chord);
+        => Dispatch(_bindings.Resolve(chord), chord, at, fromDevice: false);
 
+    /// <summary>A HOTAS button going down, timestamped by the caller.</summary>
+    /// <remarks>
+    /// Every gate the keyboard passes through applies here unchanged, Panic's exemption included.
+    /// Two things do not: a controller button is never a menu digit, because no stick has a number
+    /// row, and it is never swallowed, because a HID report reaches the game whatever we do with it.
+    /// </remarks>
+    public InputDispatch HandleDevice(DeviceButton button, DateTimeOffset at)
+        => Dispatch(_bindings.ResolveSecondary(button), Chord.Unbound, at, fromDevice: true);
+
+    /// <summary>A HOTAS button coming up. Only the two hold keys care.</summary>
+    public InputDispatch HandleDeviceUp(DeviceButton button, DateTimeOffset at)
+        => DispatchUp(_bindings.ResolveSecondary(button), Chord.Unbound, at, fromDevice: true);
+
+    private InputDispatch Dispatch(BindingAction action, Chord chord, DateTimeOffset at, bool fromDevice)
+    {
         // Panic first, and gated by nothing. A kill switch that only works while the thing you are
         // killing is on top is not a kill switch.
         if (action == BindingAction.Panic)
         {
             _panic.Toggle();
-            return InputDispatch.Sent(BindingAction.Panic, swallow: true);
+            return InputDispatch.Sent(BindingAction.Panic, swallow: !fromDevice);
         }
 
         if (_panic.IsSuspended)
@@ -286,7 +301,7 @@ public sealed class InputBridge
                     break;
             }
 
-            return InputDispatch.Sent(action, swallow: true);
+            return InputDispatch.Sent(action, swallow: !fromDevice);
         }
 
         // Two hold keys. Menu opens the overlay's keyboard surface; PTT is voice. Either one
@@ -315,10 +330,11 @@ public sealed class InputBridge
             // A toggle key is swallowed; every other hold key is not. Holding CapsLock must not
             // leave caps on, and it carries no character anybody could want typed. A letter or a
             // mouse button still passes through, because the key belongs to the user's machine too.
-            return InputDispatch.Sent(action, swallow: IsStatefulToggle(chord));
+            return InputDispatch.Sent(action, swallow: !fromDevice && IsStatefulToggle(chord));
         }
 
-        if (MenuIsOpen && TryMenuKey(chord, action))
+        // No stick has a number row, so a controller button is never a menu digit.
+        if (!fromDevice && MenuIsOpen && TryMenuKey(chord, action))
         {
             return InputDispatch.Sent(action, swallow: true);
         }
@@ -334,7 +350,7 @@ public sealed class InputBridge
         }
 
         _chords.Invoke(action);
-        return InputDispatch.Sent(action, swallow: true);
+        return InputDispatch.Sent(action, swallow: !fromDevice);
     }
 
     /// <summary>A release. Only push-to-talk cares.</summary>
@@ -342,8 +358,10 @@ public sealed class InputBridge
 
     /// <summary>A release.</summary>
     public InputDispatch HandleUp(Chord chord, DateTimeOffset at)
+        => DispatchUp(_bindings.Resolve(chord), chord, at, fromDevice: false);
+
+    private InputDispatch DispatchUp(BindingAction action, Chord chord, DateTimeOffset at, bool fromDevice)
     {
-        var action = _bindings.Resolve(chord);
         if (action is not (BindingAction.Ptt or BindingAction.Menu))
         {
             return InputDispatch.Ignored(DispatchOutcome.NotBound, action);
@@ -369,14 +387,17 @@ public sealed class InputBridge
         // BOTH edges, or the toggle still fires. Swallowing only the key-down left CapsLock latched
         // on after every hold, which locks the user into capitals until they press it again with
         // the agent stopped.
-        return InputDispatch.Sent(action, swallow: IsStatefulToggle(chord));
+        return InputDispatch.Sent(action, swallow: !fromDevice && IsStatefulToggle(chord));
     }
 
-    /// <summary>Opens a rebind capture with a five second abort.</summary>
-    public RebindSession BeginRebind(BindingAction action, DateTimeOffset startedAt)
+    /// <summary>Opens a rebind capture with a five second abort, on one of the action's two rows.</summary>
+    public RebindSession BeginRebind(
+        BindingAction action,
+        DateTimeOffset startedAt,
+        BindingSlot slot = BindingSlot.Primary)
     {
         _log.Note(InputEvent.RebindStarted);
-        return new RebindSession(_bindings, action, startedAt);
+        return new RebindSession(_bindings, action, startedAt, slot);
     }
 
     /// <summary>

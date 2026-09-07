@@ -38,6 +38,32 @@ public sealed record LogBundleSummary
     /// <summary>Monitor sizes, no device names. Overlay placement is the second-most reported fault.</summary>
     public IReadOnlyList<string> Displays { get; init; } = [];
 
+    /// <summary>The microphone actually open, or "none". The first thing a voice report needs.</summary>
+    public required string InputDevice { get; init; }
+
+    /// <summary>Whether the acoustic model is resident, or the fault word that says why not.</summary>
+    public required string SpeechModel { get; init; }
+
+    /// <summary>NO AUDIO FROM the device, when enough holds in a row heard nothing. Else null.</summary>
+    public string? SpeechWarning { get; init; }
+
+    /// <summary>
+    /// Which of the three contracts this machine is running the served copy of, and which are
+    /// still the bundle.
+    /// </summary>
+    /// <remarks>
+    /// Binding rule 5 puts every readout threshold, glyph and pattern in served JSON, so a machine
+    /// whose config fetch never landed decodes the screen with different numbers from one whose
+    /// did. Without this line the two produce identical-looking logs.
+    /// </remarks>
+    public required string ContractsInForce { get; init; }
+
+    /// <summary>Screen reads this session and how they went, or null when none were tried.</summary>
+    public string? ScreenReads { get; init; }
+
+    /// <summary>Push-to-talk holds this session and how they went, or null when none were held.</summary>
+    public string? VoiceHolds { get; init; }
+
     /// <summary>Why the last screen read produced nothing, or null. Never a coordinate.</summary>
     public string? LastReadRefusal { get; init; }
 
@@ -68,6 +94,24 @@ public sealed record LogBundleSummary
             $"capture      {(ScreenCaptureEnabled ? "on" : "off")}");
         yield return FormattableString.Invariant($"wardogs      {(GameRunning ? "running" : "not running")}");
         yield return FormattableString.Invariant($"displays     {string.Join(", ", Displays)}");
+        yield return FormattableString.Invariant($"microphone   {InputDevice}");
+        yield return FormattableString.Invariant($"speech       {SpeechModel}");
+        yield return FormattableString.Invariant($"contracts    {ContractsInForce}");
+
+        if (SpeechWarning is { Length: > 0 } warning)
+        {
+            yield return FormattableString.Invariant($"audio        {warning}");
+        }
+
+        if (ScreenReads is { Length: > 0 } reads)
+        {
+            yield return FormattableString.Invariant($"reads        {reads}");
+        }
+
+        if (VoiceHolds is { Length: > 0 } holds)
+        {
+            yield return FormattableString.Invariant($"holds        {holds}");
+        }
 
         if (LastReadRefusal is { Length: > 0 } refusal)
         {

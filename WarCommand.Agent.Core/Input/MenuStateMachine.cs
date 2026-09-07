@@ -687,6 +687,11 @@ public sealed class MenuStateMachine
     private DateTimeOffset _lastInput;
     private MenuLevel _level = MenuLevel.Closed;
 
+    // Where the highlight sat on each level walked away from, so BACK lands on the entry it was
+    // entered through rather than at the top of a list already read. Keyed by level, and by the
+    // branch's own path where one level has many instances. Cleared when the overlay closes.
+    private readonly Dictionary<string, int> _positions = new(StringComparer.Ordinal);
+
     // The range calculator's two ends. Kept on the machine so both survive a read and the page can
     // be re-entered without losing what was already set.
     private MapPoint? _toolGun;
@@ -736,10 +741,11 @@ public sealed class MenuStateMachine
 
             _level = value;
 
-            // The first line you can actually press, never blindly index 0. A level that opens
-            // with the highlight parked on read-only text offers a select key that does nothing,
-            // and the reader has no way to tell that from a broken key.
-            Highlight = FirstSelectable();
+            // Where this level was left, when it has been stood on before. Otherwise the first line
+            // you can actually press, never blindly index 0. A level that opens with the highlight
+            // parked on read-only text offers a select key that does nothing, and the reader has no
+            // way to tell that from a broken key.
+            Highlight = RecalledPosition() ?? FirstSelectable();
         }
     }
 
@@ -760,6 +766,49 @@ public sealed class MenuStateMachine
 
         return NoHighlight;
     }
+
+    /// <summary>
+    /// Identity of the level being stood on. A branch carries its path, so two categories at the
+    /// same depth remember their own row rather than sharing one.
+    /// </summary>
+    private string PositionKey() => _level == MenuLevel.Branch
+        ? "branch:" + (Selection?.Path ?? string.Empty)
+        : _level.ToString();
+
+    /// <summary>
+    /// Records where the highlight is, before walking off this level. Called on the way down and on
+    /// the way back, so a level re-entered from either direction lands where it was left.
+    /// </summary>
+    private void RememberPosition()
+    {
+        if (_level == MenuLevel.Closed || Highlight < 0)
+        {
+            return;
+        }
+
+        _positions[PositionKey()] = Highlight;
+    }
+
+    /// <summary>
+    /// The remembered row for the level now current, or null. Null when the list has shrunk past it
+    /// or the row it held is now reference text: a stale index is worse than the top of the list.
+    /// </summary>
+    private int? RecalledPosition()
+    {
+        if (!_positions.TryGetValue(PositionKey(), out var index))
+        {
+            return null;
+        }
+
+        var options = CurrentOptions();
+        return index >= 0 && index < options.Count && !options[index].IsInfo ? index : null;
+    }
+
+    /// <summary>
+    /// Drops every remembered row. The overlay going away ends the session the memory belonged to;
+    /// coming back to a menu you last touched two matches ago is not remembering, it is guessing.
+    /// </summary>
+    public void ForgetPositions() => _positions.Clear();
 
     /// <summary>No line is highlighted, because no line at this level can be pressed.</summary>
     public const int NoHighlight = -1;
@@ -1238,6 +1287,7 @@ public sealed class MenuStateMachine
         if (digit == ZeroDigit && Level is not (MenuLevel.More
             or MenuLevel.Coordinate or MenuLevel.Join or MenuLevel.Confirm or MenuLevel.Roles))
         {
+            RememberPosition();
             Level = MenuLevel.More;
             return new MenuNavigated(Level);
         }
@@ -1274,6 +1324,7 @@ public sealed class MenuStateMachine
         }
 
         _lastInput = now;
+        RememberPosition();
 
         switch (Level)
         {
@@ -1916,6 +1967,7 @@ public sealed class MenuStateMachine
             return MenuOutcome.None;
         }
 
+        RememberPosition();
         _path.Add(entry);
 
         if (!entry.IsLeaf)
@@ -2047,6 +2099,7 @@ public sealed class MenuStateMachine
         }
 
         _lastInput = now;
+        RememberPosition();
         Level = MenuLevel.More;
         return new MenuNavigated(Level);
     }
@@ -2095,6 +2148,7 @@ public sealed class MenuStateMachine
         }
 
         _selectedSlot = digit;
+        RememberPosition();
         Level = MenuLevel.BoardAction;
         return new MenuNavigated(Level);
     }
@@ -2128,6 +2182,8 @@ public sealed class MenuStateMachine
         {
             return MenuOutcome.None;
         }
+
+        RememberPosition();
 
         if (entry.Id == "join")
         {

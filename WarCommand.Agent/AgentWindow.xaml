@@ -133,6 +133,25 @@
                         <TextBlock Text="BINDINGS" Style="{StaticResource SectionHeader}" />
                         <Border Style="{StaticResource Card}">
                             <StackPanel>
+                                <!-- Two bindings per action. A pilot binds the stick and never
+                                     touches the keyboard one; anybody else leaves HOTAS empty. -->
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center"
+                                               Text="Still reaches Wardogs. Bind a spare button."
+                                               Style="{StaticResource FieldCaption}" />
+                                    <TextBlock Grid.Column="1" Text="KEYBOARD" MinWidth="120"
+                                               TextAlignment="Center"
+                                               Style="{StaticResource FieldCaption}" />
+                                    <TextBlock Grid.Column="2" Text="HOTAS" MinWidth="140"
+                                               TextAlignment="Center" Margin="8,0,0,0"
+                                               Style="{StaticResource FieldCaption}" />
+                                </Grid>
+
                                 <ItemsControl x:Name="Bindings">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -140,6 +159,7 @@
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" VerticalAlignment="Center"
@@ -157,8 +177,18 @@
                                                          on purpose and this was the only screen
                                                          the overlay pointed at to bind it. -->
                                                     <Button Grid.Column="1" Style="{StaticResource KeyPillButton}"
+                                                            MinWidth="120"
                                                             Tag="{Binding ActionName}" Click="OnRebind">
                                                         <TextBlock x:Name="ChordText" Text="{Binding Chord}"
+                                                                   Style="{StaticResource KeyPillText}" />
+                                                    </Button>
+                                                    <!-- The second row. A HOTAS button is not a key:
+                                                         it reaches no hook, cannot be swallowed, and
+                                                         is captured from the stick itself. -->
+                                                    <Button Grid.Column="2" Style="{StaticResource KeyPillButton}"
+                                                            MinWidth="140" Margin="8,0,0,0"
+                                                            Tag="{Binding ActionName}" Click="OnRebindHotas">
+                                                        <TextBlock x:Name="HotasText" Text="{Binding Hotas}"
                                                                    Style="{StaticResource KeyPillText}" />
                                                     </Button>
                                                 </Grid>
@@ -166,6 +196,10 @@
                                             <DataTemplate.Triggers>
                                                 <DataTrigger Binding="{Binding IsBound}" Value="False">
                                                     <Setter TargetName="ChordText" Property="Foreground"
+                                                            Value="{StaticResource Dim}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding HotasIsBound}" Value="False">
+                                                    <Setter TargetName="HotasText" Property="Foreground"
                                                             Value="{StaticResource Dim}" />
                                                 </DataTrigger>
                                             </DataTemplate.Triggers>
@@ -181,66 +215,12 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
                                             <TextBlock Text="Reset to defaults" Style="{StaticResource FieldLabel}" />
-                                            <TextBlock Text="Restores every chord above"
+                                            <TextBlock Text="Restores every chord, clears every HOTAS button"
                                                        Style="{StaticResource FieldCaption}" />
                                         </StackPanel>
                                         <Button Grid.Column="1" Content="RESET" Click="OnResetBindings"
                                                 MinWidth="92" VerticalAlignment="Center" />
                                     </Grid>
-                                </Border>
-                            </StackPanel>
-                        </Border>
-
-                        <!--
-                            The commands themselves. Four bindings is the whole chord surface and
-                            everything else is a digit inside the menu, so a keybinds page that
-                            listed only the four documented almost nothing you can actually press.
-                            Both lists are read from the menu's own tables, never retyped here.
-                        -->
-                        <TextBlock Text="KEYBOARD COMMANDS" Style="{StaticResource SectionHeader}"
-                                   Margin="0,24,0,0" />
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel>
-                                <Border Style="{StaticResource FieldRowCompact}">
-                                    <TextBlock x:Name="MenuOpenLine" Style="{StaticResource FieldCaption}"
-                                               TextWrapping="Wrap" />
-                                </Border>
-
-                                <Border Style="{StaticResource FieldRowCompact}">
-                                    <StackPanel>
-                                        <TextBlock Text="On a row" Style="{StaticResource FieldLabel}" />
-                                        <TextBlock Style="{StaticResource FieldCaption}" TextWrapping="Wrap"
-                                                   Text="Open the menu, press 0 for the board, then the slot digit, then:" />
-                                        <ItemsControl x:Name="RowVerbs" Margin="0,6,0,0">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Style="{StaticResource FieldCaption}"
-                                                               Text="{Binding}" />
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Style="{StaticResource FieldRowCompact}">
-                                    <StackPanel>
-                                        <TextBlock Text="Panels" Style="{StaticResource FieldLabel}" />
-                                        <TextBlock Style="{StaticResource FieldCaption}" TextWrapping="Wrap"
-                                                   Text="Open the menu, press 0 twice, then:" />
-                                        <ItemsControl x:Name="MorePages" Margin="0,6,0,0">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Style="{StaticResource FieldCaption}"
-                                                               Text="{Binding}" />
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Style="{StaticResource FieldRow}" BorderThickness="0">
-                                    <TextBlock Style="{StaticResource FieldCaption}" TextWrapping="Wrap"
-                                               Text="Backspace goes up a level. Escape closes. A menu left open closes itself." />
                                 </Border>
                             </StackPanel>
                         </Border>

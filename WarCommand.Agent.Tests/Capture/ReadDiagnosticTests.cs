@@ -1,4 +1,4 @@
-using WarCommand.Agent.Capture;
+﻿using WarCommand.Agent.Capture;
 using WarCommand.Agent.Client.Diagnostics;
 using WarCommand.Agent.Core.Contracts;
 using Xunit;
@@ -53,6 +53,9 @@ public class ReadDiagnosticTests
             GameRunning = true,
             Connection = "Online",
             Displays = ["3440x1440 primary"],
+            InputDevice = "Headset Microphone",
+            SpeechModel = "loaded",
+            ContractsInForce = "game-profile served \"w/9f\", request-types bundled, ballistics bundled",
             LastReadRefusal = "NO COORDS",
             ReadoutGeometry =
                 "client 3440x1440, 1.00x of 1440, gap 18, radius 420, run 6-90, rungs 9, "

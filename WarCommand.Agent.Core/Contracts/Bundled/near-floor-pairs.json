@@ -44,6 +44,31 @@
     {
       "position_class": "initial",
       "reason": "near_floor",
+      "score": 0.8571,
+      "cleared_by": "features",
+      "segment_distance": 0.4286,
+      "differing_features": [
+        "onset",
+        "coda"
+      ],
+      "a": {
+        "alias": "reject",
+        "owner": "verb:pass",
+        "ambiguous": false
+      },
+      "b": {
+        "alias": "request",
+        "owner": "verb:surface_request",
+        "ambiguous": false
+      },
+      "phonemes": {
+        "a": "R IH0 JH EH1 K T",
+        "b": "R IH0 K W EH1 S T"
+      }
+    },
+    {
+      "position_class": "initial",
+      "reason": "near_floor",
       "score": 1.0,
       "cleared_by": "features",
       "segment_distance": 0.5,
@@ -213,6 +238,31 @@
       "phonemes": {
         "a": "EH1 S K AO0 R T",
         "b": "T R AE1 N S P AO0 R T"
+      }
+    },
+    {
+      "position_class": "initial",
+      "reason": "near_floor",
+      "score": 1.1429,
+      "cleared_by": "features",
+      "segment_distance": 0.5714,
+      "differing_features": [
+        "onset",
+        "coda"
+      ],
+      "a": {
+        "alias": "accept",
+        "owner": "verb:accept",
+        "ambiguous": false
+      },
+      "b": {
+        "alias": "request",
+        "owner": "verb:surface_request",
+        "ambiguous": false
+      },
+      "phonemes": {
+        "a": "AE0 K S EH1 P T",
+        "b": "R IH0 K W EH1 S T"
       }
     },
     {

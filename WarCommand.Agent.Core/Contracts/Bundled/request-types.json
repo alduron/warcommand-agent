@@ -2289,6 +2289,24 @@
       "note": "Cycles the overlay board full, dim, off. Parity verb for the RightAlt+B chord, which is the one control with no menu entry at all."
     },
     {
+      "id": "surface_request",
+      "aliases": [
+        "request"
+      ],
+      "no_slot_ref": true,
+      "client_only": true,
+      "note": "Opens the REQUEST surface. Parity verb for the UP key, which the overlay names REQUEST at rest. It was the one word on the resting hint that could not be said."
+    },
+    {
+      "id": "surface_tools",
+      "aliases": [
+        "tools"
+      ],
+      "no_slot_ref": true,
+      "client_only": true,
+      "note": "Opens the TOOLS surface. Parity verb for the TOOLS key. RANGE already had a verb; the surface holding it did not."
+    },
+    {
       "id": "weapon",
       "aliases": [
         "weapon",

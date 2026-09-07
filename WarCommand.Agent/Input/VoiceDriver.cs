@@ -1,4 +1,5 @@
-using System.Buffers;
+﻿using System.Buffers;
+using System.Diagnostics;
 using System.Threading.Channels;
 using WarCommand.Agent.Client.Diagnostics;
 using WarCommand.Agent.Input;
@@ -50,6 +51,8 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
     private readonly Action<ParseResult> _onParsed;
     private readonly SilentHoldMonitor _silence;
     private readonly RollingFileLog _log;
+    private readonly ISpeechLog _speech;
+    private readonly SupportCounters _counters;
 
     private VoskModel? _model;
     private ISpeechEngine? _engine;
@@ -57,6 +60,24 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
     private Channel<Chunk>? _chunks;
     private Task? _pump;
     private bool _disposed;
+
+    // This hold only. Reset on every key down, read on key up. A hold that heard nothing is the
+    // single most reported voice fault and the one the log said nothing about at all.
+    private int _chunksThisHold;
+    private int _utterancesThisHold;
+
+    // Key-down to key-up, which is NOT what the chunk count measures. Capture takes ~130 ms to
+    // deliver its first buffer, so a hold that heard nothing needs both numbers to say whether the
+    // device was slow or the key was simply not held while anybody was talking.
+    private long _holdStartedTicks;
+
+    // The size of the vocabulary this hold was decoded against, and how many roles pruned it.
+    // The grammar is pruned by the board and by the roles this player enabled, so a membership that
+    // never loaded leaves enabledRoleIds empty and the recognizer is handed a word list with no
+    // request types in it. Good audio then decodes to nothing, which is indistinguishable in a log
+    // from a dead microphone unless these two numbers are in it.
+    private int _vocabularyThisHold;
+    private int _rolesThisHold;
 
     /// <summary>Builds the driver. The model is loaded on first use, not at startup.</summary>
     public VoiceDriver(
@@ -66,7 +87,9 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
         Func<IReadOnlyCollection<string>> enabledRoleIds,
         Action<ParseResult> onParsed,
         SilentHoldMonitor silence,
-        RollingFileLog log)
+        RollingFileLog log,
+        ISpeechLog speechLog,
+        SupportCounters counters)
     {
         ArgumentNullException.ThrowIfNull(capture);
         ArgumentNullException.ThrowIfNull(catalog);
@@ -75,6 +98,8 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
         ArgumentNullException.ThrowIfNull(onParsed);
         ArgumentNullException.ThrowIfNull(silence);
         ArgumentNullException.ThrowIfNull(log);
+        ArgumentNullException.ThrowIfNull(speechLog);
+        ArgumentNullException.ThrowIfNull(counters);
 
         _capture = capture;
         _catalog = catalog;
@@ -83,6 +108,8 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
         _onParsed = onParsed;
         _silence = silence;
         _log = log;
+        _speech = speechLog;
+        _counters = counters;
     }
 
     /// <summary>True once the acoustic model is resident. False until the first hold.</summary>
@@ -118,6 +145,9 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
 
         try
         {
+            _chunksThisHold = 0;
+            _utterancesThisHold = 0;
+            _holdStartedTicks = Stopwatch.GetTimestamp();
             _capture.Open(deviceId);
             _holding = new AudioBuffer();
             _chunks = chunks;
@@ -127,6 +157,7 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
             {
                 var pooled = ArrayPool<short>.Shared.Rent(samples.Length);
                 samples.CopyTo(pooled);
+                Interlocked.Increment(ref _chunksThisHold);
                 if (!chunks.Writer.TryWrite(new Chunk(pooled, samples.Length)))
                 {
                     ArrayPool<short>.Shared.Return(pooled, clearArray: true);
@@ -168,10 +199,36 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
 
         // The peak the whole hold reached. A device that exists and delivers silence is otherwise
         // indistinguishable from somebody who held the key and said nothing.
+        var silent = false;
+        var peak = double.NegativeInfinity;
         if (_holding is { } buffer)
         {
-            _silence.Hold(buffer, _capture.Device?.FriendlyName ?? string.Empty);
+            peak = buffer.PeakDbfs;
+            silent = _silence.Hold(buffer, _capture.Device?.FriendlyName ?? string.Empty)
+                is not SilentHoldResult.HadAudio;
         }
+
+        // The whole hold, in one line, in the file the customer exports. "I said mortar and nothing
+        // happened" used to produce an empty log: nothing recorded whether the microphone delivered
+        // anything, whether the recognizer completed an utterance, or whether the parser refused
+        // one. These four numbers separate a dead device from a dead recognizer from a word that is
+        // not in the grammar, and none of them is a coordinate or anything anybody said.
+        var keyDownMs = Stopwatch.GetElapsedTime(_holdStartedTicks).TotalMilliseconds;
+        var shape = FormattableString.Invariant(
+            $"key down {keyDownMs:0} ms, {_chunksThisHold} chunks, peak {peak:0.0} dBFS, {_utterancesThisHold} utterances, vocabulary {_vocabularyThisHold} words from {_rolesThisHold} roles");
+
+        if (_utterancesThisHold == 0)
+        {
+            // WARN: this is the reported fault, so it has to survive the default log rather than
+            // be dropped with the rest of INFO.
+            _log.Warn($"Hold heard nothing. {shape}");
+        }
+        else
+        {
+            _log.Info($"Hold ended. {shape}");
+        }
+
+        _counters.VoiceHold(silent, _utterancesThisHold);
 
         Clear();
     }
@@ -229,10 +286,12 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
     /// </remarks>
     private Grammar GrammarNow()
     {
+        var roles = _enabledRoleIds();
         var context = _board() is { } board
-            ? GrammarContext.FromBoard(board, _enabledRoleIds())
+            ? GrammarContext.FromBoard(board, roles)
             : GrammarContext.Everything;
 
+        _rolesThisHold = roles.Count;
         return Grammar.Compile(_catalog(), context);
     }
 
@@ -249,6 +308,7 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
                 return;
             }
 
+            _vocabularyThisHold = SpeechGrammarCompiler.Compile(grammar).AllWords.Count;
             session = engine.BeginSession(grammar);
             var parser = new IntentParser(grammar, BundledContracts.NearFloorPairs());
 
@@ -258,7 +318,7 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
                 {
                     if (session.Feed(chunk.Samples.AsSpan(0, chunk.Length)) is { } utterance)
                     {
-                        _onParsed(parser.Parse(utterance));
+                        Heard(utterance, parser);
                     }
                 }
                 finally
@@ -269,7 +329,7 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
 
             if (session.Final() is { } last)
             {
-                _onParsed(parser.Parse(last));
+                Heard(last, parser);
             }
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
@@ -283,6 +343,62 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
             session?.Dispose();
         }
     }
+
+    /// <summary>
+    /// One completed utterance: recorded, then handed on.
+    /// </summary>
+    /// <remarks>
+    /// DIGITS ARE MASKED and everything else is written out. A spoken grid is a coordinate and
+    /// binding rule 9 keeps coordinates out of a file people pass around, but the rest of an
+    /// utterance is catalog vocabulary the recognizer was constrained to and the request itself
+    /// goes on the wire anyway. "heard 'mortar grid # # . # #'" against "heard 'mortar'" is the
+    /// whole difference between a grammar gap and an incomplete sentence, and neither was
+    /// recoverable from an export before.
+    /// </remarks>
+    private void Heard(Utterance utterance, IntentParser parser)
+    {
+        Interlocked.Increment(ref _utterancesThisHold);
+
+        var parsed = parser.Parse(utterance);
+        var masked = Masked(utterance);
+
+        var line = FormattableString.Invariant(
+            $"Heard '{masked}' at {utterance.Confidence:0.00}, {utterance.Alternatives.Count} alternatives -> {Outcome(parsed)}");
+
+        // A refusal is WARN so it reaches the default log: an utterance the parser could not place
+        // is the report, and at INFO it would be dropped from exactly the export that needs it.
+        if (parsed is ParsedCommand { Prompt: not null })
+        {
+            _log.Warn(line);
+            _counters.Utterance(matched: false);
+        }
+        else
+        {
+            _log.Info(line);
+            _counters.Utterance(matched: true);
+        }
+
+        _onParsed(parsed);
+    }
+
+    /// <summary>
+    /// The utterance with every digit token replaced by <c>#</c>. A grid cannot be read back out
+    /// of one of these, and the words that decide whether the grammar matched are all still there.
+    /// </summary>
+    internal static string Masked(Utterance utterance)
+    {
+        ArgumentNullException.ThrowIfNull(utterance);
+        return string.Join(' ', utterance.Tokens.Select(t => t.IsDigit ? "#" : t.Text));
+    }
+
+    /// <summary>What the parser made of it: an id, never a coordinate and never a callsign.</summary>
+    private static string Outcome(ParseResult parsed) => parsed switch
+    {
+        ParsedRequest request => "request " + request.TypeId,
+        ParsedCommand { Prompt: { } prompt } => "refused " + prompt,
+        ParsedCommand command => "command " + command.VerbId,
+        _ => parsed.GetType().Name,
+    };
 
     /// <summary>Returns every queued chunk to the pool, zeroed. Audio is never left lying in one.</summary>
     private static async Task DrainAsync(ChannelReader<Chunk> reader)
@@ -317,10 +433,10 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
 
         try
         {
-            _model = await new VoskModelLoader()
+            _model = await new VoskModelLoader(_speech)
                 .LoadAsync(VoskModelLoader.DefaultModelDirectory, cancellationToken)
                 .ConfigureAwait(false);
-            _engine = new VoskSpeechEngine(_model);
+            _engine = new VoskSpeechEngine(_model, _speech);
             Fault = null;
             _log.Info("Speech model loaded.");
             return _engine;

@@ -1,4 +1,16 @@
+﻿using WarCommand.Agent.Input.Devices;
+
 namespace WarCommand.Agent.Input.Bindings;
+
+/// <summary>Which of an action's two rows a capture is filling.</summary>
+public enum BindingSlot
+{
+    /// <summary>The key or mouse button.</summary>
+    Primary = 0,
+
+    /// <summary>The HOTAS button. Keyboard presses are ignored by a capture on this row.</summary>
+    Secondary,
+}
 
 /// <summary>Where a rebind capture stands.</summary>
 public enum RebindState
@@ -44,17 +56,25 @@ public sealed class RebindSession
     private readonly BindingSet _bindings;
     private readonly DateTimeOffset _deadline;
 
-    /// <summary>Begins capturing for one action.</summary>
-    public RebindSession(BindingSet bindings, BindingAction action, DateTimeOffset startedAt)
+    /// <summary>Begins capturing for one action, on one of its two rows.</summary>
+    public RebindSession(
+        BindingSet bindings,
+        BindingAction action,
+        DateTimeOffset startedAt,
+        BindingSlot slot = BindingSlot.Primary)
     {
         ArgumentNullException.ThrowIfNull(bindings);
         _bindings = bindings;
         Action = action;
+        Slot = slot;
         _deadline = startedAt + AbortAfter;
     }
 
     /// <summary>The action being rebound.</summary>
     public BindingAction Action { get; }
+
+    /// <summary>Which row is being filled. A row only accepts the kind of press it holds.</summary>
+    public BindingSlot Slot { get; }
 
     /// <summary>Where the capture stands.</summary>
     public RebindState State { get; private set; } = RebindState.Capturing;
@@ -76,12 +96,45 @@ public sealed class RebindSession
             return RebindOutcome.NotCapturing;
         }
 
-        if (!chord.IsBound)
+        // A HOTAS row waiting for a stick button ignores the keyboard outright. Taking whichever
+        // press arrived first meant a hand resting on the keyboard filled the row the user had
+        // opened precisely because they were not at the keyboard.
+        if (Slot != BindingSlot.Primary || !chord.IsBound)
         {
             return RebindOutcome.Ignored;
         }
 
         var result = _bindings.Rebind(Action, chord);
+        if (result.Status == RebindStatus.RefusedConflict)
+        {
+            ConflictsWith = result.ConflictsWith;
+            return RebindOutcome.RefusedConflict;
+        }
+
+        if (!result.Applied)
+        {
+            return RebindOutcome.Ignored;
+        }
+
+        ConflictsWith = BindingAction.None;
+        State = RebindState.Captured;
+        return RebindOutcome.Captured;
+    }
+
+    /// <summary>Offers a controller button. Ignored by a capture on the keyboard row.</summary>
+    public RebindOutcome Offer(DeviceButton button, DateTimeOffset now)
+    {
+        if (Tick(now) != RebindState.Capturing)
+        {
+            return RebindOutcome.NotCapturing;
+        }
+
+        if (Slot != BindingSlot.Secondary || !button.IsBound)
+        {
+            return RebindOutcome.Ignored;
+        }
+
+        var result = _bindings.RebindSecondary(Action, button);
         if (result.Status == RebindStatus.RefusedConflict)
         {
             ConflictsWith = result.ConflictsWith;

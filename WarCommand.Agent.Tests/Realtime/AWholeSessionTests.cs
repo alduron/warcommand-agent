@@ -245,6 +245,40 @@ public sealed class AWholeSessionTests
     }
 
     [Fact]
+    public void Back_lands_on_the_row_it_was_entered_through_until_the_overlay_closes()
+    {
+        var session = new Session();
+        var menu = session.Machine;
+        menu.Open(T0, context: session.ContextNow());
+
+        // Walk off the top of the list, so returning to index 0 would be visibly wrong.
+        menu.Scroll(2, T0);
+        var entered = menu.Highlight;
+        Assert.True(entered > 0);
+
+        menu.Select(T0);
+        Assert.NotEqual(MenuLevel.Root, menu.Level);
+
+        // BACK used to drop the highlight on the first pressable line, so every correction cost the
+        // user the scroll they had just made.
+        menu.Back(T0);
+        Assert.Equal(MenuLevel.Root, menu.Level);
+        Assert.Equal(entered, menu.Highlight);
+
+        // A second open, key released and pressed again, is the same session and remembers.
+        menu.Back(T0);
+        Assert.False(menu.IsOpen);
+        menu.Open(T0, context: session.ContextNow());
+        Assert.Equal(entered, menu.Highlight);
+
+        // The overlay going away ends it. Nothing is remembered across that.
+        menu.ForgetPositions();
+        menu.Back(T0);
+        menu.Open(T0, context: session.ContextNow());
+        Assert.NotEqual(entered, menu.Highlight);
+    }
+
+    [Fact]
     public void Tools_is_one_press_from_anywhere_and_is_never_on_the_request_list()
     {
         var session = new Session();

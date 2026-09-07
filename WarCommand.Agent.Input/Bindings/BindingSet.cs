@@ -1,3 +1,5 @@
+﻿using WarCommand.Agent.Input.Devices;
+
 namespace WarCommand.Agent.Input.Bindings;
 
 /// <summary>Why a rebind was accepted or refused.</summary>
@@ -39,6 +41,11 @@ public sealed class BindingSet
 {
     private readonly Dictionary<BindingAction, Chord> _chords = [];
 
+    // The second row. A HOTAS button is not a key: it does not reach the keyboard hook, it cannot
+    // be swallowed, and it holds no modifier. Keeping it in its own table is what lets a pilot bind
+    // every action to the stick without giving up the keyboard binding for the people who type.
+    private readonly Dictionary<BindingAction, DeviceButton> _buttons = [];
+
     private BindingSet() => ApplyDefaults();
 
     /// <summary>Raised whenever a chord changes, so the hook can rebuild its arming table.</summary>
@@ -75,9 +82,89 @@ public sealed class BindingSet
     public IEnumerable<KeyValuePair<BindingAction, Chord>> All =>
         BindingActions.All.Select(a => new KeyValuePair<BindingAction, Chord>(a, _chords[a]));
 
+    /// <summary>Every action and the controller button it holds. Unbound is the shipped state.</summary>
+    public IEnumerable<KeyValuePair<BindingAction, DeviceButton>> AllSecondary =>
+        BindingActions.All.Select(a => new KeyValuePair<BindingAction, DeviceButton>(a, Secondary(a)));
+
+    /// <summary>
+    /// Always false, and shown beside every HOTAS row. A HID button reaches the game through the
+    /// same reports we read and there is no hook that can take it away, so a button bound here is
+    /// still whatever the game has it bound to. Pick a spare one.
+    /// </summary>
+    public static bool CanSwallowDeviceButtons => false;
+
+    /// <summary>The one line the HOTAS rows carry in place of a swallow promise.</summary>
+    public static string DeviceSwallowNotice => "Still reaches Wardogs. Bind a spare button.";
+
     /// <summary>The chord an action holds, or <see cref="Chord.Unbound"/>.</summary>
     public Chord this[BindingAction action] =>
         _chords.TryGetValue(action, out var chord) ? chord : Chord.Unbound;
+
+    /// <summary>The controller button an action holds, or <see cref="DeviceButton.None"/>.</summary>
+    public DeviceButton Secondary(BindingAction action) =>
+        _buttons.TryGetValue(action, out var button) ? button : DeviceButton.None;
+
+    /// <summary>Which action holds this controller button, or <see cref="BindingAction.None"/>.</summary>
+    public BindingAction ResolveSecondary(DeviceButton button)
+    {
+        if (!button.IsBound)
+        {
+            return BindingAction.None;
+        }
+
+        foreach (var (action, held) in _buttons)
+        {
+            if (held.IsBound && held == button)
+            {
+                return action;
+            }
+        }
+
+        return BindingAction.None;
+    }
+
+    /// <summary>
+    /// Points an action at a controller button. Refused, naming the other binding, when another
+    /// action already holds it. Never conflicts with a chord: the two rows are separate surfaces
+    /// and a key and a stick button cannot be the same press.
+    /// </summary>
+    public RebindResult RebindSecondary(BindingAction action, DeviceButton button)
+    {
+        if (action == BindingAction.None || !button.IsBound)
+        {
+            return RebindResult.Refused(RebindStatus.RefusedNotAKey);
+        }
+
+        var holder = ResolveSecondary(button);
+        if (holder != BindingAction.None && holder != action)
+        {
+            return RebindResult.Conflict(holder);
+        }
+
+        _buttons[action] = button;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return RebindResult.Ok();
+    }
+
+    /// <summary>
+    /// Clears a controller button. Allowed for Panic, unlike the chord: the kill switch still has
+    /// the key it cannot lose, and refusing here would strand a pilot with a button they cannot
+    /// clear on a stick they have sold.
+    /// </summary>
+    public RebindResult UnbindSecondary(BindingAction action)
+    {
+        if (action == BindingAction.None)
+        {
+            return RebindResult.Refused(RebindStatus.RefusedNotAKey);
+        }
+
+        if (_buttons.Remove(action))
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+
+        return RebindResult.Ok();
+    }
 
     /// <summary>Which action holds this chord, or <see cref="BindingAction.None"/>.</summary>
     public BindingAction Resolve(Chord chord)
@@ -197,6 +284,10 @@ public sealed class BindingSet
     private void ApplyDefaults()
     {
         _chords.Clear();
+
+        // No controller ships bound. There is no button number that means the same thing on two
+        // sticks, so a default here would be a guess at hardware nobody has told us about.
+        _buttons.Clear();
 
         // Two hold keys, both shipped bound and both rebindable. Nothing on the overlay happens
         // without one of them down, so shipping them unbound shipped a product that does nothing.

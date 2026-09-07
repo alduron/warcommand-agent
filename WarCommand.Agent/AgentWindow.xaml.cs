@@ -8,6 +8,7 @@ using WarCommand.Agent.Client.Storage;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Settings;
 using WarCommand.Agent.Input.Bindings;
+using WarCommand.Agent.Input.Devices;
 using WarCommand.Agent.Game;
 using WarCommand.Agent.Overlay;
 using WarCommand.Agent.Speech.Capture;
@@ -26,6 +27,12 @@ public sealed record BindingRow
 
     /// <summary>False dims the pill: an unbound action reads as absent, not as a key named "Not set".</summary>
     public required bool IsBound { get; init; }
+
+    /// <summary>The HOTAS button, as the second row shows it. Never a key.</summary>
+    public required string Hotas { get; init; }
+
+    /// <summary>False dims the HOTAS pill, which is the shipped state for every action.</summary>
+    public required bool HotasIsBound { get; init; }
 
     public string? Note { get; init; }
 
@@ -56,6 +63,10 @@ public partial class AgentWindow : Window
     private RebindSession? _capture;
     private bool _loading;
 
+    // The stick reader, handed over by the composition root once the agent is armed. Null before
+    // then, and the HOTAS row says so rather than opening a capture nothing can ever answer.
+    private IDeviceButtonSource? _devices;
+
     /// <summary>
     /// A chord was rebound or reset. The composition root re-arms the hook and redraws the hint;
     /// the window holds the live BindingSet and cannot do either itself.
@@ -72,7 +83,6 @@ public partial class AgentWindow : Window
         LoadDevices(devices);
         LoadChoices();
         LoadBindings();
-        LoadCommands();
         LoadFrom(store.Current);
     }
 
@@ -130,41 +140,38 @@ public partial class AgentWindow : Window
     }
 
     /// <summary>
-    /// The command reference, read from the menu's own tables so it cannot drift from what the
-    /// digits actually do.
+    /// The stick reader. Set once, by the composition root, when the agent arms. The HOTAS pills
+    /// are dead without it, which is the same rule every other armed thing follows.
     /// </summary>
-    private void LoadCommands()
+    public IDeviceButtonSource? DeviceButtons
     {
-        var menu = _bindings[BindingAction.Menu];
-        var ptt = _bindings[BindingAction.Ptt];
-        var up = _bindings[BindingAction.NavUp];
-        var down = _bindings[BindingAction.NavDown];
-        var select = _bindings[BindingAction.NavSelect];
-        var back = _bindings[BindingAction.NavBack];
-        var tools = _bindings[BindingAction.NavTools];
-        MenuOpenLine.Text = menu.IsBound
-            ? $"Hold {menu.Label}. {up.Label} is the request menu, {down.Label} is the board, {tools.Label} is tools. {select.Label} takes the highlighted line, {back.Label} leaves it. Release and nothing is listening. Hold {(ptt.IsBound ? ptt.Label : "the push to talk key")} instead to speak."
-            : "No overlay menu key is bound. Click its chord above and press any key.";
+        get => _devices;
+        set
+        {
+            if (_devices is { } previous)
+            {
+                previous.ButtonChanged -= OnDeviceButton;
+            }
 
-        // No digits here. A row offers only the verbs it can honour and numbers them from one, so
-        // the number beside DONE depends on the row you are standing on.
-        RowVerbs.ItemsSource = MenuStateMachine.BoardVerbList.ToList();
-
-        MorePages.ItemsSource = MenuStateMachine.MoreList
-            .Select(e => $"{e.Digit.ToString(CultureInfo.InvariantCulture)}  {e.Label}")
-            .ToList();
+            _devices = value;
+            LoadBindings();
+        }
     }
 
-    private void LoadBindings(BindingAction? capturing = null) =>
+    private void LoadBindings(BindingAction? capturing = null, BindingSlot slot = BindingSlot.Primary) =>
         Bindings.ItemsSource = BindingActions.All
             .Select(action => new BindingRow
             {
                 Action = BindingActions.Display(action),
                 ActionName = action.ToString(),
-                Chord = capturing == action
+                Chord = capturing == action && slot == BindingSlot.Primary
                     ? "Press a key"
                     : _bindings[action].IsBound ? _bindings[action].ToString() : "Not set",
                 IsBound = _bindings[action].IsBound,
+                Hotas = capturing == action && slot == BindingSlot.Secondary
+                    ? "Press a button"
+                    : _bindings.Secondary(action).Display(_devices?.Devices),
+                HotasIsBound = _bindings.Secondary(action).IsBound,
                 Note = action switch
                 {
                     BindingAction.Panic => "Rebindable, cannot be unbound",
@@ -366,8 +373,52 @@ public partial class AgentWindow : Window
         SavedNote.Text = "Press a key or mouse button. Esc cancels.";
     }
 
+    /// <summary>
+    /// Starts capturing the next HOTAS button for one action. Keyboard presses are ignored for the
+    /// length of it: the row exists for people whose hands are not on the keyboard.
+    /// </summary>
+    private void OnRebindHotas(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: string name }
+            || !Enum.TryParse<BindingAction>(name, out var action))
+        {
+            return;
+        }
+
+        if (_devices is null)
+        {
+            SavedNote.Text = "No stick reader yet. Sign in first.";
+            return;
+        }
+
+        EndCapture();
+        _capture = new RebindSession(_bindings, action, DateTimeOffset.UtcNow, BindingSlot.Secondary);
+        _devices.ButtonChanged += OnDeviceButton;
+        LoadBindings(capturing: action, slot: BindingSlot.Secondary);
+        SavedNote.Text = "Press a HOTAS button. Esc cancels.";
+    }
+
+    /// <summary>
+    /// One button edge from the stick, marshalled onto the UI thread. Presses only: a release would
+    /// bind the button the user let go of on their way to the one they meant.
+    /// </summary>
+    private void OnDeviceButton(object? sender, DeviceButtonEventArgs e)
+    {
+        if (!e.Down)
+        {
+            return;
+        }
+
+        _ = Dispatcher.BeginInvoke(() => Offer(e.Button));
+    }
+
     private void EndCapture()
     {
+        if (_devices is { } devices)
+        {
+            devices.ButtonChanged -= OnDeviceButton;
+        }
+
         _capture = null;
         LoadBindings();
     }
@@ -397,11 +448,39 @@ public partial class AgentWindow : Window
         }
     }
 
+    /// <summary>Feeds one candidate HOTAS button to the open capture.</summary>
+    private void Offer(DeviceButton button)
+    {
+        if (_capture is not { } session)
+        {
+            return;
+        }
+
+        switch (session.Offer(button, DateTimeOffset.UtcNow))
+        {
+            case RebindOutcome.Captured:
+                EndCapture();
+                SaveBindings();
+                SavedNote.Text =
+                    $"{BindingActions.Display(session.Action)} is {button.Display(_devices?.Devices)}";
+                break;
+            case RebindOutcome.RefusedConflict:
+                SavedNote.Text =
+                    $"{button.Display(_devices?.Devices)} is already {BindingActions.Display(session.ConflictsWith)}";
+                break;
+            default:
+                break;
+        }
+    }
+
     /// <summary>Writes the chords through the store, the same way every other control does.</summary>
     private void SaveBindings()
     {
-        _store.Save(_store.Current with { Bindings = App.StoredBindings(_bindings) });
-        LoadCommands();
+        _store.Save(_store.Current with
+        {
+            Bindings = App.StoredBindings(_bindings),
+            SecondaryBindings = App.StoredSecondaryBindings(_bindings),
+        });
         BindingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
