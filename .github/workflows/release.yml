@@ -87,7 +87,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          global-json-file: global.json
 
       # The tag is the single source of the version. Nothing in the repo carries it, so a release
       # cannot disagree with its own tag, and a rebuild of the same tag is byte-for-byte the same
