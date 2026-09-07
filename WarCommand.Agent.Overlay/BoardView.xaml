@@ -28,7 +28,7 @@
                         <TranslateTransform x:Name="EntranceSlide" X="10" />
                     </Border.RenderTransform>
                 <Border x:Name="RowRoot" BorderThickness="0,0,0,1" BorderBrush="{StaticResource RowDivider}"
-                        Padding="0,4,9,4" Opacity="{Binding RowOpacity}">
+                        Padding="0,2,9,2" Opacity="{Binding RowOpacity}">
                     <!-- The navigation highlight lands on the REAL row. The board is not redrawn
                          inside a menu panel, so what you move through is what you are looking at. -->
                     <Border.Style>
@@ -79,6 +79,7 @@
                                     <ColumnDefinition Width="150" />
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <!-- Every cell on this line is centred. A child with no
                                      VerticalAlignment stretches and draws its text at the top of
@@ -129,66 +130,46 @@
                                                VerticalAlignment="Center"
                                                Text="{Binding CoordinatesDisplay}" />
                                 </StackPanel>
-                                <TextBlock x:Name="StateWord" Grid.Column="2" Style="{StaticResource Up}"
+                                <ItemsControl x:Name="TagLine" Grid.Column="2" Margin="10,0,0,0"
+                                              VerticalAlignment="Center"
+                                              ItemsSource="{Binding VisibleTags}">
+                                    <ItemsControl.Style>
+                                        <Style TargetType="ItemsControl">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding TagsDisplay}" Value="">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ItemsControl.Style>
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{StaticResource Edge}" BorderThickness="1"
+                                                    Margin="0,0,4,0" Padding="4,0,4,0"
+                                                    VerticalAlignment="Center"
+                                                    Background="{StaticResource Transparent}">
+                                                <TextBlock Style="{StaticResource Up}"
+                                                           FontSize="{StaticResource SmallSize}"
+                                                           Foreground="{StaticResource Dim}"
+                                                           Text="{Binding}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="StateWord" Grid.Column="3" Style="{StaticResource Up}"
                                            HorizontalAlignment="Right" VerticalAlignment="Center"
                                            Text="{Binding StateWord}"
                                            Foreground="{StaticResource Ink}" Margin="8,0,0,0" />
                             </Grid>
 
-                            <Grid Visibility="{Binding SecondPointDisplay, Converter={StaticResource NullToVisibility}}">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="150" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <TextBlock Style="{StaticResource PointLabel}"
-                                               Text="{Binding SecondPointLabel}" />
-                                    <TextBlock Style="{StaticResource DimMono}"
-                                               Text="{Binding SecondPointDisplay}" />
-                                </StackPanel>
-                            </Grid>
-
-                            <!-- The tags, on their own line and wrapping. They used to ride the type
-                                 label inside the 150-unit column, which a role glyph already takes
-                                 25 of, so a rifle delivery carrying MAGS SCOPE SUPPRESS x2 trimmed
-                                 to 'RIFLE MA...' and the row named a rifle without naming which
-                                 one. Collapsed on a row with no tags, so it costs nothing there. -->
-                            <!-- One bordered chip per tag, wrapping. A tag has to READ as a tag on
-                                 both surfaces: the web draws a chip each and this drew one dim
-                                 run-on line, so the same request looked like two different things
-                                 and the tags were indistinguishable from the meta text beside
-                                 them. Collapsed on a row carrying none. -->
-                            <ItemsControl x:Name="TagLine" Margin="0,2,0,1"
-                                          ItemsSource="{Binding Tags}">
-                                <ItemsControl.Style>
-                                    <Style TargetType="ItemsControl">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding TagsDisplay}" Value="">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ItemsControl.Style>
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel Orientation="Horizontal" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border BorderBrush="{StaticResource Edge}" BorderThickness="1"
-                                                Margin="0,0,4,2" Padding="5,1,5,2"
-                                                Background="{StaticResource Transparent}">
-                                            <TextBlock Style="{StaticResource Up}"
-                                                       FontSize="{StaticResource SmallSize}"
-                                                       Foreground="{StaticResource Dim}"
-                                                       Text="{Binding}" />
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
+                            <!-- One dim line for everything that is not the ask itself. The
+                                 second point rides it rather than costing a line of its own. -->
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="80" />
@@ -197,6 +178,13 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0"
+                                            Visibility="{Binding SecondPointDisplay, Converter={StaticResource NullToVisibility}}">
+                                    <TextBlock Style="{StaticResource PointLabel}"
+                                               Text="{Binding SecondPointLabel}" />
+                                    <TextBlock Style="{StaticResource DimMono}"
+                                               Text="{Binding SecondPointDisplay}" />
+                                </StackPanel>
                                 <!--
                                     No age number. The overlay carries only what changes a decision
                                     inside the glance, and how old a row is does not: the countdown
