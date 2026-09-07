@@ -23,7 +23,7 @@ namespace WarCommand.Agent.Composition;
 public sealed class MenuDriver : IMenuKeySink, IMenuGate, IMenuNavSink
 {
     private readonly Dispatcher _dispatcher;
-    private readonly MenuStateMachine _menu;
+    private MenuStateMachine _menu;
     private readonly Action<MenuOutcome> _onOutcome;
     private readonly Func<DateTimeOffset> _clock;
 
@@ -54,6 +54,20 @@ public sealed class MenuDriver : IMenuKeySink, IMenuGate, IMenuNavSink
 
     /// <summary>The machine, for a renderer that draws what it holds.</summary>
     public MenuStateMachine Menu => _menu;
+
+    /// <summary>
+    /// Swaps in a machine compiled from a newly adopted catalog, closed and at the root.
+    /// </summary>
+    /// <remarks>
+    /// The driver is what the input bridge holds, so the machine moves and the wiring does not.
+    /// Replacing the driver instead would leave every hooked key pointed at the old tree.
+    /// </remarks>
+    public void Retarget(MenuStateMachine menu)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+        _menu = menu;
+        Rearm?.Invoke();
+    }
 
     /// <summary>
     /// Rebuilds the bridge's armed-key table. Set by the composition root once the bridge exists.

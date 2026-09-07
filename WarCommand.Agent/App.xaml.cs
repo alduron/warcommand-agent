@@ -168,6 +168,11 @@ public partial class App : Application, IDisposable
     private RollingFileLog? _log;
     private WasapiAudioCapture? _audioDevices;
     private DispatcherTimer? _configTimer;
+
+    /// <summary>Sent as If-None-Match, so an unchanged contract costs one 304 and no parse.</summary>
+    private string? _catalogEtag;
+    private string? _gameProfileEtag;
+    private string? _ballisticsEtag;
     private DispatcherTimer? _tickTimer;
 
     private Composition.MenuDriver? _menu;
@@ -501,7 +506,85 @@ public partial class App : Application, IDisposable
 
         StartBoardTick();
 
+        // The served contracts, not the bundle. Everything the menu and the grammar are compiled
+        // from is a catalog edit away, so an order, a label, a tag or a whole request type changes
+        // without a signed release. Backgrounded: a cold API must not hold up arming.
+        _ = RefreshServedContractsAsync(presenter, log);
+
         log.Info("Armed for an account. Hooks, menu, voice and capture are live.");
+    }
+
+    /// <summary>
+    /// Fetches the three served contracts and adopts any that changed, then rebuilds what was
+    /// compiled from them.
+    /// </summary>
+    /// <remarks>
+    /// Conditional on the stored ETag, so the steady state is three 304s. A refused document is
+    /// logged and dropped: the bundle stays in force rather than a half-valid catalog reaching the
+    /// menu. The voice grammar needs no rebuild, since VoiceDriver compiles it per hold from the
+    /// store, but the menu tree is built once and does not.
+    /// </remarks>
+    private async Task RefreshServedContractsAsync(BoardPresenter presenter, RollingFileLog log)
+    {
+        if (_client is not { } client)
+        {
+            return;
+        }
+
+        try
+        {
+            var types = await client
+                .GetRequestTypesAsync(_catalogEtag, _shutdown.Token)
+                .ConfigureAwait(true);
+            var profile = await client
+                .GetGameProfileAsync(_gameProfileEtag, _shutdown.Token)
+                .ConfigureAwait(true);
+            var ballistics = await client
+                .GetBallisticsAsync(_ballisticsEtag, _shutdown.Token)
+                .ConfigureAwait(true);
+
+            Adopt(BundledContracts.GameProfile(), profile, "game-profile", ref _gameProfileEtag, log);
+            Adopt(BundledContracts.Ballistics(), ballistics, "ballistics", ref _ballisticsEtag, log);
+
+            if (Adopt(BundledContracts.Catalog(), types, "request-types", ref _catalogEtag, log)
+                && _menu is { } menu)
+            {
+                // The tree is compiled once at arm time; everything else reads the store live, so
+                // this is the only thing an adopted catalog leaves stale.
+                var adopted = BundledContracts.Catalog().Current;
+                menu.Retarget(new MenuStateMachine(MenuTree.Compile(adopted), adopted));
+                RenderArtillery();
+                log.Info("Adopted a served catalog: menu rebuilt.");
+            }
+        }
+        catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
+        {
+            log.Warn($"Served contract refresh failed: {ex.GetType().Name}. Running on the bundle.");
+        }
+    }
+
+    /// <summary>Adopts one fetched contract. True only when the store actually changed.</summary>
+    private static bool Adopt<T>(
+        ContractStore<T> store,
+        CatalogFetch fetched,
+        string name,
+        ref string? etag,
+        RollingFileLog log)
+        where T : class, IValidatableContract
+    {
+        etag = fetched.ETag ?? etag;
+        if (fetched.NotModified || fetched.Json is not { } body)
+        {
+            return false;
+        }
+
+        var adoption = store.TryAdopt(body, fetched.ETag);
+        if (!adoption.Adopted && adoption.Errors.Count > 0)
+        {
+            log.Warn($"Served {name} refused: {string.Join("; ", adoption.Errors)}");
+        }
+
+        return adoption.Adopted;
     }
 
     /// <summary>
@@ -3018,6 +3101,7 @@ public partial class App : Application, IDisposable
                 }
 
                 await RenderForAsync(client, me, presenter, log).ConfigureAwait(true);
+                await RefreshServedContractsAsync(presenter, log).ConfigureAwait(true);
             }
             catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
             {
