@@ -1113,7 +1113,18 @@ public sealed class MenuStateMachine
     /// </summary>
     private MenuNavigated AcceptPoint(MapPoint point)
     {
-        _points.Add(point);
+        // Never more points than the type takes. Appending past the arity is a request the server
+        // refuses outright with point_count_mismatch, and the reading a user just took is the one
+        // they meant, so it corrects the last point rather than becoming an extra one.
+        if (_points.Count >= ArityOfSelection() && _points.Count > 0)
+        {
+            _points[^1] = point;
+        }
+        else
+        {
+            _points.Add(point);
+        }
+
         _digits.Clear();
 
         if (PointsWanted > 0)
@@ -1285,14 +1296,22 @@ public sealed class MenuStateMachine
                 // Backing out of confirm DISCARDS the reading and returns to the point level. It
                 // used to keep the snapshot and pop to the branch, so the next pass skipped the
                 // point level entirely and reused a coordinate the user had just backed away from.
+                //
+                // The collected POINTS go with it. They were kept, and the point level appends, so
+                // reading the coordinate again after backing out of confirm sent a one-point type
+                // two points and the server refused the whole request with point_count_mismatch.
                 _modifiers.Clear();
                 _modifierPage = 0;
                 _snapshot = null;
                 _digits.Clear();
+                _points.Clear();
                 Level = MenuLevel.Coordinate;
                 return new MenuNavigated(Level);
 
             case MenuLevel.Coordinate:
+                // Leaving the point level abandons the leaf, so the points collected for it go
+                // too: the next leaf starts its own draft rather than inheriting half of this one.
+                _points.Clear();
                 Level = PopToBranch();
                 return new MenuNavigated(Level);
 

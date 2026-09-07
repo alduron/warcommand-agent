@@ -878,6 +878,60 @@ public class MenuStateMachineTests
         Assert.Equal(Snapshot, ready.Points[0]);
     }
 
+    /// <summary>
+    /// Reported from the field, and in the log as "422 point_count_mismatch utility_tactical takes
+    /// 1 point(s); 2 supplied." Backing out of confirm returns to the point level, and the point
+    /// level APPENDED, so the second reading made the request unsendable.
+    /// </summary>
+    [Fact]
+    public void Reading_the_point_again_after_backing_out_of_confirm_still_sends_one()
+    {
+        var menu = Machine();
+        menu.Open(T0, Snapshot);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(1, T0);
+        Assert.Equal(MenuLevel.Confirm, menu.Level);
+
+        menu.Backspace(T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+
+        var again = new MapPoint(12.25m, 34.75m, "map_readout", "x12.25 y34.75", 0.91m);
+        menu.AcceptReadCoordinate(again, T0);
+
+        var ready = Assert.IsType<MenuRequestReady>(menu.KeyUp(T0));
+
+        Assert.Single(ready.Points);
+        Assert.Equal(again, ready.Points[0]);
+    }
+
+    /// <summary>
+    /// The same hole reached from the branch: a leaf abandoned at the point level left its point
+    /// behind, and the next leaf submitted with one point too many.
+    /// </summary>
+    [Fact]
+    public void A_leaf_abandoned_at_the_point_level_leaves_no_point_behind()
+    {
+        var menu = Machine();
+        menu.Open(T0, snapshot: null);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(1, T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+
+        menu.AcceptReadCoordinate(new MapPoint(1m, 2m, "map_readout", null, null), T0);
+        menu.Backspace(T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+        menu.Backspace(T0);
+
+        menu.Digit(1, T0);
+        var target = new MapPoint(55.5m, 66.5m, "map_readout", null, null);
+        menu.AcceptReadCoordinate(target, T0);
+
+        var ready = Assert.IsType<MenuRequestReady>(menu.KeyUp(T0));
+
+        Assert.Single(ready.Points);
+        Assert.Equal(target, ready.Points[0]);
+    }
+
     [Fact]
     public void The_supply_default_kind_is_applied_when_the_leaf_names_none()
     {
