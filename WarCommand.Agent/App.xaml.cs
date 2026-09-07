@@ -380,7 +380,9 @@ public partial class App : Application, IDisposable
                 presenter.Add(surface.BoardView);
                 return surface;
             },
-            notify: (title, body) => _tray?.ShowNotice(title, body));
+            // The one case the strip cannot answer: the overlay cannot draw over exclusive
+            // fullscreen, so the balloon rides along with it.
+            notify: (title, body) => Notify("OVERLAY NEEDS BORDERLESS WINDOWED", (title, body)));
 
         controller.StateChanged += (_, _) => _menuState = _menuState with
         {
@@ -1191,7 +1193,29 @@ public partial class App : Application, IDisposable
                 return;
             }
 
-            _observer?.SetFault("SUBMIT FAILED");
+            // The reason, not one word for everything. A full board, a stale deployment and a
+            // malformed request all read SUBMIT FAILED, so the only way to tell them apart was the
+            // log file the person holding the keyboard does not have open.
+            _observer?.SetFault(FaultWords.Submit(ex));
+        }
+    }
+
+    /// <summary>
+    /// Every notice this agent raises, on the board's status strip.
+    /// </summary>
+    /// <remarks>
+    /// The strip IS the notification area, and it is the only one: a tray balloon is a second
+    /// place to look, Windows drops it whenever focus assist is on, and it cannot be seen at all
+    /// from inside the game. The balloon is kept only where the strip cannot be read: the process
+    /// is quitting, or the game is in exclusive fullscreen and the overlay cannot draw over it.
+    /// </remarks>
+    private void Notify(string word, (string Title, string Body)? balloon = null)
+    {
+        _observer?.SetFault(word);
+
+        if (balloon is { } visible)
+        {
+            _tray?.ShowNotice(visible.Title, visible.Body);
         }
     }
 
@@ -1204,6 +1228,11 @@ public partial class App : Application, IDisposable
     /// </remarks>
     private static bool IsTransient(Exception ex) => ex switch
     {
+        // A full board is not the network. It arrives as a 429, which every other 429 means come
+        // back later, so it was queued: the submit vanished behind QUEUED, N WAITING and replayed
+        // a coordinate read minutes earlier onto a board that had moved. The queue is for a submit
+        // nobody could send, never for one the server considered and refused.
+        WarCommandApiException { Code: ErrorCodes.OpenRequestLimit } => false,
         WarCommandApiException api => api.IsTransient,
         _ => true,
     };
@@ -2617,7 +2646,7 @@ public partial class App : Application, IDisposable
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _log?.Warn($"Could not store the backend choice: {ex.GetType().Name}");
-            _tray?.ShowNotice("Could not switch backend", "The choice could not be written to disk.");
+            Notify("BACKEND UNCHANGED, DISK REFUSED");
             return;
         }
 
@@ -2633,7 +2662,7 @@ public partial class App : Application, IDisposable
     {
         if (Environment.ProcessPath is not { } exe)
         {
-            _tray?.ShowNotice("Restart needed", "Start WarCommand again to finish the change.");
+            Notify("RESTART NEEDED", ("Restart needed", "Start WarCommand again to finish the change."));
             Shutdown();
             return;
         }
@@ -2651,7 +2680,7 @@ public partial class App : Application, IDisposable
         catch (System.ComponentModel.Win32Exception ex)
         {
             _log?.Warn($"Relaunch failed: {ex.Message}");
-            _tray?.ShowNotice("Restart needed", "Start WarCommand again to finish the change.");
+            Notify("RESTART NEEDED", ("Restart needed", "Start WarCommand again to finish the change."));
         }
 
         Shutdown();
@@ -2691,7 +2720,7 @@ public partial class App : Application, IDisposable
         catch (Exception ex) when (ex is WarCommandApiException or HttpRequestException or TaskCanceledException)
         {
             log.Warn($"Deployment switch failed: {ex.GetType().Name}");
-            _tray?.ShowNotice("Could not switch deployment", "The API refused or is unreachable.");
+            Notify("DEPLOYMENT NOT SWITCHED");
         }
     }
 

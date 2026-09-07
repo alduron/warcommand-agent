@@ -31,6 +31,33 @@ public class RollingFileLogTests : IDisposable
         Assert.Contains("the cause", text, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// An unobserved task exception reaches the log as an AggregateException the runtime never
+    /// threw, so its own stack is null. Logging only the outer stack put a cross-thread WPF
+    /// failure in the file every day with nothing naming the call site.
+    /// </summary>
+    [Fact]
+    public void An_aggregate_with_no_stack_of_its_own_still_logs_the_causes()
+    {
+        var log = new RollingFileLog(Paths);
+
+        Exception cause;
+        try
+        {
+            throw new InvalidOperationException("the calling thread cannot access this object");
+        }
+        catch (InvalidOperationException ex)
+        {
+            cause = ex;
+        }
+
+        log.Error("Unobserved task exception.", new AggregateException(cause));
+
+        var text = AllText();
+        Assert.Contains("the calling thread cannot access this object", text, StringComparison.Ordinal);
+        Assert.Contains(nameof(An_aggregate_with_no_stack_of_its_own_still_logs_the_causes), text, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Verbose_is_read_per_line_so_the_switch_needs_no_restart()
     {

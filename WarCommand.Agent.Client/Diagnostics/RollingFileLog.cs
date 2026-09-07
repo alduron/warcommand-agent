@@ -102,9 +102,35 @@ public sealed class RollingFileLog : IClientLog
             text += $" <- {inner.GetType().Name}: {inner.Message}";
         }
 
-        return error.StackTrace is { Length: > 0 } stack
-            ? text + Environment.NewLine + stack
-            : text;
+        // The stack of whichever exception in the chain has one, innermost first. An unobserved
+        // task exception arrives as an AggregateException the runtime never threw, so its own
+        // stack is null: taking only the outer one logged a cross-thread WPF failure every day
+        // for a week with nothing naming the call site, and it could not be found from the file.
+        return Stack(error) is { } stack ? text + Environment.NewLine + stack : text;
+    }
+
+    /// <summary>The innermost stack in the chain, or null when nothing in it carries one.</summary>
+    private static string? Stack(Exception error)
+    {
+        string? found = null;
+
+        for (var current = error; current is not null; current = current.InnerException)
+        {
+            if (current is AggregateException aggregate)
+            {
+                foreach (var one in aggregate.InnerExceptions)
+                {
+                    found = Stack(one) ?? found;
+                }
+            }
+
+            if (current.StackTrace is { Length: > 0 } stack)
+            {
+                found = stack;
+            }
+        }
+
+        return found;
     }
 
     private void Write(string level, string message)

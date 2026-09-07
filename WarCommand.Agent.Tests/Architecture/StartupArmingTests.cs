@@ -82,6 +82,24 @@ public class StartupArmingTests
         Assert.Equal(2, armCalls);
     }
 
+    /// <summary>
+    /// The status strip is the notification area, and every notice goes through the one method
+    /// that writes to it. A tray balloon raised anywhere else is a notice nobody sees from inside
+    /// the game, which is where this agent is used.
+    /// </summary>
+    [Fact]
+    public void Only_Notify_raises_a_tray_balloon()
+    {
+        var source = AppSource();
+        var body = MethodBody(source, "private void Notify(");
+
+        Assert.Contains("_observer?.SetFault(word);", body, StringComparison.Ordinal);
+        Assert.Contains("_tray?.ShowNotice(", body, StringComparison.Ordinal);
+
+        // Once in Notify, and nowhere else in the composition root.
+        Assert.Equal(1, source.Split("ShowNotice(").Length - 1);
+    }
+
     private static string AppSource() => File.ReadAllText(AppSourcePath());
 
     /// <summary>The composition root, located from this file rather than from a build output.</summary>

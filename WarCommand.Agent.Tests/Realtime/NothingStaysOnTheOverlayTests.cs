@@ -2,6 +2,7 @@
 using WarCommand.Agent.Client.Realtime;
 using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Contracts;
+using WarCommand.Agent.Core.Model;
 using WarCommand.Agent.Overlay;
 using WarCommand.Agent.Realtime;
 using Xunit;
@@ -217,6 +218,28 @@ public sealed class NothingStaysOnTheOverlayTests
         observer.ExpireNotice(DateTimeOffset.UtcNow.AddMinutes(5));
 
         Assert.Equal(0, reloads);
+    }
+
+    /// <summary>
+    /// A rotation reaches the cell. The six digits on screen are what somebody reads out loud, and
+    /// the old ones are poison the moment the code turns over.
+    /// </summary>
+    [Fact]
+    public void A_rotation_frame_changes_the_join_code()
+    {
+        var (observer, presenter) = Build();
+        Assert.Equal("921585", presenter.Header!.Right);
+
+        observer.OnDeploymentRoster(new DeploymentRosterPayload
+        {
+            DeploymentId = Deployment,
+            MemberCount = 12,
+            InviteCode = "440217",
+            RotatedByCallsign = "Bear",
+        });
+
+        Assert.Equal("440217", presenter.Header!.Right);
+        Assert.Equal(12, presenter.Header!.PeopleCount);
     }
 
     private static (BoardRealtimeObserver Observer, BoardPresenter Presenter) Build(
