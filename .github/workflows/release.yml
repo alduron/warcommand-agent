@@ -87,7 +87,9 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          global-json-file: global.json
+          # Resolved from the WORKSPACE root, not the job's working-directory: this repo is
+          # checked out into warcommand-agent/ so the sibling repos can sit beside it.
+          global-json-file: warcommand-agent/global.json
 
       # The tag is the single source of the version. Nothing in the repo carries it, so a release
       # cannot disagree with its own tag, and a rebuild of the same tag is byte-for-byte the same
