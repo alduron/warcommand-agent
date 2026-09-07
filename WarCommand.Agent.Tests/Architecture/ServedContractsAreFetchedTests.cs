@@ -50,7 +50,7 @@ public class ServedContractsAreFetchedTests
     {
         // Twice: once from ArmForAccount, once from the poll tick. A catalog edit must land on a
         // running agent without a restart.
-        var calls = Regex.Matches(App, @"RefreshServedContractsAsync\(").Count;
+        var calls = Regex.Count(App, @"RefreshServedContractsAsync\(");
         Assert.True(calls >= 3, $"expected a definition and two call sites, found {calls}");
     }
 
