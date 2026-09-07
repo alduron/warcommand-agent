@@ -266,6 +266,51 @@ public class RealtimeClientTests
         Assert.Equal(arrived, revalidator.Calls[^1]);
     }
 
+    /// <summary>
+    /// Reported: "I opened the same deployment my overlay was attached to on the website and every
+    /// task went away." The web enters on every open, so the frame arrives for the match already
+    /// underneath the agent. Nothing moved, so nothing may be cleared.
+    /// </summary>
+    [Fact]
+    public async Task Re_entering_the_deployment_already_held_clears_nothing()
+    {
+        var standing = Guid.NewGuid();
+        var group = Guid.NewGuid();
+
+        var channel = new FakeWebSocketChannel();
+        channel.Push(Ready("s-1", DateTimeOffset.UtcNow, group, standing));
+
+        var observer = new RecordingObserver();
+        var revalidator = new FakeRevalidator();
+        var client = Build(new FakeTicketSource(), new FakeChannelFactory(channel), observer, new TestDelay(PresenceInterval), out _, revalidator: revalidator);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var run = client.RunAsync(cts.Token);
+        Assert.True(observer.ReadySignal.Wait(Timeout));
+        await Until(() => revalidator.Calls.Count == 1);
+
+        channel.Push(ServerFrame.Of(
+            FrameTypes.DeploymentEntered,
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["group_id"] = group,
+                ["deployment_id"] = standing,
+                ["label"] = "ALPHA",
+                ["member_count"] = 31,
+                ["source"] = "override",
+            },
+            seq: 2));
+
+        await Until(() => observer.Order.Contains("entered"));
+        await Until(() => revalidator.Calls.Count == 2);
+        await cts.CancelAsync();
+        await run;
+
+        Assert.DoesNotContain("cleared:DeploymentEntered", observer.Order);
+        Assert.DoesNotContain("draft:DeploymentChanged", observer.Order);
+        Assert.Equal(standing, revalidator.Calls[^1]);
+    }
+
     [Fact]
     public async Task An_empty_subscription_set_is_normal_and_seeds_nothing()
     {

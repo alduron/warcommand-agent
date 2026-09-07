@@ -705,10 +705,21 @@ public sealed class RealtimeClient : IAsyncDisposable
             return;
         }
 
+        // Re-entry is not a hop. The web POSTs /enter every time a deployment page is opened, so
+        // opening the deployment this agent is already standing on used to abort the draft, drop
+        // every row and reset the slot allocator behind a SWITCHING DEPLOYMENT banner. The server
+        // no longer publishes that frame, and an older one does not get to wipe the board either:
+        // nothing moved, so nothing is cleared. The revalidation below still re-reads the rows.
+        var hop = !CurrentDeploymentIds.Contains(payload.DeploymentId);
+
         // Order is the specification. Step 0 first, because a draft aborted after the board is
         // cleared has already been committed.
-        _observer.OnPendingDraftAborted(DraftAbortReason.DeploymentChanged);
-        _observer.OnBoardCleared(BoardClearReason.DeploymentEntered);
+        if (hop)
+        {
+            _observer.OnPendingDraftAborted(DraftAbortReason.DeploymentChanged);
+            _observer.OnBoardCleared(BoardClearReason.DeploymentEntered);
+        }
+
         _observer.OnDeploymentEntered(payload);
 
         _subscriptions =
