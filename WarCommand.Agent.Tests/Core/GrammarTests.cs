@@ -87,11 +87,11 @@ public class GrammarTests
     {
         var grammar = Everything();
 
-        // 'extract' is the ground exfil and 'air extract' is the air one. A shorter alias that
-        // is a prefix of a longer one is resolved here, never by phoneme distance.
-        Assert.Equal("ground_extract", grammar.LongestMatch(PositionClass.Initial, Words("extract"), 0)!.Token.Id);
-        Assert.Equal("air_extract", grammar.LongestMatch(PositionClass.Initial, Words("air extract"), 0)!.Token.Id);
-        Assert.Equal("fire_team", grammar.LongestMatch(PositionClass.Initial, Words("fire team"), 0)!.Token.Id);
+        // A shorter alias that is a prefix of a longer one is resolved here, never by phoneme
+        // distance: 'fire' opens 'fire mission' and 'fire team', both attack_position in v5.
+        Assert.Equal("move_extract", grammar.LongestMatch(PositionClass.Initial, Words("extract"), 0)!.Token.Id);
+        Assert.Equal("attack_position", grammar.LongestMatch(PositionClass.Initial, Words("fire mission"), 0)!.Token.Id);
+        Assert.Equal("attack_position", grammar.LongestMatch(PositionClass.Initial, Words("fire team"), 0)!.Token.Id);
     }
 
     [Fact]
@@ -218,7 +218,7 @@ public class GrammarTests
 
         var transport = grammar.LongestMatch(PositionClass.Initial, Words("transport"), 0)!.Token;
 
-        Assert.Equal("ground_move", transport.Id);
+        Assert.Equal("move_transport", transport.Id);
         Assert.True(transport.Ambiguous);
     }
 
@@ -243,7 +243,7 @@ public class GrammarTests
             {"pairs":[{"position_class":"initial","reason":"forced_menu","score":0.8,
               "cleared_by":"nothing","segment_distance":0.4,"differing_features":["onset"],
               "a":{"alias":"flank","owner":"type:flank","ambiguous":true},
-              "b":{"alias":"tank","owner":"type:armor_support","ambiguous":false},
+              "b":{"alias":"tank","owner":"type:attack_vehicle","ambiguous":false},
               "phonemes":{"a":"F L AE1 NG K","b":"T AE1 NG K"}}]}
             """);
 
@@ -255,7 +255,7 @@ public class GrammarTests
         Assert.Equal("initial", pair.PositionClass);
         Assert.Equal("forced_menu", pair.Reason);
         Assert.True(pair.A.Ambiguous);
-        Assert.Equal("type:armor_support", pair.B.Owner);
+        Assert.Equal("type:attack_vehicle", pair.B.Owner);
     }
 
     [Fact]

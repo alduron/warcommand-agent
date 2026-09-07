@@ -44,10 +44,10 @@ public class MenuStateMachineTests
     {
         var tree = Tree;
 
-        var fire = tree.Root.Single(e => e.Digit == ContractFixtures.Catalog.MenuCategories["fire"]);
-        Assert.Equal("FIRE", fire.Label);
-        Assert.Equal("shell_mission", fire.Children.Single(c => c.Digit == 1).TypeId);
-        Assert.Equal("armor_support", fire.Children.Single(c => c.Digit == 2).TypeId);
+        var fire = tree.Root.Single(e => e.Digit == ContractFixtures.Catalog.MenuCategories["attack"]);
+        Assert.Equal("ATTACK", fire.Label);
+        Assert.Equal("attack_position", fire.Children.Single(c => c.Digit == 1).TypeId);
+        Assert.Equal("attack_vehicle", fire.Children.Single(c => c.Digit == 2).TypeId);
     }
 
     [Fact]
@@ -84,13 +84,17 @@ public class MenuStateMachineTests
     [Fact]
     public void A_branch_holds_items_and_is_not_one_itself()
     {
-        // Twenty calibers do not fit nine digits, so AMMO nests. The branch carries no type of
-        // its own: pressing it walks in rather than sending anything.
-        var branch = Tree.Find("ammo.1")!;
+        // Twenty calibers do not fit nine digits, so AMMO nests, and v5 nests it one deeper
+        // again under ITEMS. The branch carries no type of its own: pressing it walks in.
+        var ammo = Tree.Find("items.2")!;
+        Assert.Null(ammo.TypeId);
+        Assert.Equal("AMMO", ammo.Label);
+
+        var branch = Tree.Find("items.2.1")!;
         Assert.Null(branch.TypeId);
         Assert.Equal("PISTOL", branch.Label);
 
-        var leaf = Tree.Find("ammo.1.1")!;
+        var leaf = Tree.Find("items.2.1.1")!;
         Assert.Equal("ammo_9mm", leaf.TypeId);
     }
 
@@ -99,8 +103,8 @@ public class MenuStateMachineTests
     {
         var tree = MenuTree.Compile(ContractFixtures.Catalog, ["mortar"]);
 
-        Assert.NotNull(tree.Find("fire.1"));
-        Assert.Null(tree.Find("infantry.3"));
+        Assert.NotNull(tree.Find("attack.1"));
+        Assert.Null(tree.Find("medical.1"));
     }
 
     [Theory]
@@ -130,7 +134,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0);
         menu.Digit(1, T0);
         Assert.Equal(MenuLevel.Confirm, menu.Level);
 
@@ -326,7 +330,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, snapshot: null);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0);
         menu.Digit(1, T0);
 
         Assert.Equal(MenuLevel.Coordinate, menu.Level);
@@ -345,7 +349,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, snapshot: null);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0);
         menu.Digit(1, T0);
 
         var read = new MapPoint(97.56m, 108.62m, "map_readout", "x97.56 y108.62", 0.07m);
@@ -363,7 +367,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, snapshot: null);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0);
         menu.Digit(1, T0);
 
         // Released on the coordinate level having never got a reading. Nothing is sent, and the
@@ -379,7 +383,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, snapshot: null);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0);
         menu.Digit(1, T0);
         menu.AcceptReadCoordinate(new MapPoint(1m, 2m, "map_readout", null, null), T0);
         Assert.Equal(MenuLevel.Confirm, menu.Level);
@@ -480,13 +484,13 @@ public class MenuStateMachineTests
         var menu = Machine();
         menu.Open(T0, Snapshot);
 
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0.AddMilliseconds(100));
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0.AddMilliseconds(100));
         menu.Digit(1, T0.AddMilliseconds(200));
         var outcome = menu.KeyUp(T0.AddMilliseconds(300));
 
         var ready = Assert.IsType<MenuRequestReady>(outcome);
         Assert.Equal(Snapshot, ready.Point);
-        Assert.Equal("shell_mission", ready.TypeId);
+        Assert.Equal("attack_position", ready.TypeId);
     }
 
     [Fact]
@@ -494,7 +498,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0);
         menu.Digit(1, T0);
 
         Assert.Equal(MenuLevel.Coordinate, menu.Level);
@@ -517,10 +521,10 @@ public class MenuStateMachineTests
         var menu = Machine();
         menu.Open(T0, Snapshot);
 
-        var outcome = menu.Digit(ContractFixtures.Catalog.MenuCategories["infantry"], T0);
+        var outcome = menu.Digit(ContractFixtures.Catalog.MenuCategories["defend"], T0);
         Assert.IsType<MenuNavigated>(outcome);
 
-        // INFANTRY has four entries; 9 is not one of them.
+        // DEFEND has two entries; 9 is not one of them.
         Assert.IsType<MenuNothing>(menu.Digit(9, T0));
         Assert.Equal(MenuLevel.Branch, menu.Level);
     }
@@ -530,7 +534,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0);
 
         var outcome = menu.KeyUp(T0.AddMilliseconds(50));
 
@@ -543,7 +547,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0);
         menu.Digit(1, T0);
 
         var urgent = menu.Options.Single(o => string.Equals(o.Label, "Urgent", StringComparison.Ordinal));
@@ -559,8 +563,13 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["ammo"], T0);
+        // ITEMS -> AMMO -> PISTOL is three branches deep in v5, so backing out takes three.
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["items"], T0);
+        menu.Digit(2, T0);
         menu.Digit(1, T0);
+        Assert.Equal(MenuLevel.Branch, menu.Level);
+
+        menu.Backspace(T0);
         Assert.Equal(MenuLevel.Branch, menu.Level);
 
         menu.Backspace(T0);
@@ -575,7 +584,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0);
 
         Assert.IsType<MenuDiscarded>(menu.Escape(T0));
         Assert.Equal(MenuLevel.Closed, menu.Level);
@@ -823,10 +832,10 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["mobility"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["move"], T0);
         menu.Digit(1, T0);
 
-        Assert.Equal(2, ContractFixtures.Catalog.RequestType("air_move")!.Arity);
+        Assert.Equal(2, ContractFixtures.Catalog.RequestType("move_transport")!.Arity);
 
         // The snapshot is PICKUP. The draft is not finished, so it waits on the point level for
         // dropoff rather than jumping to confirm.
@@ -844,7 +853,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["mobility"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["move"], T0);
         menu.Digit(1, T0);
 
         var dropoff = new MapPoint(42.5m, 43.5m, "map_readout", null, null);
@@ -855,7 +864,7 @@ public class MenuStateMachineTests
 
         var ready = Assert.IsType<MenuRequestReady>(menu.KeyUp(T0));
 
-        Assert.Equal("air_move", ready.TypeId);
+        Assert.Equal("move_transport", ready.TypeId);
         Assert.Equal(2, ready.Points.Count);
         Assert.Equal(Snapshot, ready.Points[0]);
         Assert.Equal(dropoff, ready.Points[1]);
@@ -869,7 +878,7 @@ public class MenuStateMachineTests
     {
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0);
         menu.Digit(1, T0);
 
         var ready = Assert.IsType<MenuRequestReady>(menu.KeyUp(T0));

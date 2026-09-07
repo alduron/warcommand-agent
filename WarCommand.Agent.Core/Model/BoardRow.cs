@@ -61,6 +61,12 @@ public sealed record BoardRow
     /// <summary>Null unless the row is claimed or in progress.</summary>
     public Guid? ClaimantParticipantId { get; init; }
 
+    /// <summary>Many people may accept this row. It stays Open and collects takers instead.</summary>
+    public bool MultiTaker { get; init; }
+
+    /// <summary>Everyone who accepted a <see cref="MultiTaker"/> row. Empty on a single-claimant one.</summary>
+    public IReadOnlyList<Guid> TakerParticipantIds { get; init; } = [];
+
     /// <summary>Server wall clock. Render <c>ExpiresAt + clock_offset</c>, never this value raw.</summary>
     public required DateTimeOffset ExpiresAt { get; init; }
 
@@ -102,7 +108,10 @@ public sealed record BoardRow
 
     public bool IsOpen => State == RequestState.Open;
 
-    public bool IsHeld => State is RequestState.Claimed or RequestState.InProgress;
+    /// <summary>Held in any sense. A shared row stays Open while it collects takers.</summary>
+    public bool IsHeld =>
+        State is RequestState.Claimed or RequestState.InProgress
+        || (MultiTaker && State == RequestState.Open && TakerParticipantIds.Count > 0);
 
     public bool IsTerminal => State is RequestState.Completed or RequestState.Cancelled or RequestState.Expired;
 
@@ -124,13 +133,17 @@ public sealed record BoardRow
         }
     }
 
-    public bool IsClaimedBy(Guid participantId) => ClaimantParticipantId == participantId;
+    public bool IsClaimedBy(Guid participantId) =>
+        MultiTaker ? TakerParticipantIds.Contains(participantId) : ClaimantParticipantId == participantId;
+
+    /// <summary>How many people are on it. One or none unless the row is shared.</summary>
+    public int TakerCount => MultiTaker ? TakerParticipantIds.Count : (ClaimantParticipantId is null ? 0 : 1);
 
     /// <summary>True when this viewer asked for the row.</summary>
     public bool IsRequestedBy(Guid participantId) => RequestedByParticipantId == participantId;
 
     /// <summary>
-    /// A held row the viewer is one half of: they took it, or they asked for it. Renders in YOURS
+    /// A held row the viewer is one half of: they took it, or they asked for it. Renders in ACTIVE
     /// at the foot of the board, holding no slot.
     /// </summary>
     public bool RendersInYours(Guid viewerParticipantId) =>
@@ -140,8 +153,12 @@ public sealed record BoardRow
     /// A held row the viewer has no part in. Renders as no row at all, only as one of the
     /// N in IN PROGRESS, so a busy board is not mostly work its reader cannot take.
     /// </summary>
+    /// <remarks>
+    /// A shared row somebody else is on is NOT one of these: it is still open and this viewer can
+    /// still join it, so collapsing it to a count would hide work they are wanted for.
+    /// </remarks>
     public bool CountsAsInProgress(Guid viewerParticipantId) =>
-        IsHeld && !IsClaimedBy(viewerParticipantId) && !IsRequestedBy(viewerParticipantId);
+        IsHeld && !MultiTaker && !IsClaimedBy(viewerParticipantId) && !IsRequestedBy(viewerParticipantId);
 
     /// <summary>
     /// LOW CONF treatment. Never renders for a source that reports no confidence.

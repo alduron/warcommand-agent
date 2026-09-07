@@ -65,7 +65,7 @@ public class FireTargetFollowsTheMissionTests
     [Fact]
     public void Only_a_fire_mission_computes_a_solution()
     {
-        Assert.NotNull(ContractFixtures.Catalog.RequestType("shell_mission")!.ComputesSolution);
+        Assert.NotNull(ContractFixtures.Catalog.RequestType("attack_position")!.ComputesSolution);
         Assert.Null(ContractFixtures.Catalog.RequestType("resupply")!.ComputesSolution);
         Assert.Null(ContractFixtures.Catalog.RequestType("weapon_rifle")!.ComputesSolution);
     }

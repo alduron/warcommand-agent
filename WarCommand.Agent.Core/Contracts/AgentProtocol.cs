@@ -174,6 +174,12 @@ public record RequestBody
 
     public int ReleaseCount { get; init; }
 
+    /// <summary>Many people may accept this row. It stays open and collects takers.</summary>
+    public bool MultiTaker { get; init; }
+
+    /// <summary>Everyone on a <see cref="MultiTaker"/> row. Empty on a single-claimant one.</summary>
+    public IReadOnlyList<TakerBody> Takers { get; init; } = [];
+
     public Guid? RelatedRequestId { get; init; }
 
     public Guid? SupersedesRequestId { get; init; }
@@ -216,10 +222,22 @@ public record RequestBody
         CreatedAt = CreatedAt,
         Version = Version,
         ReleaseCount = ReleaseCount,
+        MultiTaker = MultiTaker,
+        TakerParticipantIds = [.. Takers.Select(t => t.ParticipantId)],
         RelatedRequestId = RelatedRequestId,
         SupersedesRequestId = SupersedesRequestId,
         Note = Note,
     };
+}
+
+/// <summary>One person on a shared row.</summary>
+public sealed record TakerBody
+{
+    public required Guid ParticipantId { get; init; }
+
+    public string? Callsign { get; init; }
+
+    public required DateTimeOffset ClaimedAt { get; init; }
 }
 
 // ---------------------------------------------------------------------------

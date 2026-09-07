@@ -254,17 +254,30 @@ public sealed class BoardState
         // In progress, not claimed: taking a job starts it, and the server records both in one
         // move. A row left in Claimed would draw no bar, count as nothing, and offer a START that
         // no longer exists.
-        var claimed = row with
-        {
-            State = RequestState.InProgress,
-            ClaimantParticipantId = claimantParticipantId,
-            ClaimantCallsign = claimantCallsign,
-            Version = version,
-        };
+        //
+        // A shared row does none of that. It stays OPEN and gains one more taker, because the
+        // next person can still accept it: moving it to InProgress would take it off every other
+        // board on the first acceptance, which is the exact opposite of what it is for.
+        var claimed = row.MultiTaker
+            ? row with
+            {
+                TakerParticipantIds = [.. row.TakerParticipantIds, claimantParticipantId],
+                Version = version,
+            }
+            : row with
+            {
+                State = RequestState.InProgress,
+                ClaimantParticipantId = claimantParticipantId,
+                ClaimantCallsign = claimantCallsign,
+                Version = version,
+            };
 
         // The claimant KEEPS its digit: done, release and copy all address a row by it.
         // Nobody else does, including the requester, who has nothing to do to it.
-        if (!claimed.IsClaimedBy(ViewerParticipantId))
+        //
+        // A shared row somebody else joined keeps its digit for everyone: this viewer can still
+        // accept it, and a row that loses its number is a row they can no longer say.
+        if (!claimed.MultiTaker && !claimed.IsClaimedBy(ViewerParticipantId))
         {
             Allocator.Release(requestId, now);
             claimed = claimed.WithoutSlot();

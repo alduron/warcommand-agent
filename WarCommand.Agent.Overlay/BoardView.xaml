@@ -658,12 +658,13 @@
                     </StackPanel>
                 </Border>
 
-                <!-- YOURS: the rows this viewer is one half of. Foot of the board, because the top
-                     belongs to work that still needs a taker. -->
+                <!-- ACTIVE: the rows this viewer is one half of, what they took and what they
+                     asked for that somebody took. Foot of the board, because the top belongs to
+                     work that still needs a taker. -->
                 <StackPanel x:Name="YoursSection" Visibility="Collapsed">
                     <Border Padding="9,5,9,2">
                         <TextBlock x:Name="YoursLabel" Style="{StaticResource Up}"
-                                   Foreground="{StaticResource Dim}" Text="YOURS" />
+                                   Foreground="{StaticResource Dim}" Text="ACTIVE" />
                     </Border>
                     <ItemsControl x:Name="SecondaryList" ItemTemplate="{StaticResource StripRowTemplate}" />
                 </StackPanel>

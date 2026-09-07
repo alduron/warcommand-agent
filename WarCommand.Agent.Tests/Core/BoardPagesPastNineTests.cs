@@ -20,7 +20,7 @@ public class BoardPagesPastNineTests
     private static BoardRow Row(int n) =>
         Rows.A(
             id: Guid.Parse($"018f0000-0000-7000-8000-0000000000{n:d2}"),
-            typeId: "shell_mission",
+            typeId: "attack_position",
             createdAt: T0.AddSeconds(n)) with
         {
             TicketCode = $"MTR-{n:d2}",

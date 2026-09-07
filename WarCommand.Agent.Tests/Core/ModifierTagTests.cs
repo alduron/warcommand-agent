@@ -103,7 +103,7 @@ public class ModifierTagTests
     [Fact]
     public void A_tag_chosen_on_another_page_stays_chosen_and_is_counted()
     {
-        var menu = Confirming("weapons.1");
+        var menu = Confirming("items.1.1");
 
         Assert.Equal(2, menu.ModifierPageCount);
 

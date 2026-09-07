@@ -28,7 +28,7 @@ public class BoardLinesAreSequentialTests
     private static BoardRow Row(int n, Guid? claimant = null) =>
         Rows.A(
             id: Guid.Parse($"018f0000-0000-7000-8000-0000000000{n:d2}"),
-            typeId: "shell_mission",
+            typeId: "attack_position",
             createdAt: T0.AddSeconds(n),
             state: claimant is null ? RequestState.Open : RequestState.InProgress,
             claimant: claimant) with

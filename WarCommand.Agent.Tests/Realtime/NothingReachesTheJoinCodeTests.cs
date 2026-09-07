@@ -43,7 +43,7 @@ public sealed class NothingReachesTheJoinCodeTests
         observer.OnBoardStalenessChanged(stale: true, drainAgeSeconds: 90);
         observer.OnCredentialsRejected("device_revoked");
         observer.OnConnectionStateChanged(RealtimeConnectionState.Reconnecting);
-        observer.SetRoles(["mortar", "armor_support"]);
+        observer.SetRoles(["mortar", "attack_vehicle"]);
         observer.OnPendingDraftAborted(DraftAbortReason.DeploymentChanged);
         observer.SetGunPosition(new GunPosition(
             "l81",

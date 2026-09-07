@@ -289,7 +289,7 @@ public class PttStateMachineTests
             new ParsedDisambiguation
             {
                 Alias = "flank",
-                Options = [new DisambiguationOption("flank", "FLANK", null, null), new DisambiguationOption("armor_support", "ARMOR", null, null)],
+                Options = [new DisambiguationOption("flank", "FLANK", null, null), new DisambiguationOption("attack_vehicle", "ARMOR", null, null)],
             },
             draft: null,
             T0.AddSeconds(1));

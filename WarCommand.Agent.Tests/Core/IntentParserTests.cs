@@ -76,7 +76,7 @@ public class IntentParserTests
             new IntentParser(Loaded, pairs).Parse(Utterance.FromWords("transport", 0.95)));
 
         Assert.Equal("transport", menu.Alias);
-        Assert.Equal(["ground_move", "vehicle_defense"], menu.Options.Select(o => o.TypeId));
+        Assert.Equal(["move_transport", "vehicle_defense"], menu.Options.Select(o => o.TypeId));
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public class IntentParserTests
         var menu = Assert.IsType<ParsedDisambiguation>(
             new IntentParser(Loaded, NearFloorPairs.Empty).Parse(Utterance.FromWords("transport", 0.95)));
 
-        Assert.Equal(["ground_move"], menu.Options.Select(o => o.TypeId));
+        Assert.Equal(["move_transport"], menu.Options.Select(o => o.TypeId));
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public class IntentParserTests
 
         var menu = Assert.IsType<ParsedDisambiguation>(Parser(Confusables("escort", "transport")).Parse(utterance));
 
-        Assert.Equal(["vehicle_defense", "ground_move"], menu.Options.Select(o => o.TypeId));
+        Assert.Equal(["vehicle_defense", "move_transport"], menu.Options.Select(o => o.TypeId));
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public class IntentParserTests
     {
         var parsed = Assert.IsType<ParsedRequest>(Parse("mortar willy pete"));
 
-        Assert.Equal("shell_mission", parsed.TypeId);
+        Assert.Equal("attack_position", parsed.TypeId);
         Assert.Equal(["willy_pete"], parsed.Modifiers);
     }
 
