@@ -113,32 +113,8 @@ public sealed class TrayIconController : ISuspendable, IDisposable
     }
 
     /// <summary>
-    /// A balloon naming where the icon is. Windows 11 files a new tray icon into the overflow
-    /// flyout by default, so a first run otherwise looks like nothing launched at all.
-    /// </summary>
-    public void ShowLocationHint()
-    {
-        _notifyIcon.BalloonTipTitle = "WarCommand";
-        _notifyIcon.BalloonTipText = "running, in the notification area under ^";
-        _notifyIcon.BalloonTipIcon = ToolTipIcon.Info;
-        _notifyIcon.ShowBalloonTip(10_000);
-    }
-
-    /// <summary>
-    /// The balloon an agent holding no account shows. Names the site, because no other unpaired
-    /// surface does.
-    /// </summary>
-    public void ShowNotSetUpHint()
-    {
-        _notifyIcon.BalloonTipTitle = "Not set up";
-        _notifyIcon.BalloonTipText = "warcommand.app, signed in. Then it finds itself.";
-        _notifyIcon.BalloonTipIcon = ToolTipIcon.Warning;
-        _notifyIcon.ShowBalloonTip(10_000);
-    }
-
-    /// <summary>
-    /// A balloon the agent raises for itself: the borderless-windowed prompt, and anything else
-    /// the user has to act on while looking at the game rather than at us.
+    /// The one balloon. Raised only through App.Notify, which writes the word to the status strip
+    /// first: the strip is the notification area, and a balloon nobody sees is not a notice.
     /// </summary>
     public void ShowNotice(string title, string body)
     {

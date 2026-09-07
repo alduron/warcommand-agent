@@ -308,7 +308,11 @@ public partial class App : Application, IDisposable
         _tray = new TrayIconController { StateProvider = () => _menuState };
         _tray.CommandInvoked += OnTrayCommand;
         _tray.SetTooltip(profile.IsTrayOnly ? "WarCommand (tray only)" : "WarCommand - not set up");
-        _tray.ShowLocationHint();
+        // No account yet, so no board and no strip: this is one of the three states where the
+        // balloon is the only surface there is, and pointing at the tray icon is its whole job.
+        Notify(
+            "RUNNING, TRAY ICON UNDER ^",
+            ("WarCommand", "running, in the notification area under ^"));
 
         // Verbose is read per line rather than captured, so the switch in settings takes effect
         // without a restart. The store is already built above.
@@ -3174,7 +3178,9 @@ public partial class App : Application, IDisposable
         _presenter?.ShowEmptyState("Not set up", _menuState.PairingCode is { } shown
             ? $"warcommand.app  /  or code {shown}"
             : "warcommand.app  /  sign in to finish");
-        _tray?.ShowNotSetUpHint();
+        Notify(
+            "NOT SET UP, WARCOMMAND.APP",
+            ("Not set up", "warcommand.app, signed in. Then it finds itself."));
 
         while (!_shutdown.IsCancellationRequested)
         {

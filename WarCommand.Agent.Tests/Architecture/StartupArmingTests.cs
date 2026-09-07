@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace WarCommand.Agent.Tests.Architecture;
@@ -98,6 +99,49 @@ public class StartupArmingTests
 
         // Once in Notify, and nowhere else in the composition root.
         Assert.Equal(1, source.Split("ShowNotice(").Length - 1);
+    }
+
+    /// <summary>
+    /// Every balloon in the whole agent, not just the ones the composition root raises. Two lived
+    /// on the tray controller itself, so they never reached the strip and the sweep never saw them.
+    /// </summary>
+    [Fact]
+    public void The_whole_agent_has_exactly_one_balloon_and_it_is_behind_Notify()
+    {
+        var raisers = new List<string>();
+        var callers = new List<string>();
+
+        foreach (var file in Sources())
+        {
+            var text = File.ReadAllText(file);
+
+            if (text.Contains("ShowBalloonTip(", StringComparison.Ordinal))
+            {
+                raisers.Add(Path.GetFileName(file));
+            }
+
+            // A call to the balloon, as opposed to the one declaration of it.
+            if (text.Contains(".ShowNotice(", StringComparison.Ordinal))
+            {
+                callers.Add(Path.GetFileName(file));
+            }
+        }
+
+        Assert.Equal(["TrayIconController.cs"], raisers);
+        Assert.Equal(["App.xaml.cs"], callers);
+    }
+
+    /// <summary>Every .cs file the agent ships, tests and generated output excluded.</summary>
+    private static IEnumerable<string> Sources([CallerFilePath] string here = "")
+    {
+        var repo = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(here)))!;
+
+        return Directory
+            .EnumerateFiles(repo, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(f => !f.Contains(".Tests", StringComparison.Ordinal))
+            .OrderBy(f => f, StringComparer.Ordinal);
     }
 
     private static string AppSource() => File.ReadAllText(AppSourcePath());

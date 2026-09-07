@@ -886,10 +886,11 @@ public class MenuStateMachineTests
     [Fact]
     public void Reading_the_point_again_after_backing_out_of_confirm_still_sends_one()
     {
+        var (category, leaf) = AOnePointLeaf();
         var menu = Machine();
         menu.Open(T0, Snapshot);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
-        menu.Digit(1, T0);
+        menu.Digit(category, T0);
+        menu.Digit(leaf, T0);
         Assert.Equal(MenuLevel.Confirm, menu.Level);
 
         menu.Backspace(T0);
@@ -911,18 +912,21 @@ public class MenuStateMachineTests
     [Fact]
     public void A_leaf_abandoned_at_the_point_level_leaves_no_point_behind()
     {
+        var (category, leaf) = AOnePointLeaf();
         var menu = Machine();
         menu.Open(T0, snapshot: null);
-        menu.Digit(ContractFixtures.Catalog.MenuCategories["fire"], T0);
-        menu.Digit(1, T0);
+        menu.Digit(category, T0);
+        menu.Digit(leaf, T0);
         Assert.Equal(MenuLevel.Coordinate, menu.Level);
 
         menu.AcceptReadCoordinate(new MapPoint(1m, 2m, "map_readout", null, null), T0);
         menu.Backspace(T0);
         Assert.Equal(MenuLevel.Coordinate, menu.Level);
-        menu.Backspace(T0);
 
-        menu.Digit(1, T0);
+        // Out of the point level altogether, back onto the branch, and in again.
+        menu.Backspace(T0);
+        menu.Digit(leaf, T0);
+
         var target = new MapPoint(55.5m, 66.5m, "map_readout", null, null);
         menu.AcceptReadCoordinate(target, T0);
 
@@ -930,6 +934,32 @@ public class MenuStateMachineTests
 
         Assert.Single(ready.Points);
         Assert.Equal(target, ready.Points[0]);
+    }
+
+    /// <summary>
+    /// A category and a leaf for a one-point type, read off the compiled tree.
+    /// </summary>
+    /// <remarks>
+    /// Never a named category id. The catalog is the game's own menu and it gets rebuilt: a test
+    /// about how the menu holds points has no business failing because a category was renamed.
+    /// </remarks>
+    private static (int Category, int Leaf) AOnePointLeaf()
+    {
+        foreach (var category in Tree.Root)
+        {
+            foreach (var leaf in category.Children)
+            {
+                if (leaf.IsLeaf
+                    && leaf.TypeId is { } id
+                    && ContractFixtures.Catalog.RequestType(id) is { Arity: 1 })
+                {
+                    return (category.Digit, leaf.Digit);
+                }
+            }
+        }
+
+        Assert.Fail("The catalog has no one-point leaf directly under a category.");
+        return default;
     }
 
     [Fact]
