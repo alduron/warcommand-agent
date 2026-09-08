@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 
 namespace WarCommand.Agent.Core.Input;
 
@@ -80,15 +80,19 @@ public static class OverlayHint
             // The BOUND keys, never the words BACKSPACE and ESC. Those were literals while the
             // defaults were A and Escape, so the one cell whose job is naming a key named the
             // wrong one, and BACK was described as "up" rather than as what the key is called.
-            // ESC is not rebindable, so it stays a literal. BACK is, and printing BACKSPACE for
-            // a key bound to A named a key that does nothing.
+            // ESC used to be named on every one of these lines and is armed nowhere: the overlay
+            // is click-through and no-activate, so a menu key exists only if the hook takes it, and
+            // the hook does not take Escape. The cell whose job is naming a key named a dead one.
             var back = state.BackLabel ?? "BACK";
 
             return state.MenuLevel switch
             {
-                MenuLevel.Coordinate or MenuLevel.Join => $"{back} FIXES  ESC CLOSES",
-                MenuLevel.Confirm => "RELEASE SENDS  ESC DISCARDS",
-                _ => $"{back} BACK  ESC CLOSES",
+                // Both keys delete the last digit, and Backspace is the one a hand that just typed
+                // the grid reaches for. Naming only the bound back key sent people to Backspace
+                // anyway, which was unarmed and did nothing.
+                MenuLevel.Coordinate or MenuLevel.Join => $"{back} OR BACKSPACE FIXES",
+                MenuLevel.Confirm => $"RELEASE SENDS  {back} FIXES",
+                _ => $"{back} BACK  RELEASE CLOSES",
             };
         }
 

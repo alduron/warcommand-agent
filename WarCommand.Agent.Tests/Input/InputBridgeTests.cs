@@ -160,10 +160,12 @@ public class InputBridgeTests
         Assert.True(harness.Bridge.Handle(Chord.Bare("4")).Swallow);
         Assert.True(harness.Bridge.Handle(Chord.Bare("Numpad4")).Swallow);
 
-        // The game keeps these. Escape closed the menu, which releasing the hold key already does,
-        // and Backspace deleted a digit, which the back key does.
+        // Backspace too. It deletes the last typed digit, and it is the key a hand that just typed
+        // a grid on the number row actually reaches for.
+        Assert.True(harness.Bridge.Handle(Chord.Bare("Backspace")).Swallow);
+
+        // The game keeps Escape. It closed the menu, which releasing the hold key already does.
         Assert.False(harness.Bridge.Handle(Chord.Bare("Escape")).Swallow);
-        Assert.False(harness.Bridge.Handle(Chord.Bare("Backspace")).Swallow);
 
         // The hold key never is. Opening the menu is additive, exactly like a modifier: swallowing
         // it meant the key that opens the menu could not be typed anywhere on the machine.
@@ -176,9 +178,59 @@ public class InputBridgeTests
         Assert.False(w.Swallow);
         Assert.False(w.Dispatched);
 
-        // Both fours reached the menu and nothing else did.
+        // Both fours and the one Backspace reached the menu, and nothing else did.
         Assert.Equal([4, 4], harness.MenuKeys.Digits);
         Assert.Equal(0, harness.MenuKeys.Escapes);
+        Assert.Equal(1, harness.MenuKeys.Backspaces);
+    }
+
+    /// <summary>
+    /// The key everybody presses to fix a typo has to reach the machine that holds the typo.
+    /// </summary>
+    /// <remarks>
+    /// It was left unarmed on the argument that the back key deletes a digit too. It does, but it
+    /// is a different hand: the back key belongs to the one holding the menu key, and Backspace to
+    /// the one that just typed the grid. Pressed on a coordinate page it did nothing whatsoever,
+    /// and the wrong coordinate stayed on screen.
+    /// </remarks>
+    [Fact]
+    public void Backspace_reaches_the_menu_on_a_coordinate_page()
+    {
+        var harness = new Harness(gameForeground: true, gameRunning: true);
+        harness.Menu.MenuIsOpen = true;
+        harness.Bridge.Rearm();
+
+        Assert.True(harness.Bridge.Armed.IsArmed(0x08), "Backspace is not armed while a menu is open");
+
+        var dispatch = harness.Bridge.Handle(Chord.Bare("Backspace"));
+
+        Assert.True(dispatch.Swallow);
+        Assert.Equal(1, harness.MenuKeys.Backspaces);
+    }
+
+    /// <summary>The hold key may be a modifier, so Backspace arrives carrying it.</summary>
+    [Fact]
+    public void Backspace_reaches_the_menu_while_a_modifier_hold_key_is_down()
+    {
+        var harness = new Harness(gameForeground: true, gameRunning: true);
+        harness.Menu.MenuIsOpen = true;
+        harness.Bridge.Rearm();
+
+        harness.Bridge.Handle(new Chord(BindingModifiers.RightAlt, KeyOf("Backspace")));
+
+        Assert.Equal(1, harness.MenuKeys.Backspaces);
+    }
+
+    [Fact]
+    public void Backspace_is_not_armed_while_no_menu_is_open()
+    {
+        var harness = new Harness(gameForeground: true, gameRunning: true);
+
+        Assert.False(harness.Bridge.Armed.IsArmed(0x08));
+
+        var dispatch = harness.Bridge.Handle(Chord.Bare("Backspace"));
+
+        Assert.False(dispatch.Swallow);
         Assert.Equal(0, harness.MenuKeys.Backspaces);
     }
 

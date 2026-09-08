@@ -59,15 +59,22 @@ public sealed class ArmedKeys
     /// PTT key is already armed as a binding. Everything else passes to the game, because a menu
     /// that ate W for a second and a half would get somebody killed.
     ///
-    /// Escape and Backspace used to be here and are gone. Escape discarded and closed, which is
-    /// exactly what letting go of the hold key does, so it bought nothing and cost the game its own
-    /// Escape key for as long as the menu was open. Backspace deleted one typed digit, which the
-    /// back key already does.
+    /// Escape is not here. It discarded and closed, which is exactly what letting go of the hold
+    /// key already does, so it bought nothing and cost the game its own Escape key for as long as
+    /// the menu was open.
+    ///
+    /// Backspace IS here. The back key deletes a typed digit too, and that was the argument for
+    /// leaving this one out, but the two are reached by different hands: the back key by one
+    /// already holding the menu key, Backspace by the one that just typed a grid on the number
+    /// row. Unarmed, a mistyped coordinate could only be fixed with a key nobody thinks to press.
+    /// It is swallowed only while a menu is open, which is only while the hold key is down.
     /// </summary>
     private static IEnumerable<string> MenuKeyLabels
     {
         get
         {
+            yield return "Backspace";
+
             for (var d = 0; d <= 9; d++)
             {
                 var digit = d.ToString(System.Globalization.CultureInfo.InvariantCulture);

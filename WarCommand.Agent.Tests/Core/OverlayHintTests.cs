@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Core.Input;
+using WarCommand.Agent.Core.Input;
 
 namespace WarCommand.Agent.Tests.Core;
 
@@ -25,11 +25,11 @@ public class OverlayHintTests
     }
 
     [Theory]
-    [InlineData(MenuLevel.Root, "A BACK  ESC CLOSES")]
-    [InlineData(MenuLevel.More, "A BACK  ESC CLOSES")]
-    [InlineData(MenuLevel.Coordinate, "A FIXES  ESC CLOSES")]
-    [InlineData(MenuLevel.Join, "A FIXES  ESC CLOSES")]
-    [InlineData(MenuLevel.Confirm, "RELEASE SENDS  ESC DISCARDS")]
+    [InlineData(MenuLevel.Root, "A BACK  RELEASE CLOSES")]
+    [InlineData(MenuLevel.More, "A BACK  RELEASE CLOSES")]
+    [InlineData(MenuLevel.Coordinate, "A OR BACKSPACE FIXES")]
+    [InlineData(MenuLevel.Join, "A OR BACKSPACE FIXES")]
+    [InlineData(MenuLevel.Confirm, "RELEASE SENDS  A FIXES")]
     public void An_open_menu_draws_its_own_digits_so_the_hint_names_the_way_out(MenuLevel level, string expected)
     {
         // BackLabel is the BOUND key. The hint printed the literal word BACKSPACE while the

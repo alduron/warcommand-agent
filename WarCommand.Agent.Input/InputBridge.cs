@@ -417,6 +417,9 @@ public sealed class InputBridge
         return false;
     }
 
+    /// <summary>Backspace. Armed with the digits whenever a menu is open.</summary>
+    private const int VirtualKeyBack = 0x08;
+
     private bool TryMenuKey(Chord chord, BindingAction action)
     {
         // Modifiers are ignored here on purpose. The hold key that opened the menu may itself be a
@@ -437,10 +440,20 @@ public sealed class InputBridge
             return true;
         }
 
-        // Escape and Backspace are deliberately absent. Escape discarded and closed, which is what
-        // letting go of the hold key already does, so it bought nothing and took the game's own
-        // Escape key for as long as the menu was open. Backspace deleted one typed digit, which the
-        // back key does, and it is out of reach of a hand holding CapsLock anyway.
+        // Backspace deletes the last typed digit, which is what the back key does. Both exist
+        // because different hands reach for them: the back key by one already holding the menu key,
+        // Backspace by the one that just typed a grid on the number row. It was left unarmed on the
+        // argument that the back key covers it, and the result was a coordinate page where the key
+        // everybody presses to fix a typo did nothing at all.
+        if (chord.Key.Matches(VirtualKeyBack))
+        {
+            _menu.Backspace();
+            return true;
+        }
+
+        // Escape stays absent. It discarded and closed, which is what letting go of the hold key
+        // already does, so it bought nothing and took the game's own Escape key for as long as the
+        // menu was open.
         return false;
     }
 

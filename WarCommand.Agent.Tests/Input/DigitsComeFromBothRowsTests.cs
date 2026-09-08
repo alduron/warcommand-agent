@@ -56,18 +56,28 @@ public sealed class DigitsComeFromBothRowsTests
     }
 
     [Fact]
-    public void The_menu_no_longer_eats_escape_or_backspace()
+    public void The_menu_no_longer_eats_escape()
     {
         var armed = ArmedKeysFor(menuOpen: true);
 
         // Escape discarded and closed, which is what letting go of the hold key already does, and
-        // for as long as the menu was open the game could not see its own Escape. Backspace deleted
-        // one typed digit, which the back key does.
-        foreach (var label in (string[])["Escape", "Backspace"])
-        {
-            Assert.True(BindingKey.TryFromLabel(label, out var key));
-            Assert.False(IsArmed(armed, key), $"the menu is still swallowing {label}");
-        }
+        // for as long as the menu was open the game could not see its own Escape.
+        Assert.True(BindingKey.TryFromLabel("Escape", out var key));
+        Assert.False(IsArmed(armed, key), "the menu is still swallowing Escape");
+    }
+
+    /// <summary>
+    /// Backspace is armed with the digits. The back key deletes a typed digit too, and that was the
+    /// argument for leaving this one out, but a hand that just typed a grid on the number row
+    /// reaches for Backspace, and on a coordinate page it did nothing at all.
+    /// </summary>
+    [Fact]
+    public void An_open_menu_arms_backspace()
+    {
+        Assert.True(BindingKey.TryFromLabel("Backspace", out var key));
+
+        Assert.True(IsArmed(ArmedKeysFor(menuOpen: true), key), "Backspace is not armed with the digits");
+        Assert.False(IsArmed(ArmedKeysFor(menuOpen: false), key), "Backspace is taken from the game with no menu open");
     }
 
     [Fact]
