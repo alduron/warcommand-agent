@@ -22,7 +22,7 @@ public class ReleaseWorkflowParityTests
 
     private static readonly IList Steps = LoadSteps();
 
-    /// <summary>Workspace paths, because xunit theory data has to be a simple serialisable value.</summary>
+    /// <summary>Workspace paths, because xunit theory data has to be a simple serializable value.</summary>
     public static TheoryData<string> RequiredDependencies
     {
         get

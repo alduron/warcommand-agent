@@ -10,7 +10,7 @@ socket frames, so on a quiet board the countdown froze where it was seeded.
 YOURS works. Board rows are keyed on the participant id the API now serves;
 the agent had been using the membership id, which matches no row, so YOURS was
 always empty and your own claims counted as somebody else's work. Its rows
-carry their colour across the whole row rather than on one word.
+carry their color across the whole row rather than on one word.
 
 Right-click, Deployment lists every live deployment you can stand in and
 switches to the one you pick. The rows there used to do nothing at all.

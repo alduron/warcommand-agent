@@ -1,4 +1,4 @@
-﻿using System.Windows.Threading;
+using System.Windows.Threading;
 using WarCommand.Agent.Client.Realtime;
 using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Contracts;
@@ -145,7 +145,7 @@ public sealed class AWholeSessionTests
         Assert.Contains(session.Board.Yours, r => r.Id == row.Id);
         Assert.NotNull(claimed.Slot);
 
-        // And the overlay offers exactly the verbs that can be honoured on it: no START anywhere,
+        // And the overlay offers exactly the verbs that can be honored on it: no START anywhere,
         // and DONE reachable, which is the step that could not be reached at all before.
         var verbs = session.VerbsOn(claimed.Slot!.Value);
         Assert.Contains("done", verbs);

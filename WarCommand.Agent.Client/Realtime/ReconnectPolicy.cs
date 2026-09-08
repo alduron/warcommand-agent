@@ -48,7 +48,7 @@ public sealed class ReconnectPolicy
 
     /// <summary>
     /// The delay before the HTTPS board revalidation. A separate draw from
-    /// <see cref="NextSocketDelay"/> on purpose: sharing one value would re-synchronise the fleet
+    /// <see cref="NextSocketDelay"/> on purpose: sharing one value would re-synchronize the fleet
     /// on the database after spreading it on the socket.
     /// </summary>
     public TimeSpan NextRevalidateDelay(int attempt) => Draw(attempt);

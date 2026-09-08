@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Core.Board;
+using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Grammar;
 using WarCommand.Agent.Core.Model;
 
@@ -189,14 +189,17 @@ public class GrammarTests
 
         Assert.NotEmpty(grammar.AllWords);
         Assert.Contains("mortar", grammar.AllWords);
-        Assert.DoesNotContain("armour", grammar.AllWords);
+        // A word no catalog entry spells. The sentinel here used to be a British spelling, and the
+        // American spelling sweep rewrote it into a word the catalog DOES hold: the tank role's own
+        // display. Pick a sentinel that no spelling rule can turn into a real catalog word.
+        Assert.DoesNotContain("howitzer", grammar.AllWords);
     }
 
     [Fact]
     public void Ambiguous_aliases_are_loaded_and_flagged()
     {
         // Bare "transport" is ambiguous by construction: the ground mover and the air mover are
-        // both transport. It is recognised and never resolved by confidence.
+        // both transport. It is recognized and never resolved by confidence.
         var grammar = Everything();
 
         var transport = grammar.LongestMatch(PositionClass.Initial, Words("transport"), 0)!.Token;

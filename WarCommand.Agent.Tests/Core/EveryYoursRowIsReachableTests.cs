@@ -85,7 +85,7 @@ public sealed class EveryYoursRowIsReachableTests
 
     /// <summary>The bug as reported: your own request, taken by somebody else, with no way in.</summary>
     [Fact]
-    public void A_row_you_asked_for_that_somebody_else_took_can_be_cancelled_from_the_menu()
+    public void A_row_you_asked_for_that_somebody_else_took_can_be_canceled_from_the_menu()
     {
         var board = Board();
         var asked = Rows.A(requester: Viewer, createdAt: T0);

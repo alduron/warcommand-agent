@@ -185,7 +185,7 @@ public static class ContractStore
             var parsed = body.Deserialize<T>(AgentJson.Options);
             if (parsed is null)
             {
-                validation.Add("document deserialised to null");
+                validation.Add("document deserialized to null");
                 return null;
             }
 

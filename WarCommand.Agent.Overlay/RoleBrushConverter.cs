@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Data;
@@ -12,7 +12,7 @@ namespace WarCommand.Agent.Overlay;
 /// </summary>
 /// <remarks>
 /// The tokens are merged into BoardView, not into App.xaml, so an application-only lookup finds
-/// nothing and every role renders the neutral grey. It reads as a board that has no role colour at
+/// nothing and every role renders the neutral gray. It reads as a board that has no role color at
 /// all rather than as a missing resource, which is why this loads the dictionary itself.
 /// </remarks>
 public sealed class RoleBrushConverter : IValueConverter
@@ -30,7 +30,7 @@ public sealed class RoleBrushConverter : IValueConverter
     /// <remarks>
     /// Deliberately not a Lazy. The pack URI needs WPF's resource plumbing to be up, so the first
     /// caller in a process can legitimately come away with nothing, and a Lazy caches that empty
-    /// answer for the life of the process: every role then paints the fallback grey forever, and
+    /// answer for the life of the process: every role then paints the fallback gray forever, and
     /// which test ran first decides it. An empty load is not cached, so the next caller retries.
     /// </remarks>
     private static IReadOnlyDictionary<string, Brush> Tokens
@@ -71,12 +71,12 @@ public sealed class RoleBrushConverter : IValueConverter
         value is string key ? Token(key) : Fallback;
 
     /// <summary>
-    /// Any token in <c>Theme/OverlayTokens.xaml</c>, as a brush, or the fallback grey.
+    /// Any token in <c>Theme/OverlayTokens.xaml</c>, as a brush, or the fallback gray.
     /// </summary>
     /// <remarks>
     /// Shared with <see cref="SeverityBrushConverter"/>. The loading is the awkward part, not the
     /// mapping, and a second copy of it is a second chance to cache an empty dictionary and paint
-    /// a whole surface grey for the life of the process.
+    /// a whole surface gray for the life of the process.
     /// </remarks>
     internal static Brush Token(string key)
     {
@@ -98,7 +98,7 @@ public sealed class RoleBrushConverter : IValueConverter
     /// <summary>
     /// The role hues, frozen. The dictionary is loaded once on whichever thread asks first, and an
     /// unfrozen brush belongs to that thread: handing it to any other one throws on the first read
-    /// of its colour. Frozen clones are the only cross-thread-safe thing to cache.
+    /// of its color. Frozen clones are the only cross-thread-safe thing to cache.
     /// </summary>
     private static Dictionary<string, Brush> LoadTokens()
     {
@@ -119,7 +119,7 @@ public sealed class RoleBrushConverter : IValueConverter
         {
             // Every failure, not just IOException: a pack URI resolved before WPF's resource
             // plumbing is up throws several other things, and catching one of them was the
-            // difference between a retry and a process that paints grey from then on.
+            // difference between a retry and a process that paints gray from then on.
         }
 
         return frozen;

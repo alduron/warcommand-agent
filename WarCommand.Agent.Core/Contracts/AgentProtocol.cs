@@ -25,6 +25,7 @@ public static class FrameTypes
     public const string RequestSubmitted = "request.submitted";
     public const string RequestClaimed = "request.claimed";
     public const string RequestStarted = "request.started";
+    public const string RequestAdvanced = "request.advanced";
     public const string RequestCompleted = "request.completed";
     public const string RequestReleased = "request.released";
     public const string RequestSuperseded = "request.superseded";
@@ -46,6 +47,7 @@ public static class FrameTypes
     public const string DeploymentJoin = "deployment.join";
     public const string Resume = "resume";
     public const string RequestClaim = "request.claim";
+    public const string RequestAdvance = "request.advance";
     public const string RequestComplete = "request.complete";
     public const string RequestRelease = "request.release";
     public const string RequestAbandon = "request.abandon";
@@ -169,6 +171,9 @@ public record RequestBody
 
     public int ReleaseCount { get; init; }
 
+    /// <summary>Which point is under way, zero based. 0 forever on a single-point type.</summary>
+    public int CurrentLeg { get; init; }
+
     /// <summary>Many people may accept this row. It stays open and collects takers.</summary>
     public bool MultiTaker { get; init; }
 
@@ -216,6 +221,7 @@ public record RequestBody
         CreatedAt = CreatedAt,
         Version = Version,
         ReleaseCount = ReleaseCount,
+        CurrentLeg = CurrentLeg,
         MultiTaker = MultiTaker,
         TakerParticipantIds = [.. Takers.Select(t => t.ParticipantId)],
         RelatedRequestId = RelatedRequestId,
@@ -367,6 +373,12 @@ public sealed record RequestReleasedPayload : RequestBody
 {
     public required ReleaseReason Reason { get; init; }
 }
+
+/// <summary>
+/// A multi-point job moved to its next leg. A full row, and NOT a state change: the row stays where
+/// it is on every board and the leg it draws changes.
+/// </summary>
+public sealed record RequestAdvancedPayload : RequestBody;
 
 /// <summary>Terminal. Drop the row and follow the new ticket.</summary>
 public sealed record RequestSupersededPayload
@@ -555,6 +567,14 @@ public sealed record RequestClaimCommand
 
 /// <summary>Terminal, and it carries nothing: no outcome, no reason, no count.</summary>
 public sealed record RequestCompleteCommand
+{
+    public required Guid RequestId { get; init; }
+
+    public required int Version { get; init; }
+}
+
+/// <summary>The next leg of a multi-point job. Answered with request.advanced, full body.</summary>
+public sealed record RequestAdvanceCommand
 {
     public required Guid RequestId { get; init; }
 

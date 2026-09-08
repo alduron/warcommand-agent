@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Windows.Media;
@@ -88,8 +88,8 @@ public class RoleGlyphTests
 
     /// <summary>
     /// The tokens are merged into BoardView, not into App.xaml, so an application-only lookup found
-    /// nothing and every role on the board drew the neutral grey. It reads as a board with no role
-    /// colour rather than as a missing resource, which is why nobody caught it by looking.
+    /// nothing and every role on the board drew the neutral gray. It reads as a board with no role
+    /// color rather than as a missing resource, which is why nobody caught it by looking.
     /// </summary>
     [Fact]
     public void The_brush_converter_resolves_the_role_hues_with_no_application_resources()
@@ -110,7 +110,7 @@ public class RoleGlyphTests
 
     /// <summary>Every group the catalog ships resolves, and no two of them collide.</summary>
     [Fact]
-    public void Every_shipped_colour_group_draws_a_hue_of_its_own()
+    public void Every_shipped_color_group_draws_a_hue_of_its_own()
     {
         OnStaThread(() =>
         {

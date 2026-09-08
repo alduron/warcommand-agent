@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Core.Tray;
+using WarCommand.Agent.Core.Tray;
 
 namespace WarCommand.Agent.Tests.Tray;
 
@@ -22,7 +22,7 @@ public class TrayMenuTests
     {
         var items = TrayMenu.Build(Empty);
 
-        // The title row carries the state as a coloured dot, not as a word: TrayMenu.Header is the
+        // The title row carries the state as a colored dot, not as a word: TrayMenu.Header is the
         // tooltip's text, and the mock's first row is the product name alone.
         Assert.Equal("WarCommand", items[0].Text);
         Assert.True(items[0].IsTitle);

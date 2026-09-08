@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Core.Contracts;
+using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Input;
 
 namespace WarCommand.Agent.Tests.Core;
@@ -61,7 +61,7 @@ public class MenuSpeechTests
     public void A_number_is_never_reached_through_a_near_miss()
     {
         // 'four' and 'five' are one edit apart and both name a line here. Resolving a number by
-        // distance would make every mishearing press the neighbouring row.
+        // distance would make every mishearing press the neighboring row.
         Assert.Equal("MECH", MenuSpeech.Match("four", Supply)?.Label);
         Assert.Equal("HAMMERS", MenuSpeech.Match("five", Supply)?.Label);
     }

@@ -8,16 +8,16 @@ using WarCommand.Agent.Overlay;
 namespace WarCommand.Agent.Tests.Overlay;
 
 /// <summary>
-/// The glyph must be centred by its INK, not by its box. Centring the Canvas was not enough and
-/// the icon still drew low against its label, because the served icons are not centred inside
+/// The glyph must be centered by its INK, not by its box. Centering the Canvas was not enough and
+/// the icon still drew low against its label, because the served icons are not centered inside
 /// their own 24x24: mortar is an arc sitting on the bottom edge.
 /// </summary>
-public class RoleGlyphCentringTests
+public class RoleGlyphCenteringTests
 {
     private const double Middle = RoleGlyph.Box / 2;
 
     [Fact]
-    public void The_mortar_arc_is_centred_despite_being_drawn_on_the_bottom_edge()
+    public void The_mortar_arc_is_centered_despite_being_drawn_on_the_bottom_edge()
     {
         // Raw art: 'M3 20C7 6 17 6 21 20' plus feet at y20. Its ink middle is near y15, three
         // units below the box middle, which is exactly what was visible beside the label.
@@ -28,7 +28,7 @@ public class RoleGlyphCentringTests
     }
 
     [Fact]
-    public void Every_served_role_glyph_is_centred_on_the_box()
+    public void Every_served_role_glyph_is_centered_on_the_box()
     {
         foreach (var role in Catalog().Roles)
         {
@@ -38,20 +38,20 @@ public class RoleGlyphCentringTests
                 continue;
             }
 
-            var centre = Ink(first, second);
+            var center = Ink(first, second);
             Assert.True(
-                System.Math.Abs(centre.X - Middle) < 0.51,
-                $"{role.Id} ink is off centre horizontally at {centre.X:0.00}");
+                System.Math.Abs(center.X - Middle) < 0.51,
+                $"{role.Id} ink is off center horizontally at {center.X:0.00}");
             Assert.True(
-                System.Math.Abs(centre.Y - Middle) < 0.51,
-                $"{role.Id} ink is off centre vertically at {centre.Y:0.00}");
+                System.Math.Abs(center.Y - Middle) < 0.51,
+                $"{role.Id} ink is off center vertically at {center.Y:0.00}");
         }
     }
 
     [Fact]
-    public void Centring_moves_the_ink_without_resizing_it()
+    public void Centering_moves_the_ink_without_resizing_it()
     {
-        // A Viewbox would have centred it too, by scaling each glyph until its ink filled the box,
+        // A Viewbox would have centered it too, by scaling each glyph until its ink filled the box,
         // which makes a small icon huge and a wide one tiny. Sizes must stay comparable.
         var role = Role("mortar");
         var raw = RoleGlyph.Parse(role.Icon!.D1);

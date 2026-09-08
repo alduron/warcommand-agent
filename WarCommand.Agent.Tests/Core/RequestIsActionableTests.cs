@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Core.Contracts;
+using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 using Xunit;
@@ -137,7 +137,7 @@ public sealed class RequestIsActionableTests
         {
             Assert.True(
                 type.PointLabels.Count >= type.Arity,
-                $"{type.Id} takes {type.Arity} point(s) and labels {type.PointLabels.Count}: an unlabelled second point does not say which end is which");
+                $"{type.Id} takes {type.Arity} point(s) and labels {type.PointLabels.Count}: an unlabeled second point does not say which end is which");
         }
     }
 

@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace WarCommand.Agent.Core.Contracts;
 
@@ -161,7 +161,7 @@ public sealed record SolutionRulesSection
     public required PresentationRules Presentation { get; init; }
 }
 
-/// <summary>Labelled samples of the true solution. Off at M1, per group, owner opts in.</summary>
+/// <summary>Labeled samples of the true solution. Off at M1, per group, owner opts in.</summary>
 public sealed record FireObservationsSection
 {
     public bool Enabled { get; init; }

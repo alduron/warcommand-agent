@@ -9,15 +9,15 @@ using WarCommand.Agent.Input;
 namespace WarCommand.Agent.Tray;
 
 /// <summary>
-/// The tray icon and its menu. The icon's colour is the connection state and it is the only
-/// always-visible health signal, per 10-agent-spec.md: green connected, amber reconnecting, grey
-/// panicked or unpaired. The field colour carries the state; the shield mark itself is never
-/// recoloured.
+/// The tray icon and its menu. The icon's color is the connection state and it is the only
+/// always-visible health signal, per 10-agent-spec.md: green connected, amber reconnecting, gray
+/// panicked or unpaired. The field color carries the state; the shield mark itself is never
+/// recolored.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Registers as <see cref="PanicSubsystem.TrayIndicator"/>. Panic always wins: while suspended the
-/// icon is forced grey regardless of the last reported connection state, and resuming re-derives
+/// icon is forced gray regardless of the last reported connection state, and resuming re-derives
 /// it rather than trusting what was showing before.
 /// </para>
 /// <para>
@@ -59,7 +59,7 @@ public sealed class TrayIconController : ISuspendable, IDisposable
         {
             Renderer = new TrayMenuRenderer(),
             Font = new Font("Segoe UI Variable Text", 10.5f, FontStyle.Regular, GraphicsUnit.Point),
-            // The margin stays, painted the surface colour: it is the indent every row in the mock
+            // The margin stays, painted the surface color: it is the indent every row in the mock
             // shares, and it is where the title row's state dot sits.
             ShowImageMargin = true,
             MinimumSize = new Size(300, 0),
@@ -100,7 +100,7 @@ public sealed class TrayIconController : ISuspendable, IDisposable
 
     /// <summary>
     /// Drives the icon from the realtime socket's state. Idle, Connecting and Stopped all read as
-    /// the grey "not connected" field: to a user there is no useful difference between "never
+    /// the gray "not connected" field: to a user there is no useful difference between "never
     /// paired" and "the socket gave up", both mean the same thing is not happening right now.
     /// </summary>
     public void SetConnectionState(RealtimeConnectionState state)
@@ -134,10 +134,10 @@ public sealed class TrayIconController : ISuspendable, IDisposable
         _notifyIcon.Text = text.Length <= 63 ? text : text[..63];
     }
 
-    /// <summary>Panic engaged. Forces grey no matter what the socket is doing.</summary>
+    /// <summary>Panic engaged. Forces gray no matter what the socket is doing.</summary>
     /// <remarks>
     /// Marshalled: Panic is toggled from InputBridge.Handle on the low-level hook pump thread, and
-    /// this touches a NotifyIcon and builds a Bitmap. The icon going grey is the only confirmation
+    /// this touches a NotifyIcon and builds a Bitmap. The icon going gray is the only confirmation
     /// the kill switch fired, so it must not be the thing that throws.
     /// </remarks>
     public void Suspend() => OnUi(() =>
@@ -213,7 +213,7 @@ public sealed class TrayIconController : ISuspendable, IDisposable
         };
 
         // The right-aligned dim value the mock draws: '31 people', 'off', 'admin+'. The shortcut
-        // slot is exactly that column, already right-aligned and already the correct grey.
+        // slot is exactly that column, already right-aligned and already the correct gray.
         if (item.Value is { } value)
         {
             rendered.ShowShortcutKeys = true;
@@ -252,24 +252,24 @@ public sealed class TrayIconController : ISuspendable, IDisposable
     }
 
     /// <summary>
-    /// The 14px rounded square beside the product name, in the mock's own three colours. Same
-    /// meaning as the icon's field: green connected, amber reconnecting, grey panicked or unpaired.
+    /// The 14px rounded square beside the product name, in the mock's own three colors. Same
+    /// meaning as the icon's field: green connected, amber reconnecting, gray panicked or unpaired.
     /// </summary>
     private Bitmap StateDot()
     {
-        var colour = _suspended
-            ? TrayMenuRenderer.Grey
+        var color = _suspended
+            ? TrayMenuRenderer.Gray
             : ToIndicator(_lastState) switch
             {
                 TrayIndicator.Connected => TrayMenuRenderer.Ok,
                 TrayIndicator.Reconnecting => TrayMenuRenderer.Warn,
-                _ => TrayMenuRenderer.Grey,
+                _ => TrayMenuRenderer.Gray,
             };
 
         var dot = new Bitmap(16, 16);
         using var graphics = Graphics.FromImage(dot);
         graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        using var brush = new SolidBrush(colour);
+        using var brush = new SolidBrush(color);
         graphics.FillEllipse(brush, 2, 2, 12, 12);
         return dot;
     }
@@ -318,7 +318,7 @@ public sealed class TrayIconController : ISuspendable, IDisposable
     /// <remarks>
     /// new Icon(path) takes the system DEFAULT size, which is the 32x32 frame, and the shell then
     /// scales it down to 16. Each .ico carries a hand-sized 16, 20 and 24 for exactly this, and
-    /// none of them were being used: the green read as muddy grey at tray size. SmallIconSize
+    /// none of them were being used: the green read as muddy gray at tray size. SmallIconSize
     /// follows the display's DPI, so a 200 percent display picks the 24 rather than blurring one.
     /// </remarks>
     private static Icon LoadIcon(string fileName)

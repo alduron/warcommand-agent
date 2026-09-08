@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Windows;
@@ -11,7 +11,7 @@ namespace WarCommand.Agent.Tests.Overlay;
 
 /// <summary>
 /// End to end through the XAML: rows in, painted glyphs out. Every other test on this path checks
-/// one hop, and the overlay drew grey shapeless rows anyway because the hops disagreed.
+/// one hop, and the overlay drew gray shapeless rows anyway because the hops disagreed.
 /// </summary>
 public class BoardViewRoleGlyphRenderTests
 {
@@ -25,7 +25,7 @@ public class BoardViewRoleGlyphRenderTests
     /// </summary>
     /// <remarks>
     /// Two roles at least, and roles whose hues differ: one hue on every row is exactly what a
-    /// broken lookup looks like, so a single-role fixture would pass while the board was grey.
+    /// broken lookup looks like, so a single-role fixture would pass while the board was gray.
     /// </remarks>
     private static IReadOnlyList<BoardRowViewModel> Rows { get; } =
     [

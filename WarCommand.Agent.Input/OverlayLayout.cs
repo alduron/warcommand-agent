@@ -5,7 +5,7 @@ namespace WarCommand.Agent.Input;
 /// <summary>Where the panel sits, and where the board sits inside it.</summary>
 /// <param name="Bounds">The window's bounds in screen pixels.</param>
 /// <param name="VerticalBias">
-/// Where the board sits inside those bounds: +1 against the top, -1 against the bottom, 0 centred.
+/// Where the board sits inside those bounds: +1 against the top, -1 against the bottom, 0 centered.
 /// The window is taller than the board, so the bias is what makes a top anchor draw on the top edge.
 /// </param>
 public readonly record struct OverlayPlacement(ScreenRect Bounds, double VerticalBias)
@@ -46,7 +46,7 @@ public static class OverlayLayout
     private enum Band
     {
         Start,
-        Centre,
+        Center,
         End,
     }
 
@@ -87,10 +87,10 @@ public static class OverlayLayout
         var horizontal = HorizontalBand(anchor);
         var vertical = VerticalBand(anchor);
 
-        // Exactly one axis is ever free, and vertical wins for the centre anchor so that Left,
-        // Right and Centre all nudge the same way.
-        var verticalFree = vertical == Band.Centre;
-        var horizontalFree = !verticalFree && horizontal == Band.Centre;
+        // Exactly one axis is ever free, and vertical wins for the center anchor so that Left,
+        // Right and Center all nudge the same way.
+        var verticalFree = vertical == Band.Center;
+        var horizontalFree = !verticalFree && horizontal == Band.Center;
 
         var left = Along(game.Left, game.Width, width, horizontal, horizontalFree ? nudge : 0);
         var top = Along(game.Top, game.Height, height, vertical, verticalFree ? -nudge : 0);
@@ -111,25 +111,25 @@ public static class OverlayLayout
 
     /// <summary>
     /// One axis. <paramref name="towardEnd"/> is the nudge expressed as travel toward the far edge,
-    /// so it reaches that edge exactly at 1 and the centre at 0.
+    /// so it reaches that edge exactly at 1 and the center at 0.
     /// </summary>
     private static int Along(int origin, int span, int size, Band band, double towardEnd)
     {
         var start = origin + Margin;
         var end = origin + span - size - Margin;
-        var centre = origin + ((span - size) / 2);
+        var center = origin + ((span - size) / 2);
 
         if (end < start)
         {
-            // No room for the margin at all: centring is the least wrong answer.
-            return centre;
+            // No room for the margin at all: centering is the least wrong answer.
+            return center;
         }
 
         return band switch
         {
             Band.Start => start,
             Band.End => end,
-            _ => Lerp(centre, towardEnd >= 0 ? end : start, Math.Abs(towardEnd)),
+            _ => Lerp(center, towardEnd >= 0 ? end : start, Math.Abs(towardEnd)),
         };
     }
 
@@ -139,13 +139,13 @@ public static class OverlayLayout
     {
         OverlayAnchor.Left or OverlayAnchor.TopLeft or OverlayAnchor.BottomLeft => Band.Start,
         OverlayAnchor.Right or OverlayAnchor.TopRight or OverlayAnchor.BottomRight => Band.End,
-        _ => Band.Centre,
+        _ => Band.Center,
     };
 
     private static Band VerticalBand(OverlayAnchor anchor) => anchor switch
     {
         OverlayAnchor.Top or OverlayAnchor.TopLeft or OverlayAnchor.TopRight => Band.Start,
         OverlayAnchor.Bottom or OverlayAnchor.BottomLeft or OverlayAnchor.BottomRight => Band.End,
-        _ => Band.Centre,
+        _ => Band.Center,
     };
 }

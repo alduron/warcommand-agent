@@ -1,4 +1,4 @@
-﻿namespace WarCommand.Agent.Capture;
+namespace WarCommand.Agent.Capture;
 
 /// <summary>
 /// One captured frame, bottom-up BGRA. Lives for as long as the scan and never leaves the process:
@@ -82,7 +82,7 @@ public sealed class Frame
     /// box. This is what a relative threshold is a fraction of.
     /// </summary>
     /// <remarks>
-    /// The weakest channel, not the average: a saturated colour is bright and is not text. The
+    /// The weakest channel, not the average: a saturated color is bright and is not text. The
     /// readout's own core is the brightest neutral thing beside the crosshair, so measuring it is
     /// how a threshold follows the map's gradient instead of guessing at it.
     /// </remarks>

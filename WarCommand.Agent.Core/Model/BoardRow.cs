@@ -76,6 +76,12 @@ public sealed record BoardRow
     /// <summary>Increments on every released event, by any reason. Renders as 'RETRY x2'.</summary>
     public int ReleaseCount { get; init; }
 
+    /// <summary>
+    /// Which point is under way, zero based. Only a multi-point row ever leaves 0, and only its
+    /// holder moves it, with ADVANCE. It is a cursor: the row's state does not change with it.
+    /// </summary>
+    public int CurrentLeg { get; init; }
+
     /// <summary>Paired spotter request, or null.</summary>
     public Guid? RelatedRequestId { get; init; }
 

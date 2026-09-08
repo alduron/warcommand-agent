@@ -5,14 +5,14 @@ using Xunit;
 namespace WarCommand.Agent.Tests.Core;
 
 /// <summary>
-/// A row offers only the verbs it can actually honour.
+/// A row offers only the verbs it can actually honor.
 /// </summary>
 /// <remarks>
 /// Every verb used to appear on every row: START, DONE and RELEASE on an open row nobody had
 /// claimed, and ACCEPT on a row already yours. The server refuses all of those, so the press did
 /// nothing and the surface reported nothing. This is the same rule MORE already follows.
 /// </remarks>
-public sealed class RowVerbsAreHonourableTests
+public sealed class RowVerbsAreHonorableTests
 {
     private static readonly DateTimeOffset T0 = DateTimeOffset.UnixEpoch;
 
@@ -102,6 +102,52 @@ public sealed class RowVerbsAreHonourableTests
         Assert.Contains("done", VerbsOn(RequestState.InProgress, mine: true));
     }
 
+    private static List<string> VerbsOnTwoLegs(bool mine, int currentLeg)
+    {
+        var menu = Machine();
+        menu.OpenOnBoard(T0, new MenuContext
+        {
+            OccupiedSlots = [4],
+            Slots = new Dictionary<int, SlotState>
+            {
+                [4] = new(
+                    RequestState.InProgress,
+                    mine,
+                    false,
+                    Guid.Empty,
+                    ["pickup", "dropoff"],
+                    currentLeg),
+            },
+        });
+
+        menu.Select(T0);
+        return [.. menu.Options.Select(o => o.VerbId!)];
+    }
+
+    [Fact]
+    public void A_two_leg_job_you_hold_can_be_advanced_until_the_last_leg()
+    {
+        // The pickup is done and the dropoff is next: the requester has to be able to see that.
+        Assert.Contains("advance", VerbsOnTwoLegs(mine: true, currentLeg: 0));
+
+        // Nothing follows the dropoff. DONE is the verb there, and an advance past the last point
+        // would leave the cursor off the end of the points the board draws.
+        Assert.DoesNotContain("advance", VerbsOnTwoLegs(mine: true, currentLeg: 1));
+
+        // Not yours, not your leg to move.
+        Assert.DoesNotContain("advance", VerbsOnTwoLegs(mine: false, currentLeg: 0));
+    }
+
+    [Fact]
+    public void A_one_point_row_never_offers_advance()
+    {
+        foreach (var state in (RequestState[])[RequestState.Open, RequestState.Claimed, RequestState.InProgress])
+        {
+            Assert.DoesNotContain("advance", VerbsOn(state, mine: true));
+            Assert.DoesNotContain("advance", VerbsOn(state, mine: false));
+        }
+    }
+
     [Fact]
     public void Every_verb_a_row_offers_is_within_reach_of_the_hand_holding_the_key()
     {
@@ -146,7 +192,7 @@ public sealed class RowVerbsAreHonourableTests
     public void With_no_slot_state_known_the_row_still_offers_something_reachable()
     {
         // A caller that has not filled Slots in must not lose the board entirely. It cannot know
-        // which verbs the row will honour, so it offers the most important ones and still stops at
+        // which verbs the row will honor, so it offers the most important ones and still stops at
         // five, because the sixth would be a key the hand cannot reach anyway.
         var menu = Machine();
         menu.OpenOnBoard(T0, new MenuContext { OccupiedSlots = [4] });

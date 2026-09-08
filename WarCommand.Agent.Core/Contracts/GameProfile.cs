@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace WarCommand.Agent.Core.Contracts;
@@ -65,7 +65,7 @@ public sealed record MapReadoutSection
     /// How far from the crosshair the readout may sit, and the half-size of the captured region.
     /// </summary>
     /// <remarks>
-    /// Anchored to the CURSOR, never to the screen. A fixed centre panel clipped the readout
+    /// Anchored to the CURSOR, never to the screen. A fixed center panel clipped the readout
     /// whenever the cursor neared the edge of the map, so plainly readable numbers were never
     /// captured at all.
     /// </remarks>
@@ -255,7 +255,7 @@ public sealed record LogTailDetectorSection
     public IReadOnlyList<string> ConnectPatterns { get; init; } = [];
 }
 
-/// <summary>Server-side only. The agent never ships or initialises the Steamworks SDK.</summary>
+/// <summary>Server-side only. The agent never ships or initializes the Steamworks SDK.</summary>
 public sealed record SteamDetectorSection
 {
     public bool Enabled { get; init; }
@@ -430,7 +430,7 @@ public sealed record GameProfile : IValidatableContract
 
     /// <summary>
     /// True when every map shares <see cref="DefaultUnitsToMeters"/>. While it is false and the
-    /// current map is unknown, a range in metres cannot be trusted and the caller must refuse.
+    /// current map is unknown, a range in meters cannot be trusted and the caller must refuse.
     /// </summary>
     [JsonIgnore]
     public bool AllMapsShareDefaultScale => Maps.All(m => m.UnitsToMeters == DefaultUnitsToMeters);

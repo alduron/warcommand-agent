@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Input.Devices;
+using WarCommand.Agent.Input.Devices;
 
 namespace WarCommand.Agent.Input.Bindings;
 
@@ -25,7 +25,7 @@ public enum RebindState
     Aborted,
 
     /// <summary>The user closed the dialog.</summary>
-    Cancelled,
+    Canceled,
 }
 
 /// <summary>What one offered press did.</summary>
@@ -167,7 +167,7 @@ public sealed class RebindSession
     {
         if (State == RebindState.Capturing)
         {
-            State = RebindState.Cancelled;
+            State = RebindState.Canceled;
         }
     }
 }

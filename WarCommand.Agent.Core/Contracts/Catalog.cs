@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using WarCommand.Agent.Core.Model;
 
 namespace WarCommand.Agent.Core.Contracts;
@@ -73,7 +73,7 @@ public sealed record RequestTypeDef
 
     public IReadOnlyList<string> SpokenAliases { get; init; } = [];
 
-    /// <summary>Recognised but never resolved by confidence. Offers a two-item menu instead.</summary>
+    /// <summary>Recognized but never resolved by confidence. Offers a two-item menu instead.</summary>
     public IReadOnlyList<string> AmbiguousAliases { get; init; } = [];
 
     public IReadOnlyList<string> Modifiers { get; init; } = [];

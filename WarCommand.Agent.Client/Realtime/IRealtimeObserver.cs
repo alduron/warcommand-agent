@@ -104,6 +104,11 @@ public interface IRealtimeObserver
     {
     }
 
+    /// <summary>The next leg of a multi-point job. A full row, and no state change.</summary>
+    void OnRequestAdvanced(RequestAdvancedPayload payload)
+    {
+    }
+
     void OnRequestSuperseded(RequestSupersededPayload payload)
     {
     }

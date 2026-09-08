@@ -1,6 +1,6 @@
-﻿namespace WarCommand.Agent.Overlay;
+namespace WarCommand.Agent.Overlay;
 
-/// <summary>How loudly one status item reads. Decides its colour and its place in the strip.</summary>
+/// <summary>How loudly one status item reads. Decides its color and its place in the strip.</summary>
 public enum StatusSeverity
 {
     /// <summary>Something is wrong and the board cannot be trusted until it clears.</summary>
@@ -23,7 +23,7 @@ public enum StatusSeverity
 /// its own surface for both reasons. Items stack, and the header goes back to holding only what it
 /// is for.
 /// <para>
-/// It carries no colour. Severity picks a token in the strip's template, because every colour in
+/// It carries no color. Severity picks a token in the strip's template, because every color in
 /// the overlay lives in <c>Theme/OverlayTokens.xaml</c> and nowhere else.
 /// </para>
 /// </remarks>

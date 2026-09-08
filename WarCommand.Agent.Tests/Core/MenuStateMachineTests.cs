@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Core.Model;
 
@@ -801,7 +801,7 @@ public class MenuStateMachineTests
         menu.Digit(0, T0);
         menu.Digit(0, T0);
 
-        // An entry the agent cannot honour is absent, never shown and dead. Roles, match, people,
+        // An entry the agent cannot honor is absent, never shown and dead. Roles, match, people,
         // restart and link all returned a panel id nothing handled: they closed the menu and did
         // nothing, which is the one click this product refuses to offer anywhere.
         var offered = menu.Options.Select(o => o.VerbId).ToList();
@@ -884,6 +884,34 @@ public class MenuStateMachineTests
         var action = Assert.IsType<MenuBoardAction>(menu.Digit(copy.Digit, T0));
 
         Assert.Equal("copy", action.VerbId);
+        Assert.Equal(3, action.Slot);
+    }
+
+    [Fact]
+    public void A_two_point_row_copies_each_leg_on_its_own()
+    {
+        // A transport is worked in two trips. One COPY carrying both legs makes the driver edit the
+        // line mid-mission, so each point is its own verb, named by the label its type gave it.
+        var menu = Machine();
+        menu.OpenOnBoard(T0, new MenuContext
+        {
+            OccupiedSlots = [3],
+            Slots = new Dictionary<int, SlotState>
+            {
+                [3] = new(RequestState.Open, false, false, Guid.Empty, ["pickup", "dropoff"]),
+            },
+        });
+        menu.Select(T0);
+
+        var pickup = menu.Options.Single(o => o.VerbId == "copy:0");
+        var dropoff = menu.Options.Single(o => o.VerbId == "copy:1");
+
+        Assert.Equal("COPY PICKUP", pickup.Label);
+        Assert.Equal("COPY DROPOFF", dropoff.Label);
+        Assert.DoesNotContain(menu.Options, o => o.VerbId == "copy");
+
+        var action = Assert.IsType<MenuBoardAction>(menu.Digit(dropoff.Digit, T0));
+        Assert.Equal("copy:1", action.VerbId);
         Assert.Equal(3, action.Slot);
     }
 
@@ -1096,6 +1124,63 @@ public class MenuStateMachineTests
 
         Assert.Fail("The catalog has no one-point leaf directly under a category.");
         return default;
+    }
+
+    /// <summary>
+    /// The last digit accepts the point outright, so without this a wrong one cost the whole grid:
+    /// there was no press that meant "that digit was wrong" once the tenth had landed.
+    /// </summary>
+    [Fact]
+    public void Backspace_after_the_last_digit_takes_that_digit_back()
+    {
+        var (category, leaf) = AOnePointLeaf();
+        var menu = Machine();
+        menu.Open(T0, snapshot: null);
+        menu.Digit(category, T0);
+        menu.Digit(leaf, T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+
+        for (var i = 0; i < menu.DigitsWanted; i++)
+        {
+            menu.Digit(1, T0);
+        }
+
+        Assert.Equal(MenuLevel.Confirm, menu.Level);
+
+        menu.Backspace(T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+        Assert.Equal(menu.DigitsWanted - 1, menu.DigitsTyped);
+        Assert.Empty(menu.Points);
+
+        // Retyping the one wrong digit finishes the point, and it is the corrected one.
+        menu.Digit(2, T0);
+        Assert.Equal(MenuLevel.Confirm, menu.Level);
+
+        var ready = Assert.IsType<MenuRequestReady>(menu.KeyUp(T0));
+        Assert.Single(ready.Points);
+        // The last digit typed is y's hundredths, whatever DigitsPerAxis happens to be.
+        Assert.Equal(2, (int)(ready.Points[0].Y * 100m) % 10);
+    }
+
+    /// <summary>
+    /// A read or spoken point has no digits, so BACK still discards it whole. Only a typed point
+    /// can give a digit back.
+    /// </summary>
+    [Fact]
+    public void Backspace_still_discards_a_read_point_whole()
+    {
+        var (category, leaf) = AOnePointLeaf();
+        var menu = Machine();
+        menu.Open(T0, snapshot: null);
+        menu.Digit(category, T0);
+        menu.Digit(leaf, T0);
+        menu.AcceptReadCoordinate(new MapPoint(12.25m, 34.75m, "map_readout", "x12.25 y34.75", null), T0);
+        Assert.Equal(MenuLevel.Confirm, menu.Level);
+
+        menu.Backspace(T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+        Assert.Equal(0, menu.DigitsTyped);
+        Assert.Empty(menu.Points);
     }
 
     [Fact]

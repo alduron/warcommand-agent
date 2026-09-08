@@ -6,7 +6,7 @@ namespace WarCommand.Agent.Tests.Overlay;
 
 /// <summary>
 /// The glyph beside an ALL CAPS label rides up by GlyphCapNudge. Caps fill only the cap band, so
-/// the text ink sits high in its line box and centring the two boxes leaves the icon visibly low.
+/// the text ink sits high in its line box and centering the two boxes leaves the icon visibly low.
 /// </summary>
 /// <remarks>
 /// The nudge is a measured device-pixel value in OverlayTokens.xaml. This pins it to the font's own
@@ -43,8 +43,8 @@ public class GlyphCapNudgeTests
     }
 
     /// <summary>
-    /// Distance from the line box centre down to the cap band centre. Negative means the caps sit
-    /// above the box centre, which is how far the glyph must rise to meet them.
+    /// Distance from the line box center down to the cap band center. Negative means the caps sit
+    /// above the box center, which is how far the glyph must rise to meet them.
     /// </summary>
     private static double CapCompensation(FontFamily family, double fontSize)
     {
@@ -53,9 +53,9 @@ public class GlyphCapNudgeTests
 
         var box = family.LineSpacing * fontSize;
         var baseline = family.Baseline * fontSize;
-        var capCentre = baseline - (caps * fontSize / 2);
+        var capCenter = baseline - (caps * fontSize / 2);
 
-        return capCentre - (box / 2);
+        return capCenter - (box / 2);
     }
 
     /// <summary>The first face of the CondensedFont stack actually installed here.</summary>

@@ -169,7 +169,7 @@ public static class SpeechGrammarCompiler
     }
 
     /// <summary>
-    /// The union the decoder is handed. Number words ride in when a legal verb takes metres or a
+    /// The union the decoder is handed. Number words ride in when a legal verb takes meters or a
     /// quantity: 'lift 6' cannot be heard if the number words were never loaded.
     /// </summary>
     private static IReadOnlyList<string> RecognizerPhrases(

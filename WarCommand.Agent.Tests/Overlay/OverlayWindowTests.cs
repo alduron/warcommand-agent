@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
@@ -9,7 +9,7 @@ namespace WarCommand.Agent.Tests.Overlay;
 
 /// <summary>
 /// The in-game surface, checked against the real window handle rather than against the XAML that
-/// asked for it. 06-overlay-ux.md names four extended styles and says all three of the behavioural
+/// asked for it. 06-overlay-ux.md names four extended styles and says all three of the behavioral
 /// ones are required; a surface missing one is a surface that eats clicks, steals focus, or turns
 /// up in alt-tab in the middle of a fight.
 /// </summary>

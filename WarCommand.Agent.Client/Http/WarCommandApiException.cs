@@ -44,7 +44,7 @@ public class WarCommandApiException : Exception
     /// <summary>The X-Correlation-Id this agent put on the request.</summary>
     public string? RequestCorrelationId { get; }
 
-    /// <summary>Present on 429. Honour it rather than backing off blind.</summary>
+    /// <summary>Present on 429. Honor it rather than backing off blind.</summary>
     public TimeSpan? RetryAfter { get; init; }
 
     /// <summary>True when replaying the same call later could still succeed.</summary>

@@ -66,7 +66,7 @@ public sealed record ApiFieldError
 
 /// <summary>
 /// The one error body, every endpoint, every failure. Extra members that only some codes carry are
-/// reachable through <see cref="Body"/> rather than being modelled once per code.
+/// reachable through <see cref="Body"/> rather than being modeled once per code.
 /// </summary>
 public sealed record ApiError
 {

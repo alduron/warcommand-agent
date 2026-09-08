@@ -79,7 +79,7 @@ public static class NearWhiteScanner
 
     /// <summary>
     /// Groups near-white pixels into blobs with a single-pass union of runs, then merges blobs whose
-    /// boxes are close enough to be neighbouring glyphs on one line.
+    /// boxes are close enough to be neighboring glyphs on one line.
     /// </summary>
     public static IReadOnlyList<TextBlob> Scan(
         Frame frame,
@@ -177,7 +177,7 @@ public static class NearWhiteScanner
         return runs;
     }
 
-    // Neighbouring glyphs on one line become one blob, which is what a pattern would be matched
+    // Neighboring glyphs on one line become one blob, which is what a pattern would be matched
     // against. Vertical overlap plus a small horizontal gap is the whole test.
     private static List<TextBlob> MergeIntoLines(List<Blob> glyphs, int glyphGap)
     {

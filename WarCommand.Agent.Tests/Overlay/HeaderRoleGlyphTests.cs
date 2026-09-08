@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Overlay;
 
@@ -10,7 +10,7 @@ namespace WarCommand.Agent.Tests.Overlay;
 /// </summary>
 /// <remarks>
 /// Per Decision_WarCommandOverlayColorIsStateOnlyWebOwnsRoleHue the role owns the glyph and its hue
-/// and nothing else, so these assert the glyph and the brush key, never the label's colour.
+/// and nothing else, so these assert the glyph and the brush key, never the label's color.
 /// </remarks>
 public class HeaderRoleGlyphTests
 {
@@ -53,7 +53,7 @@ public class HeaderRoleGlyphTests
 
         Assert.True(
             header.Roles.Select(r => r.RoleBrushKey).Distinct(StringComparer.Ordinal).Count() > 1,
-            "The header must show that the hue means something, not one colour for every role.");
+            "The header must show that the hue means something, not one color for every role.");
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class HeaderRoleGlyphTests
     [Fact]
     public void A_header_that_skipped_the_resolver_renders_no_roles_at_all()
     {
-        // The failure mode this replaces drew colourless ids, which reads as the feature missing
+        // The failure mode this replaces drew colorless ids, which reads as the feature missing
         // rather than as a bug. Nothing is the honest render.
         var header = new BoardHeader { Title = "T", RoleIds = ["mortar"] };
 

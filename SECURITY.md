@@ -5,7 +5,7 @@
 Use GitHub's **Report a vulnerability** button under this repository's Security tab. That opens a
 private advisory only the maintainers can see. Do not open a public issue for a security finding.
 
-Expect an acknowledgement within 72 hours. If a fix ships, the advisory is published with credit
+Expect an acknowledgment within 72 hours. If a fix ships, the advisory is published with credit
 unless you ask otherwise.
 
 ## What is in scope

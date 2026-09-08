@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Core.Contracts;
+using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Model;
 
 namespace WarCommand.Agent.Core.Fire;
@@ -15,7 +15,7 @@ public enum FireSolutionStatus
     /// <summary>Below min_range_m or above max_range_m. The gun cannot reach it.</summary>
     OutOfRange,
 
-    /// <summary>No map, and the profile carries a per-map scale, so metres are unknowable.</summary>
+    /// <summary>No map, and the profile carries a per-map scale, so meters are unknowable.</summary>
     MapUnknown,
 }
 
@@ -33,7 +33,7 @@ public sealed record FireSolution
     /// <summary>The word the overlay uses. Never 'firing solution'.</summary>
     public const string BracketLabel = "BRACKET";
 
-    /// <summary>Rendered when the current map is unknown and metres cannot be trusted.</summary>
+    /// <summary>Rendered when the current map is unknown and meters cannot be trusted.</summary>
     public const string MapUnknownMessage = "MAP UNKNOWN";
 
     /// <summary>Rendered instead of a mil value that would look measured and is not.</summary>
@@ -56,7 +56,7 @@ public sealed record FireSolution
     /// <summary>Null when no scale could be resolved. Then the overlay reads map units.</summary>
     public decimal? RangeMeters { get; init; }
 
-    /// <summary>True when range must render as map units, because a wrong metre figure is worse.</summary>
+    /// <summary>True when range must render as map units, because a wrong meter figure is worse.</summary>
     public bool RangeInMapUnits => RangeMeters is null;
 
     /// <summary>Null while the table is a placeholder, out of range, or the map is unknown.</summary>

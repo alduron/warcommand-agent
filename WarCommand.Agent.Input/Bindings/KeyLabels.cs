@@ -1,9 +1,9 @@
-﻿namespace WarCommand.Agent.Input.Bindings;
+namespace WarCommand.Agent.Input.Bindings;
 
 /// <summary>
 /// The fixed set of labels a key may wear, and the only place a virtual-key code and a string sit in
 /// the same table. A code absent from this table cannot become a <see cref="BindingKey"/> at all, so
-/// nothing unlabelled is ever representable, let alone printable.
+/// nothing unlabeled is ever representable, let alone printable.
 /// </summary>
 internal static class KeyLabels
 {
@@ -34,7 +34,7 @@ internal static class KeyLabels
         var table = new Dictionary<ushort, string>();
 
         // Mouse. Left and Right are deliberately absent: swallowing either would take the game's
-        // primary controls, and an unlabelled button cannot be bound.
+        // primary controls, and an unlabeled button cannot be bound.
         table[0x04] = "Mouse3";
         table[0x05] = "Mouse4";
         table[0x06] = "Mouse5";

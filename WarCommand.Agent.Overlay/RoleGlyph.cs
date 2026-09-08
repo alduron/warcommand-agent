@@ -47,11 +47,11 @@ public static class RoleGlyph
     /// <summary>The glyph's design box. Every served icon is drawn on 24x24, stroke only.</summary>
     public const double Box = 24.0;
 
-    /// <summary>Both paths of one role's glyph, in draw order, centred on the box.</summary>
+    /// <summary>Both paths of one role's glyph, in draw order, centered on the box.</summary>
     /// <remarks>
-    /// The ink is centred, not the box. The served icons are not drawn centred in their own 24x24:
+    /// The ink is centered, not the box. The served icons are not drawn centered in their own 24x24:
     /// mortar is an arc from y9.5 to y20, whose middle is nearly three units below the box middle,
-    /// so centring the Canvas still draws the icon low against its label. Centring here fixes every
+    /// so centering the Canvas still draws the icon low against its label. Centering here fixes every
     /// icon at once, including one edited in the catalog after this ships, which is the point of
     /// the glyph being served rather than compiled.
     /// </remarks>
@@ -100,7 +100,7 @@ public static class RoleGlyph
     }
 
     /// <summary>
-    /// Parsed into a modifiable clone, so the centring transform can be applied before freezing.
+    /// Parsed into a modifiable clone, so the centering transform can be applied before freezing.
     /// </summary>
     /// <remarks>
     /// Geometry.Parse hands back an already frozen geometry, and setting Transform on it throws

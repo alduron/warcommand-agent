@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Windows.Threading;
 using WarCommand.Agent.Client.Realtime;
 using WarCommand.Agent.Core.Board;
@@ -10,7 +10,7 @@ using WarCommand.Agent.Realtime;
 namespace WarCommand.Agent.Tests.Realtime;
 
 /// <summary>
-/// The socket driving the board. Every frame lands here, and the rules it has to honour are the
+/// The socket driving the board. Every frame lands here, and the rules it has to honor are the
 /// ones that are invisible until a fire mission goes missing.
 /// </summary>
 public class BoardRealtimeObserverTests

@@ -113,7 +113,7 @@ public sealed class RealtimeClient : IAsyncDisposable
         [.. _subscriptions.Where(s => s.Deployment is not null).Select(s => s.Deployment!.Id)];
 
     /// <summary>
-    /// Connects and keeps connecting until cancelled, or until a close code says to stop. Backoff
+    /// Connects and keeps connecting until canceled, or until a close code says to stop. Backoff
     /// is full jitter, base 500 ms, cap 30 s.
     /// </summary>
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -219,6 +219,10 @@ public sealed class RealtimeClient : IAsyncDisposable
             RequestId = requestId,
             Version = version,
         });
+
+    /// <summary>The next leg of a multi-point job. No state change: current_leg moves.</summary>
+    public bool Advance(Guid requestId, int version) =>
+        Send(FrameTypes.RequestAdvance, new RequestAdvanceCommand { RequestId = requestId, Version = version });
 
     public bool Release(Guid requestId, int version) =>
         Send(FrameTypes.RequestRelease, new RequestReleaseCommand { RequestId = requestId, Version = version });
@@ -531,6 +535,10 @@ public sealed class RealtimeClient : IAsyncDisposable
 
             case FrameTypes.RequestReleased:
                 Deliver<RequestReleasedPayload>(envelope, _observer.OnRequestReleased);
+                break;
+
+            case FrameTypes.RequestAdvanced:
+                Deliver<RequestAdvancedPayload>(envelope, _observer.OnRequestAdvanced);
                 break;
 
             case FrameTypes.RequestSuperseded:

@@ -8,7 +8,7 @@ namespace WarCommand.Agent.Tests.Architecture;
 /// See Convention_WarCommandAgentArmsNothingWithoutAnAccount and 10-agent-spec.md step 6.
 /// </summary>
 /// <remarks>
-/// A source test rather than a behavioural one: the composition root is a WPF Application whose
+/// A source test rather than a behavioral one: the composition root is a WPF Application whose
 /// startup cannot be driven from a test, and the ordering inside it is exactly what shipped wrong.
 /// </remarks>
 public class StartupArmingTests

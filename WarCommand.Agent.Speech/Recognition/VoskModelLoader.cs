@@ -144,7 +144,7 @@ public sealed class VoskModelLoader
     /// <summary>
     /// True when the native loader produced a handle. Vosk reports a bad model directory by
     /// returning null rather than throwing, and the next recognizer built on it faults the process,
-    /// so the null is caught here. An unrecognised binding layout is treated as loaded, because
+    /// so the null is caught here. An unrecognized binding layout is treated as loaded, because
     /// refusing on a failed reflection lookup would break voice on a working model.
     /// </summary>
     private static bool HasNativeHandle(Vosk.Model model)

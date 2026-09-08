@@ -15,13 +15,13 @@ namespace WarCommand.Agent.Capture;
 /// six times run took a minute where the learned size takes milliseconds, on a path that runs
 /// three times per key press.</item>
 /// </list>
-/// Normalising the run to the reference height removes both. It is the same 1-bit shape, sampled
+/// Normalizing the run to the reference height removes both. It is the same 1-bit shape, sampled
 /// to the size the atlas already knows, so what reaches the solver is what it was tuned against
 /// whatever monitor the player is on.
 /// </remarks>
-public static class NormalisedRun
+public static class NormalizedRun
 {
-    /// <summary>A run this much taller than the reference is worth normalising.</summary>
+    /// <summary>A run this much taller than the reference is worth normalizing.</summary>
     private const double Tolerance = 1.25;
 
     /// <summary>Mask frames are 1-bit: this separates the two values FromMask writes.</summary>
@@ -54,8 +54,8 @@ public static class NormalisedRun
 
         for (var y = 0; y < height; y++)
         {
-            // Nearest neighbour, deliberately. The source is already 1-bit, so there is nothing to
-            // average: interpolating would invent grey the threshold would then have to guess at.
+            // Nearest neighbor, deliberately. The source is already 1-bit, so there is nothing to
+            // average: interpolating would invent gray the threshold would then have to guess at.
             var sourceY = Math.Min(mask.Count - 1, (int)((y + 0.5) / scale));
             var source = mask[sourceY];
             var row = new char[width];
@@ -69,7 +69,7 @@ public static class NormalisedRun
             rows.Add(new string(row));
         }
 
-        var normalised = Frame.FromMask(rows);
-        return (normalised, new TextBlob(0, 0, normalised.Width - 1, normalised.Height - 1, blob.PixelCount));
+        var normalized = Frame.FromMask(rows);
+        return (normalized, new TextBlob(0, 0, normalized.Width - 1, normalized.Height - 1, blob.PixelCount));
     }
 }

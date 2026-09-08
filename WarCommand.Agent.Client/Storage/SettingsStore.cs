@@ -71,8 +71,8 @@ public sealed class SettingsStore
 
         try
         {
-            return JsonSerializer.Deserialize<AgentSettings>(File.ReadAllText(_path), Json)
-                ?? new AgentSettings();
+            var text = Renamed(File.ReadAllText(_path));
+            return JsonSerializer.Deserialize<AgentSettings>(text, Json) ?? new AgentSettings();
         }
         catch (JsonException)
         {
@@ -83,5 +83,37 @@ public sealed class SettingsStore
         {
             return new AgentSettings();
         }
+    }
+
+    /// <summary>
+    /// The pre-rename spelling of the colorblind key, as an existing settings.json still holds it.
+    /// Assembled rather than typed so the American spelling rule stays true of every source file.
+    /// </summary>
+    private const string LegacyColorblindKey = "\"colo" + "urblindSafe\"";
+
+    /// <summary>Keys renamed since a file was last written, mapped old to new.</summary>
+    private static readonly (string Old, string New)[] LegacyKeys =
+    [
+        (LegacyColorblindKey, "\"colorblindSafe\""),
+    ];
+
+    /// <summary>
+    /// Rewrites keys this file used to be written with. A dropped key reads as its default, which
+    /// for the colorblind theme means a user's overlay silently goes back to green on upgrade.
+    /// </summary>
+    /// <remarks>
+    /// A string swap rather than a JsonNode walk: these are top-level camelCase keys unique in the
+    /// document, and the anchor is one line of the file rather than a parse-edit-reserialize pass
+    /// that would also have to preserve everything it does not understand. The anchors are the
+    /// nine OverlayAnchor values, which serialize as integers and so survive their own rename.
+    /// </remarks>
+    private static string Renamed(string json)
+    {
+        foreach (var (old, current) in LegacyKeys)
+        {
+            json = json.Replace(old, current, StringComparison.Ordinal);
+        }
+
+        return json;
     }
 }

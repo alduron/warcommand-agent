@@ -5,7 +5,7 @@ namespace WarCommand.Agent.Tests.Tray;
 /// <summary>
 /// The one row that reaches the queue. It shipped raising a command the composition root had no
 /// case for, so it rendered and did nothing, which is exactly what
-/// Convention_WarCommandTrayMenuRendersOnlyHonourableRows forbids.
+/// Convention_WarCommandTrayMenuRendersOnlyHonorableRows forbids.
 /// </summary>
 public class TrayWebBoardTests
 {

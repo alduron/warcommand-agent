@@ -8,7 +8,7 @@ public interface ITextToSpeech : IDisposable
     /// <summary>False when no synthesizer or no voice is installed. Readback is then simply off.</summary>
     bool IsAvailable { get; }
 
-    /// <summary>Speaks asynchronously, cancelling anything already queued.</summary>
+    /// <summary>Speaks asynchronously, canceling anything already queued.</summary>
     void Speak(string text);
 
     /// <summary>Drops anything queued or in progress.</summary>

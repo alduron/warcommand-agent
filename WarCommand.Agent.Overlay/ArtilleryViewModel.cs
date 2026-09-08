@@ -49,7 +49,7 @@ public sealed record ArtilleryViewModel
         MapPoint? target,
         Func<MapPoint, MapPoint, (string Bracket, string Note)> compute,
         RangeMode? mode = null,
-        Func<MapPoint, MapPoint, decimal>? metres = null)
+        Func<MapPoint, MapPoint, decimal>? meters = null)
     {
         ArgumentNullException.ThrowIfNull(compute);
 
@@ -72,9 +72,9 @@ public sealed record ArtilleryViewModel
             return readout with { Note = "SET THE TARGET FOR A RANGE" };
         }
 
-        if (metres is not null)
+        if (meters is not null)
         {
-            var range = metres(gun, aim);
+            var range = meters(gun, aim);
             readout = readout with
             {
                 Range = FormattableString.Invariant($"{range:0} M"),

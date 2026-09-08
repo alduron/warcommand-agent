@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Core.Abstractions;
+using WarCommand.Agent.Core.Abstractions;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Model;
 
@@ -193,12 +193,12 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
         var readout = profile.MapReadout;
 
         // The cursor FIRST: reading it after the grab smears the crosshair offset by however far
-        // the mouse travelled during the copy.
+        // the mouse traveled during the copy.
         var cursor = GameWindow.CursorInClient(hwnd);
 
         // Captured AROUND THE CURSOR, never around the screen. The readout is anchored to the
         // moving crosshair, so the window that looks for it has to move with the crosshair too. A
-        // fixed centre panel clipped it the moment the cursor neared the edge of the map, and the
+        // fixed center panel clipped it the moment the cursor neared the edge of the map, and the
         // failure looked like a decode problem when nothing had been captured at all.
         var client = GameWindow.ClientRectOnScreen(hwnd);
 
@@ -247,7 +247,7 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
         var yVotes = new List<Vote>();
 
         // Each candidate run is decoded at ITS OWN ink as well as at the rung that found it. The
-        // readout greys out by distance to the edge of the map, so the two halves of one reading
+        // readout grays out by distance to the edge of the map, so the two halves of one reading
         // are at different points on that gradient and a threshold measured across the whole panel
         // is still a guess for either of them. A run's own peak is not a guess.
         //
@@ -304,7 +304,7 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
 
         // Set BEFORE the refusal, because the read that finds nothing is the one somebody is
         // reporting. A diagnostic only written on success describes the case nobody complains about.
-        LastVoteSummary = Summarise("x", xVotes) + "  |  " + Summarise("y", yVotes);
+        LastVoteSummary = Summarize("x", xVotes) + "  |  " + Summarize("y", yVotes);
         LastDiagnostic = FormattableString.Invariant(
             $"{_lastGeometry}, rungs {ladder.Count}, runs {work.Count}, x {Shape(xVotes)}, y {Shape(yVotes)}");
 
@@ -354,7 +354,7 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
                 $"{votes.Count} read, {votes.Select(v => v.Text).Distinct(StringComparer.Ordinal).Count()} distinct, best margin {votes.Max(v => v.Margin):0.00}");
 
     /// <summary>One axis' readings and their counts, best first.</summary>
-    private static string Summarise(string axis, List<Vote> votes) =>
+    private static string Summarize(string axis, List<Vote> votes) =>
         votes.Count == 0
             ? axis + ": none"
             : axis + ": " + string.Join(", ", votes
@@ -369,7 +369,7 @@ public sealed class MapReadoutCoordinateSource : ICoordinateSource
     /// brightest ink.
     /// </summary>
     /// <remarks>
-    /// MEASURED on a live client at the bottom right corner of the map: the readout greys out by
+    /// MEASURED on a live client at the bottom right corner of the map: the readout grays out by
     /// distance to the edge, continuously, so no single value serves the whole panel and the two
     /// halves of one reading are not equally bright. A run's own peak is the one number that is
     /// about that run.

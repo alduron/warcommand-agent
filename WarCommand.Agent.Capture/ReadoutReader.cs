@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.RegularExpressions;
 using WarCommand.Agent.Core.Contracts;
 
@@ -91,9 +91,9 @@ public sealed class ReadoutReader
             // A run bigger than the atlas was cut at is redrawn at that size first. The solver is
             // quadratic in the run's width and the glyph margin decays as the run grows, so a
             // player on a larger UI got slower reads AND a lower score for the same correct text.
-            var (source, box, ink) = NormalisedRun.For(frame, blob, Ink, _readout.LineHeightPx)
+            var (source, box, ink) = NormalizedRun.For(frame, blob, Ink, _readout.LineHeightPx)
                 is { } scaled
-                ? (scaled.Frame, scaled.Blob, NormalisedRun.MaskThreshold)
+                ? (scaled.Frame, scaled.Blob, NormalizedRun.MaskThreshold)
                 : (frame, blob, Ink);
 
             foreach (var atlas in _atlases)
@@ -708,7 +708,7 @@ public sealed class ReadoutReader
         }
 
         // Trimmed to the glyph's own ink vertically as well, so a comma and a full stop do not both
-        // normalise into the same cell as a digit.
+        // normalize into the same cell as a digit.
         return bottom < top
             ? (new float[GlyphAtlas.CellSize * GlyphAtlas.CellSize], 0)
             : (GlyphAtlas.Resample(ink, width, 0, top, width, bottom - top + 1),

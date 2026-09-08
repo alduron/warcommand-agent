@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -125,7 +125,7 @@ public partial class AgentWindow : Window
 
     private void LoadChoices()
     {
-        // Device name is what is persisted; nobody recognises \.\DISPLAY2, and every monitor
+        // Device name is what is persisted; nobody recognizes \.\DISPLAY2, and every monitor
         // reports itself as Generic PnP Monitor, so the label is the index and the resolution.
         var screens = System.Windows.Forms.Screen.AllScreens;
         DisplayBox.ItemsSource = screens
@@ -135,9 +135,9 @@ public partial class AgentWindow : Window
         OverlayModeBox.ItemsSource = new[] { "Always on", "Mirror Wardogs", "Hidden" };
         AnchorBox.ItemsSource = new[]
         {
-            "Top left", "Top centre", "Top right",
-            "Left centre", "Centre", "Right centre",
-            "Bottom left", "Bottom centre", "Bottom right",
+            "Top left", "Top center", "Top right",
+            "Left center", "Center", "Right center",
+            "Bottom left", "Bottom center", "Bottom right",
         };
         OverlayOpacityBox.ItemsSource = new[] { "Low", "Normal", "High" };
         WhenUnfocused.ItemsSource = new[] { "Hide", "Dim" };
@@ -217,9 +217,8 @@ public partial class AgentWindow : Window
         Slide.Value = settings.ClampedSlide;
         WidthFraction.Value = settings.ClampedWidthFraction;
         OverlayOpacityBox.SelectedIndex = (int)settings.Opacity;
-        ColourblindSafe.IsChecked = settings.ColourblindSafe;
+        ColorblindSafe.IsChecked = settings.ColorblindSafe;
         WhenUnfocused.SelectedIndex = (int)settings.WhenUnfocused;
-        AutoCopyOnClaim.IsChecked = settings.AutoCopyOnClaim;
         ScreenCapture.IsChecked = settings.ScreenCaptureEnabled;
         VerboseLogging.IsChecked = settings.VerboseLogging;
         RenderLogSize();
@@ -286,9 +285,8 @@ public partial class AgentWindow : Window
         Slide = Slide.Value,
         WidthFraction = WidthFraction.Value,
         Opacity = (OverlayOpacity)Math.Max(OverlayOpacityBox.SelectedIndex, 0),
-        ColourblindSafe = ColourblindSafe.IsChecked is true,
-        WhenUnfocused = (UnfocusedBehaviour)Math.Max(WhenUnfocused.SelectedIndex, 0),
-        AutoCopyOnClaim = AutoCopyOnClaim.IsChecked is true,
+        ColorblindSafe = ColorblindSafe.IsChecked is true,
+        WhenUnfocused = (UnfocusedBehavior)Math.Max(WhenUnfocused.SelectedIndex, 0),
         ScreenCaptureEnabled = ScreenCapture.IsChecked is true,
         VerboseLogging = VerboseLogging.IsChecked is true,
     };
@@ -297,7 +295,7 @@ public partial class AgentWindow : Window
     private static readonly OverlayAnchor[] AnchorOrder =
     [
         OverlayAnchor.TopLeft, OverlayAnchor.Top, OverlayAnchor.TopRight,
-        OverlayAnchor.Left, OverlayAnchor.Centre, OverlayAnchor.Right,
+        OverlayAnchor.Left, OverlayAnchor.Center, OverlayAnchor.Right,
         OverlayAnchor.BottomLeft, OverlayAnchor.Bottom, OverlayAnchor.BottomRight,
     ];
 
@@ -307,7 +305,7 @@ public partial class AgentWindow : Window
     /// <summary>Which axis the offset travels along, or null for a corner.</summary>
     private static string? FreeAxisOf(OverlayAnchor anchor) => anchor switch
     {
-        OverlayAnchor.Left or OverlayAnchor.Right or OverlayAnchor.Centre => "vertical",
+        OverlayAnchor.Left or OverlayAnchor.Right or OverlayAnchor.Center => "vertical",
         OverlayAnchor.Top or OverlayAnchor.Bottom => "horizontal",
         _ => null,
     };
@@ -540,7 +538,7 @@ public partial class AgentWindow : Window
         if (e.Key == Key.Escape)
         {
             EndCapture();
-            SavedNote.Text = "Rebind cancelled";
+            SavedNote.Text = "Rebind canceled";
             return;
         }
 

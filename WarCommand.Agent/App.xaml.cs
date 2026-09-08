@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Net.Http;
@@ -265,7 +265,7 @@ public partial class App : Application, IDisposable
     private RegisteredWaitHandle? _showRegistration;
 
     /// <summary>
-    /// Starts the tray grey (unpaired/no session yet), then resolves the profile, ensures device
+    /// Starts the tray gray (unpaired/no session yet), then resolves the profile, ensures device
     /// credentials, and shows second-screen mode against whatever API the profile names.
     /// </summary>
     /// <remarks>
@@ -1119,8 +1119,8 @@ public partial class App : Application, IDisposable
                 JoinFromMenu(spokenCode, log);
                 break;
 
-            case ParsedCommand { VerbId: "role", RoleId: { } spokenRole }:
-                ToggleRoleFromMenu(spokenRole, log);
+            case ParsedCommand { VerbId: "role", RoleId: { } spokenrolle }:
+                ToggleRoleFromMenu(spokenrolle, log);
                 break;
 
             // The panels. Spoken under the hold, they open under the hold and close when the key
@@ -1234,7 +1234,7 @@ public partial class App : Application, IDisposable
             case MenuBoardPaged paged:
                 // The board moves, then the open menu re-reads it. Walking off the bottom of page
                 // one lands on the top of page two; walking off the top of page two lands on the
-                // bottom of page one, which is the row the eye was already travelling towards.
+                // bottom of page one, which is the row the eye was already traveling towards.
                 if (_observer?.TurnPage(paged.Delta) == true && _menu is { } paging)
                 {
                     paging.Menu.RefreshContext(MenuContextNow(), landOnLastRow: paged.Delta < 0);
@@ -1332,7 +1332,7 @@ public partial class App : Application, IDisposable
     /// The range calculator's modes, from the served ballistics.
     /// </summary>
     /// <remarks>
-    /// SNIPING is raw range judged against nothing; every other mode is a weapon, labelled by its
+    /// SNIPING is raw range judged against nothing; every other mode is a weapon, labeled by its
     /// role and bounded by its own min and max. A limit that moves is a contract edit.
     /// </remarks>
     private static IReadOnlyList<RangeMode> RangeModesNow()
@@ -1644,10 +1644,20 @@ public partial class App : Application, IDisposable
         {
             "accept" => realtime.Claim(row.Id, row.Version),
             "done" => realtime.Complete(row.Id, row.Version),
+            "advance" => realtime.Advance(row.Id, row.Version),
             "release" => realtime.Release(row.Id, row.Version),
             "pass" => board.Pass(row.Id, DateTimeOffset.UtcNow),
             "mute" => board.MuteRequester(row.RequestedByParticipantId, DateTimeOffset.UtcNow) > 0,
-            "copy" => CopyPoint(row),
+            "copy" => CopyPoint(row, 0),
+
+            // "copy:1" is the second leg. A transport is worked one leg at a time, so each point
+            // copies on its own; see MenuStateMachine.ExpandVerb.
+            _ when action.VerbId.StartsWith("copy:", StringComparison.Ordinal) =>
+                CopyPoint(row, int.TryParse(
+                    action.VerbId.AsSpan(5),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var ordinal) ? ordinal : 0),
 
             // These parse from voice and used to fall to the default, so "cancel 3" and "recall 3"
             // did nothing but write a log line reading "refused", and a requester had no way to
@@ -1679,24 +1689,28 @@ public partial class App : Application, IDisposable
     /// write "94.70 107.37": no ticket, no axis prefixes, no comma, so pasting it into chat gave
     /// nobody a clickable pin and named no job. The measured shape is "MED-24 x94.70, y107.25".
     /// </remarks>
-    private static bool CopyPoint(BoardRow row)
+    private static bool CopyPoint(BoardRow row, int ordinal)
     {
-        if (row.Points.Count == 0)
+        // ONE leg, never both. A transport is worked in two trips: the taker copies the pickup,
+        // drives it, and wants the dropoff only once the load is aboard. A line carrying both is a
+        // line the driver has to edit before pasting, mid-mission, with a hand on a wheel.
+        var point = row.Points
+            .OrderBy(p => p.Ordinal)
+            .Skip(ordinal)
+            .FirstOrDefault();
+
+        if (point is null)
         {
             return false;
         }
 
-        var point = row.Points[0].Point;
+        // Every leg names the job: the ticket is on both pastes, because the dropoff arrives in
+        // chat long after the pickup did and nothing else on that line says which request it is.
         var text = CoordinateHandoffText.Render(
             BundledContracts.GameProfile().Current.CoordinateHandoff,
             row.TicketCode,
-            point.X,
-            point.Y);
-
-        if (text is null)
-        {
-            return false;
-        }
+            point.Point.X,
+            point.Point.Y);
 
         System.Windows.Clipboard.SetText(text);
         return true;
@@ -1706,7 +1720,7 @@ public partial class App : Application, IDisposable
     /// The two MORE entries that are actions rather than pages.
     /// </summary>
     /// <remarks>
-    /// Both are offered only when they can be honoured: restart needs admin, and link needs the
+    /// Both are offered only when they can be honored: restart needs admin, and link needs the
     /// prompt to be showing. Neither is a page, so neither has a level.
     /// </remarks>
     private async void RunPanel(string panelId, RollingFileLog log)
@@ -1897,7 +1911,7 @@ public partial class App : Application, IDisposable
     }
 
     /// <summary>
-    /// One case per <see cref="TrayCommand"/> the agent can honour today. A command whose subsystem
+    /// One case per <see cref="TrayCommand"/> the agent can honor today. A command whose subsystem
     /// is not wired up cannot arrive: <see cref="TrayMenu.Build"/> does not render its row until the
     /// matching <see cref="TrayMenuState"/> field is filled in.
     /// </summary>
@@ -2126,7 +2140,7 @@ public partial class App : Application, IDisposable
         }
 
         // HttpClient's 100-second default covers the whole operation, streamed body included, so a
-        // 59 MB installer needs a sustained 5 Mbps to beat it. Below that the transfer is cancelled
+        // 59 MB installer needs a sustained 5 Mbps to beat it. Below that the transfer is canceled
         // mid-stream, the cancellation is swallowed as "try again later", and the agent retries for
         // ever and never updates. The shutdown token is what bounds this transfer.
         _updates = new UpdateDownloader(
@@ -2659,7 +2673,7 @@ public partial class App : Application, IDisposable
     /// <remarks>
     /// A stored chord wins over a DEFAULT holding the same key, which is the case whenever a new
     /// binding ships on a key somebody had already rebound to something else: Rebind refuses a
-    /// conflict, so without this the saved choice was silently dropped in favour of the new default
+    /// conflict, so without this the saved choice was silently dropped in favor of the new default
     /// and the user's own key stopped working with nothing said. A conflict between two STORED
     /// chords is still refused, first one wins, because the file is then arguing with itself.
     /// </remarks>
@@ -2834,7 +2848,7 @@ public partial class App : Application, IDisposable
             _observer?.SetGunPosition(null);
         }
 
-        // Only the rows this build can honour are filled in. The group, match, map, microphone and
+        // Only the rows this build can honor are filled in. The group, match, map, microphone and
         // push-to-talk fields stay null until their subsystem lands, and TrayMenu.Build leaves the
         // rows out, so the menu can never offer a click that does nothing.
         _standingOn = deploymentId;
@@ -2864,7 +2878,7 @@ public partial class App : Application, IDisposable
             PeopleCount = membership.Deployment.MemberCount,
             Where = membership.ParticipantKind == "visitor" ? "visitor" : null,
             // The code alone. Six digits in the corner of the bar are not mistakable for anything
-            // else, and the label was competing with the thing it labelled for the same width.
+            // else, and the label was competing with the thing it labeled for the same width.
             Right = membership.Deployment.InviteCode ?? me.User.Callsign,
             RoleIds = membership.SubscribedRoleIds,
             Hint = HeaderHint(),
@@ -3074,7 +3088,7 @@ public partial class App : Application, IDisposable
     /// fifteen second config poll and reacted to nothing in under five seconds.
     /// <para>
     /// Started with Task.Run rather than awaited or run inline: RunAsync is a connect-and-receive
-    /// loop that returns only when cancelled, and an async loop whose delay completes synchronously
+    /// loop that returns only when canceled, and an async loop whose delay completes synchronously
     /// never yields.
     /// </para>
     /// <para>
@@ -3185,7 +3199,7 @@ public partial class App : Application, IDisposable
 
     /// <summary>The socket's health IS the dot. Nothing else may set it.</summary>
     /// <remarks>
-    /// Logged on every transition, because the dot's colour is the only thing a user can see and
+    /// Logged on every transition, because the dot's color is the only thing a user can see and
     /// "why is it amber" is otherwise unanswerable from a log file. The client itself logs the
     /// failures; this logs reaching Connected, which nothing else records.
     /// </remarks>

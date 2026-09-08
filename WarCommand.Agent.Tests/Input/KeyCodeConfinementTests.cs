@@ -39,7 +39,7 @@ public class KeyCodeConfinementTests
     }
 
     [Fact]
-    public void An_unlabelled_code_is_not_representable_at_all()
+    public void An_unlabeled_code_is_not_representable_at_all()
     {
         // 0xFF is a valid virtual key and carries no label, so it cannot become a binding and there
         // is nothing to print.

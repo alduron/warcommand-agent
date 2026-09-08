@@ -62,10 +62,10 @@ public class StatusStripRenderTests
     }
 
     /// <summary>
-    /// Every item inflates: its text lands, and its dot takes the severity's colour.
+    /// Every item inflates: its text lands, and its dot takes the severity's color.
     /// </summary>
     [Fact]
-    public void Each_item_draws_its_word_and_its_colour()
+    public void Each_item_draws_its_word_and_its_color()
     {
         Sta.Run(() =>
         {
@@ -89,8 +89,8 @@ public class StatusStripRenderTests
                 ["ACCEPT REFUSED", "BOARD MAY BE STALE", "COPIED WARCOMMAND:921585"],
                 words);
 
-            // Three dots, three different colours: the converter ran and resolved a real token
-            // rather than falling through to one grey for everything.
+            // Three dots, three different colors: the converter ran and resolved a real token
+            // rather than falling through to one gray for everything.
             var dots = Descendants<System.Windows.Shapes.Ellipse>(view.StatusItems);
             Assert.Equal(3, dots.Count);
             Assert.Equal(3, dots.Select(dot => ((SolidColorBrush)dot.Fill).Color).Distinct().Count());

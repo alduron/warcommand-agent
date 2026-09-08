@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Input.Bindings;
+using WarCommand.Agent.Input.Bindings;
 using WarCommand.Agent.Input.Devices;
 
 namespace WarCommand.Agent.Input;
@@ -265,7 +265,7 @@ public sealed class InputBridge
         }
 
         // Navigation, armed only while a hold is down and ALWAYS swallowed. This is the whole
-        // reason the control surface moved off the mouse: the keyboard hook's swallow is honoured
+        // reason the control surface moved off the mouse: the keyboard hook's swallow is honored
         // by the game and the mouse hook's is not. See Insight_WardogsReadsRawInputSoHooksCannotBlockIt.
         if (BindingActions.IsNavigation(action))
         {

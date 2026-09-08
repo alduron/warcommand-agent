@@ -18,13 +18,13 @@ public enum PanicSubsystem
     /// <summary>Audio capture. The device is released and the buffer zeroed.</summary>
     AudioCapture,
 
-    /// <summary>The tray icon, which goes grey while suspended.</summary>
+    /// <summary>The tray icon, which goes gray while suspended.</summary>
     TrayIndicator,
 }
 
 /// <summary>
 /// One signal, fanned out. Panic suspends hotkey grabs, capture, overlay drawing and audio capture
-/// in one press and turns the tray icon grey; pressing again resumes them, and every subsystem
+/// in one press and turns the tray icon gray; pressing again resumes them, and every subsystem
 /// re-derives its state rather than trusting what it held.
 /// </summary>
 /// <remarks>

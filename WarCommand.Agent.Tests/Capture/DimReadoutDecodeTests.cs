@@ -10,7 +10,7 @@ namespace WarCommand.Agent.Tests.Capture;
 /// </summary>
 /// <remarks>
 /// The reported failure was that the readout only decodes near the middle of the map and goes blind
-/// at the edges, where the text greys out. Reproducing that needs no game: the learned masks in
+/// at the edges, where the text grays out. Reproducing that needs no game: the learned masks in
 /// game-profile.json are the real shapes, so painting them at a lower ink value is the same input
 /// the decoder sees at the border.
 /// </remarks>
@@ -60,7 +60,7 @@ public class DimReadoutDecodeTests
         var blobs = NearWhiteScanner.Scan(frame, 165, glyphGap: readout.GlyphGapPx);
         Assert.NotEmpty(blobs);
 
-        // Found at 165, read at 240: the old behaviour, and it answers nothing.
+        // Found at 165, read at 240: the old behavior, and it answers nothing.
         Assert.Null(reader.ReadPoint(frame, blobs, boundsMax: null, threshold: null));
 
         // Found at 165 and read at 165.
@@ -142,7 +142,7 @@ public class DimReadoutDecodeTests
     /// A frame carrying the two halves of a readout at the given ink, over a terrain-ish gradient.
     /// </summary>
     /// <remarks>
-    /// Each glyph is the learned mask, centred in a fixed pitch cell, ringed in black the way the
+    /// Each glyph is the learned mask, centered in a fixed pitch cell, ringed in black the way the
     /// game rings its own text. The outline is why a low threshold stays safe and belongs in the
     /// fixture: without it the test would prove something easier than the real problem.
     /// </remarks>

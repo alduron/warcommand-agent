@@ -34,7 +34,7 @@ public enum GrammarTokenKind
 
     Digit,
 
-    /// <summary>A cardinal or numeral used for a count or for metres.</summary>
+    /// <summary>A cardinal or numeral used for a count or for meters.</summary>
     Number,
 
     /// <summary>at, here, point.</summary>
@@ -59,7 +59,7 @@ public sealed record GrammarToken
     /// <summary>The kind a shortcut alias sets on its parent type.</summary>
     public string? SecondaryId { get; init; }
 
-    /// <summary>From ambiguous_aliases. Recognised, and never resolved by confidence.</summary>
+    /// <summary>From ambiguous_aliases. Recognized, and never resolved by confidence.</summary>
     public bool Ambiguous { get; init; }
 
     /// <summary>Numeric reading for a digit or number token.</summary>

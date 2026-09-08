@@ -1,4 +1,4 @@
-﻿using System.Collections.Specialized;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -10,10 +10,10 @@ using WarCommand.Agent.Core.Model;
 namespace WarCommand.Agent.Overlay;
 
 /// <summary>
-/// Which state colour a row carries. One accent drives the edge bar, the digit and the state word
+/// Which state color a row carries. One accent drives the edge bar, the digit and the state word
 /// at once, so a row can never show an urgent edge next to a green digit.
 /// </summary>
-/// <remarks>Named states only. Role colour is web-only; the overlay's colours are all state.</remarks>
+/// <remarks>Named states only. Role color is web-only; the overlay's colors are all state.</remarks>
 public enum RowAccent
 {
     /// <summary>Open and claimable by somebody. No edge, ink digit, no state word.</summary>
@@ -209,7 +209,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     private string? _secondPointDisplay;
 
     /// <summary>
-    /// How far the load travels, point 1 to point 2. Metres with a map scale, map units without,
+    /// How far the load travels, point 1 to point 2. Meters with a map scale, map units without,
     /// and never a bearing. Null on a one-point row.
     /// </summary>
     public string? LegDisplay
@@ -427,7 +427,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     /// answers instead is whose job this is, since transport_move reaches ground and air transport
     /// at the same time and a 200 m move is a truck while a 3 km move is a lift.
     ///
-    /// Metres when the caller hands in the map's units_to_meters, which is a served fact per
+    /// Meters when the caller hands in the map's units_to_meters, which is a served fact per
     /// binding rule 5 and never a constant here. Map units when it does not, because a wrong
     /// distance is worse than an honest unitless one.
     /// </remarks>
@@ -486,8 +486,8 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         // A crew told only OUT OF RANGE cannot even tell which way to move to fix it.
         parts.Add(FormattableString.Invariant($"AZ {solution.AzimuthDegrees:0}"));
 
-        parts.Add(solution.RangeMeters is { } metres
-            ? FormattableString.Invariant($"{metres:0}m")
+        parts.Add(solution.RangeMeters is { } meters
+            ? FormattableString.Invariant($"{meters:0}m")
             : FormattableString.Invariant($"{solution.RangeUnits:0.0}u"));
 
         if (solution.Status is FireSolutionStatus.OutOfRange)
@@ -541,8 +541,8 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         var numbers = new List<string>(4)
         {
             FormattableString.Invariant($"AZ {solution.AzimuthDegrees:0}"),
-            solution.RangeMeters is { } metres
-                ? FormattableString.Invariant($"{metres:0}m")
+            solution.RangeMeters is { } meters
+                ? FormattableString.Invariant($"{meters:0}m")
                 : FormattableString.Invariant($"{solution.RangeUnits:0.0}u"),
         };
 
@@ -585,14 +585,14 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
         var leg = FireSolutionCalculator.Leg(row.Points[0].Point, row.Points[1].Point, unitsToMeters);
 
-        if (leg.DistanceMeters is not { } metres)
+        if (leg.DistanceMeters is not { } meters)
         {
             return FormattableString.Invariant($"{leg.DistanceUnits:0.0}u");
         }
 
-        return metres >= 1000m
-            ? FormattableString.Invariant($"{metres / 1000m:0.0}km")
-            : FormattableString.Invariant($"{metres:0}m");
+        return meters >= 1000m
+            ? FormattableString.Invariant($"{meters / 1000m:0.0}km")
+            : FormattableString.Invariant($"{meters:0}m");
     }
 
     /// <summary>

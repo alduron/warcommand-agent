@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Client.Diagnostics;
+using WarCommand.Agent.Client.Diagnostics;
 using WarCommand.Agent.Game;
 using WarCommand.Agent.Input;
 using WarCommand.Agent.Input.Bindings;
@@ -63,7 +63,7 @@ public sealed class InputComposition : IDisposable
     /// where the game is not running and every binding would otherwise be inert.
     /// </param>
     /// <param name="overlay">Registered as the drawing subsystem and driven by the Board chord.</param>
-    /// <param name="tray">Registered as the indicator subsystem so it greys on panic.</param>
+    /// <param name="tray">Registered as the indicator subsystem so it grays on panic.</param>
     /// <param name="onHold">
     /// Hold-key edges, with the action so the two can be told apart. Both open the microphone and
     /// both open the menu; down is where a coordinate is snapshotted, for both.

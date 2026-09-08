@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Windows.Threading;
 using WarCommand.Agent.Client.Realtime;
 using WarCommand.Agent.Core.Board;
@@ -224,7 +224,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
 
     /// <summary>
     /// The event channel stalled while the socket stayed up. A different fault from the amber dot,
-    /// and it gets the header's own word rather than the connection colour.
+    /// and it gets the header's own word rather than the connection color.
     /// </summary>
     public void OnBoardStalenessChanged(bool stale, double drainAgeSeconds) => OnUi(() =>
     {
@@ -321,6 +321,12 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
 
     /// <inheritdoc />
     public void OnRequestReleased(RequestReleasedPayload payload) => Upsert(payload);
+
+    /// <summary>
+    /// The leg moved and nothing else did. A full body, upserted like any other: the row keeps its
+    /// slot, keeps its holder, and redraws on the point now under way.
+    /// </summary>
+    public void OnRequestAdvanced(RequestAdvancedPayload payload) => Upsert(payload);
 
     /// <inheritdoc />
     public void OnRequestEscalated(RequestEscalatedPayload payload) => Upsert(payload);
@@ -565,7 +571,7 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         var now = _serverNow();
         var glyphs = new RoleGlyphSource(_catalog().Role);
 
-        // Served map scale, so a two-point row reads in metres. See RefreshBoardAsync.
+        // Served map scale, so a two-point row reads in meters. See RefreshBoardAsync.
         var unitsToMeters = BundledContracts.GameProfile().Current.DefaultUnitsToMeters;
 
         // Once, not once per row. It is the same context for every row on the board.
@@ -638,11 +644,15 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
             // IsClaimedBy, never the claimant column. A shared row you accepted leaves that column
             // null and stays Open, so the menu read it as somebody else's and offered you ACCEPT
             // on work you already had, with no DONE and no RELEASE anywhere.
+            // The point labels ride along so the menu can offer COPY per leg. Without them a
+            // two-point row offers one COPY and the driver gets the pickup only.
             slots[++pressed] = new SlotState(
                 row.State,
                 row.IsClaimedBy(_viewerId),
                 row.RequestedByParticipantId == _viewerId,
-                row.Id);
+                row.Id,
+                [.. row.Points.OrderBy(p => p.Ordinal).Select(p => p.Label)],
+                row.CurrentLeg);
         }
 
         _onRendered(new BoardSnapshot(
@@ -685,11 +695,11 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     public void SetFault(string? fault) => OnUi(() => SetFaultCore(fault, StatusSeverity.Fault));
 
     /// <summary>
-    /// A confirmation of something the viewer just did. Same deadline, quieter colour.
+    /// A confirmation of something the viewer just did. Same deadline, quieter color.
     /// </summary>
     /// <remarks>
-    /// COPIED and GUN CLEARED are not faults, and drawing them in the fault colour taught people
-    /// to read the strip's loudest colour as noise.
+    /// COPIED and GUN CLEARED are not faults, and drawing them in the fault color taught people
+    /// to read the strip's loudest color as noise.
     /// </remarks>
     public void SetNote(string note) => OnUi(() => SetFaultCore(note, StatusSeverity.Note));
 

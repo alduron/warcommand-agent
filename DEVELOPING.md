@@ -27,7 +27,7 @@ Working on the tray icon or its menu needs no docker, no TLS proxy, no API and n
 
 That sets `WARCOMMAND_TRAY_ONLY=1`, which implies the dev profile and stops the startup sequence
 after the icon. Right-click the icon for the menu. **`Dev: force icon state`** switches the icon
-between green, amber and grey with no socket anywhere, which is how the three states are eyeballed.
+between green, amber and gray with no socket anywhere, which is how the three states are eyeballed.
 
 **Only one agent runs at a time.** `App.OnStartup` takes a session-scoped mutex before it builds
 anything; a second launch logs and exits, leaving no tray icon and no device registration. A dev
@@ -174,11 +174,11 @@ dotnet publish WarCommand.Agent/WarCommand.Agent.csproj -c Release -o publish/
 
 ## What is still missing
 
-The tray menu renders only the rows this build can honour: the header, the board line, second-screen
+The tray menu renders only the rows this build can honor: the header, the board line, second-screen
 mode, the dev force-state section and Quit. The group, match, map, microphone, push-to-talk, sound,
 pairing, settings and Panic rows are written and tested in `TrayMenu.Build` but stay absent until
 their subsystem fills in the matching `TrayMenuState` field, so the menu never offers a click that
-does nothing. Panic in particular is absent rather than greyed until `PanicSwitch.Arm()` succeeds,
+does nothing. Panic in particular is absent rather than grayed until `PanicSwitch.Arm()` succeeds,
 which it cannot do until every `PanicSubsystem` is registered.
 
 Realtime is wired: the agent seeds the board once over HTTPS and everything after that arrives as a

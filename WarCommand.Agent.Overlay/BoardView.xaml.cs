@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -20,7 +20,7 @@ namespace WarCommand.Agent.Overlay;
 /// </summary>
 /// <remarks>
 /// Role owns the glyph and nothing else, per Decision_WarCommandOverlayColorIsStateOnlyWebOwnsRoleHue,
-/// so the hue strokes the paths and the label stays the header's dim grey.
+/// so the hue strokes the paths and the label stays the header's dim gray.
 /// </remarks>
 public sealed record HeaderRole
 {
@@ -54,7 +54,7 @@ public sealed record BoardHeader
 
     /// <summary>
     /// The same roles carrying their glyph and hue. Empty until WithGlyph runs, which is what makes
-    /// a header that skipped it render nothing rather than a line of colourless ids.
+    /// a header that skipped it render nothing rather than a line of colorless ids.
     /// </summary>
     public IReadOnlyList<HeaderRole> Roles { get; init; } = [];
 
@@ -189,7 +189,7 @@ public partial class BoardView : UserControl
     /// <summary>Displays the coordinate the dev source (or any source) just answered with.</summary>
     public void ShowSimulatedPoint(string text) => SimulatedPointText.Text = text;
 
-    /// <summary>The build line at the foot of the window, in the mock's watermark grey.</summary>
+    /// <summary>The build line at the foot of the window, in the mock's watermark gray.</summary>
     public void SetStatus(string text) => StatusText.Text = text;
 
     /// <summary>
@@ -463,7 +463,7 @@ public partial class BoardView : UserControl
     /// </summary>
     /// <remarks>
     /// The menu redraws on every navigation key. Replacing the collection each time rebuilds every
-    /// container WPF has already realised, which is expensive enough to feel like the keys are
+    /// container WPF has already realized, which is expensive enough to feel like the keys are
     /// lagging behind the hand.
     /// </remarks>
     private static void Sync(

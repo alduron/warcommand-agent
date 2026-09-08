@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Model;
 
@@ -96,8 +96,8 @@ public sealed record RangeMode(string Id, string Label, decimal? MinRangeM = nul
     public static IReadOnlyList<RangeMode> Fallback { get; } = [Raw];
 
     /// <summary>True while this range is outside what the mode can reach.</summary>
-    public bool IsOutOfRange(decimal metres) =>
-        (MinRangeM is { } min && metres < min) || (MaxRangeM is { } max && metres > max);
+    public bool IsOutOfRange(decimal meters) =>
+        (MinRangeM is { } min && meters < min) || (MaxRangeM is { } max && meters > max);
 }
 
 /// <summary>One selectable entry. Compiled from menu_paths, never hand drawn.</summary>
@@ -455,7 +455,7 @@ public sealed record MenuGunPositionCleared : MenuOutcome;
 /// What the MORE page is allowed to offer this person right now. Its digits are fixed: an entry
 /// nobody can use is absent, never renumbered, so a digit learned once stays learned.
 /// </summary>
-/// <summary>What one board line holds, for deciding which verbs it can honour.</summary>
+/// <summary>What one board line holds, for deciding which verbs it can honor.</summary>
 /// <param name="State">The row's state.</param>
 /// <param name="ClaimedByViewer">True when the viewer is the one holding it.</param>
 /// <param name="RequestedByViewer">True when the viewer is the one who asked for it.</param>
@@ -473,11 +473,20 @@ public sealed record MenuGunPositionCleared : MenuOutcome;
 /// where a moved press accepts the wrong job in silence.
 /// </para>
 /// </remarks>
+/// <param name="PointLabels">
+/// The row's point labels, in ordinal order. Null where the caller has not filled it in, which
+/// offers a single COPY exactly as it always did. A two-point row offers one COPY per leg.
+/// </param>
+/// <param name="CurrentLeg">
+/// Which point is under way. ADVANCE draws only while a leg follows it; the last leg ends with DONE.
+/// </param>
 public readonly record struct SlotState(
     RequestState State,
     bool ClaimedByViewer,
     bool RequestedByViewer = false,
-    Guid RequestId = default);
+    Guid RequestId = default,
+    IReadOnlyList<string>? PointLabels = null,
+    int CurrentLeg = 0);
 
 public sealed record MenuContext
 {
@@ -493,7 +502,7 @@ public sealed record MenuContext
     /// What each occupied slot holds, so the verb list can offer only what the row will accept.
     /// </summary>
     /// <remarks>
-    /// Absent means the old behaviour: every verb on every row. That offered START, DONE and
+    /// Absent means the old behavior: every verb on every row. That offered START, DONE and
     /// RELEASE on an open row nobody had claimed, and ACCEPT on a row already yours. The server
     /// refuses each of them, so the press did nothing and the surface said nothing either.
     /// </remarks>
@@ -630,24 +639,30 @@ public sealed class MenuStateMachine
     /// </remarks>
     /// <summary>
     /// Every row verb, in the order they are offered. The digit is assigned at render, from the
-    /// position in the FILTERED list, so what a row can honour always lands on 1 upward.
+    /// position in the FILTERED list, so what a row can honor always lands on 1 upward.
     /// </summary>
     /// <remarks>
+    /// COPY sits third because a two-point row splits it into one entry per leg, and five is the
+    /// cap: with COPY last, a row you hold and also raised offered DONE, ADVANCE, RELEASE, CANCEL
+    /// and the pickup, and the DROPOFF fell off the end. The coordinate is what the row is for.
+    /// <para>
     /// They used to carry fixed digits so a verb kept its number everywhere, which is the better
     /// rule when every number is reachable. They are not: a hand holding CapsLock covers 1 to 5 on
     /// the number row and nothing past it, so MUTE on 6 and COPY on 7 were dead keys. The lists are
     /// filtered by row state and the states are disjoint, so ordering by what that state needs most
     /// keeps every offer inside five and keeps it stable: on an open row 1 is always ACCEPT, on a
     /// row you hold 1 is always DONE.
+    /// </para>
     /// </remarks>
     private static readonly (string VerbId, string Label)[] BoardVerbs =
     [
         ("accept", "ACCEPT"),
         ("done", "DONE"),
-        ("cancel", "CANCEL"),
-        ("release", "RELEASE"),
-        ("pass", "PASS"),
+        ("advance", "ADVANCE"),
         ("copy", "COPY"),
+        ("release", "RELEASE"),
+        ("cancel", "CANCEL"),
+        ("pass", "PASS"),
         ("mute", "MUTE"),
     ];
 
@@ -713,6 +728,11 @@ public sealed class MenuStateMachine
     // be submitted at all: TRANSPORT, LIFT and ESCORT were unsubmittable because the machine had
     // no notion of arity and the submit always sent exactly one.
     private readonly List<MapPoint> _points = [];
+
+    // The digits that spelled each accepted point, empty for one that was read or spoken. Kept so
+    // BACK can put a typed point back on the digit row: the last digit accepts the point outright,
+    // so without this a wrong tenth digit cost the whole grid and both points of a pair.
+    private readonly List<IReadOnlyList<int>> _pointDigits = [];
 
     // The subscribed roles as the USER has them right now, seeded from the context at open and
     // flipped the instant a toggle is pressed. Reading the context directly meant a toggled row
@@ -899,7 +919,7 @@ public sealed class MenuStateMachine
     /// <summary>
     /// Every row verb, in offer order, for a screen that documents the keyboard rather than running
     /// it. Read from the same table the menu dispatches on, so the two cannot drift. There is no
-    /// digit here: a row's verbs are numbered from what that row can honour.
+    /// digit here: a row's verbs are numbered from what that row can honor.
     /// </summary>
     public static IReadOnlyList<string> BoardVerbList { get; } =
         [.. BoardVerbs.Select(v => v.Label)];
@@ -947,6 +967,7 @@ public sealed class MenuStateMachine
         _modifierPage = 0;
         _digits.Clear();
         _points.Clear();
+        _pointDigits.Clear();
         _selectedSlot = 0;
         _snapshot = snapshot;
         _context = context ?? new MenuContext();
@@ -1194,6 +1215,33 @@ public sealed class MenuStateMachine
     /// <summary>
     /// Records a completed point and moves on: another point if the type wants one, confirm if not.
     /// </summary>
+    /// <summary>
+    /// Puts the last TYPED point back on the digit row, one digit short, and returns to the point
+    /// level. False when there is nothing to take back or the point was read or spoken, which has
+    /// no digits and so no last digit to delete.
+    /// </summary>
+    private bool ReopenLastTypedPoint()
+    {
+        if (_points.Count == 0 || _pointDigits.Count != _points.Count)
+        {
+            return false;
+        }
+
+        var typed = _pointDigits[^1];
+        if (typed.Count == 0)
+        {
+            return false;
+        }
+
+        _points.RemoveAt(_points.Count - 1);
+        _pointDigits.RemoveAt(_pointDigits.Count - 1);
+        _digits.Clear();
+        _digits.AddRange(typed.Take(typed.Count - 1));
+        _snapshot = null;
+        Level = MenuLevel.Coordinate;
+        return true;
+    }
+
     private MenuOutcome AcceptPoint(MapPoint point)
     {
         // A range end, said or read on THE coordinate screen. Comes home to the page it was
@@ -1222,13 +1270,18 @@ public sealed class MenuStateMachine
         // Never more points than the type takes. Appending past the arity is a request the server
         // refuses outright with point_count_mismatch, and the reading a user just took is the one
         // they meant, so it corrects the last point rather than becoming an extra one.
+        IReadOnlyList<int> typedDigits =
+            _digits.Count == _options.DigitsPerAxis * 2 ? [.. _digits] : [];
+
         if (_points.Count >= ArityOfSelection() && _points.Count > 0)
         {
             _points[^1] = point;
+            _pointDigits[^1] = typedDigits;
         }
         else
         {
             _points.Add(point);
+            _pointDigits.Add(typedDigits);
         }
 
         _digits.Clear();
@@ -1377,6 +1430,14 @@ public sealed class MenuStateMachine
                 return new MenuNavigated(Level);
 
             case MenuLevel.Confirm:
+                // A TYPED point is taken back one digit at a time, like every other backspace. The
+                // tenth digit accepts the point outright, so a wrong one used to cost the whole
+                // grid: there was no press that meant "that last digit was wrong".
+                if (ReopenLastTypedPoint())
+                {
+                    return new MenuNavigated(Level);
+                }
+
                 // Backing out of confirm DISCARDS the reading and returns to the point level. It
                 // used to keep the snapshot and pop to the branch, so the next pass skipped the
                 // point level entirely and reused a coordinate the user had just backed away from.
@@ -1389,6 +1450,7 @@ public sealed class MenuStateMachine
                 _snapshot = null;
                 _digits.Clear();
                 _points.Clear();
+                _pointDigits.Clear();
                 Level = MenuLevel.Coordinate;
                 return new MenuNavigated(Level);
 
@@ -1400,9 +1462,17 @@ public sealed class MenuStateMachine
                 return new MenuNavigated(Level);
 
             case MenuLevel.Coordinate:
+                // Point 2 with nothing typed backs into point 1's last digit rather than abandoning
+                // the leaf. A pair is one interaction, and BACK deletes one digit everywhere in it.
+                if (ReopenLastTypedPoint())
+                {
+                    return new MenuNavigated(Level);
+                }
+
                 // Leaving the point level abandons the leaf, so the points collected for it go
                 // too: the next leaf starts its own draft rather than inheriting half of this one.
                 _points.Clear();
+                _pointDigits.Clear();
                 Level = PopToBranch();
                 return new MenuNavigated(Level);
 
@@ -1969,7 +2039,7 @@ public sealed class MenuStateMachine
     }
 
     /// <summary>
-    /// The verbs THIS row can honour, numbered from 1, with the rest absent.
+    /// The verbs THIS row can honor, numbered from 1, with the rest absent.
     /// </summary>
     /// <remarks>
     /// Every verb used to be offered on every row: START, DONE and RELEASE on an open row nobody
@@ -1986,6 +2056,7 @@ public sealed class MenuStateMachine
         .. BoardVerbs
             .Where(v => _catalog.CommandVerb(v.VerbId) is not null)
             .Where(v => VerbApplies(v.VerbId))
+            .SelectMany(ExpandVerb)
             .Take(MaxRowVerbs)
             .Select((v, i) => new MenuEntry
             {
@@ -1996,9 +2067,42 @@ public sealed class MenuStateMachine
             }),
     ];
 
+    /// <summary>
+    /// One verb, or one per leg where the verb addresses a single point.
+    /// </summary>
+    /// <remarks>
+    /// A transport is worked one leg at a time: the taker copies the PICKUP, drives there, and only
+    /// then wants the DROPOFF. One COPY carrying both legs pastes a line the driver has to edit
+    /// mid-mission, which is the one thing a hand on a wheel cannot do, so copy is per point.
+    /// The suffix is the ORDINAL, and a row with one point keeps the bare "copy" it always had.
+    /// </remarks>
+    private IEnumerable<(string VerbId, string Label)> ExpandVerb((string VerbId, string Label) verb)
+    {
+        if (verb.VerbId != "copy")
+        {
+            return [verb];
+        }
+
+        var labels = _context.Slots.TryGetValue(_selectedSlot, out var slot)
+            ? slot.PointLabels ?? []
+            : [];
+
+        return labels.Count < 2
+            ? [verb]
+            : labels.Select((label, ordinal) => (
+                VerbId: $"copy:{ordinal.ToString(CultureInfo.InvariantCulture)}",
+                Label: string.IsNullOrWhiteSpace(label)
+                    ? $"COPY {(ordinal + 1).ToString(CultureInfo.InvariantCulture)}"
+                    : $"COPY {label.ToUpperInvariant()}"));
+    }
+
+    /// <summary>Whether this row has a point after the one it is working.</summary>
+    private static bool HasLegAfterCurrent(SlotState slot) =>
+        (slot.PointLabels?.Count ?? 0) > slot.CurrentLeg + 1;
+
     private bool VerbApplies(string verbId)
     {
-        // With no state known, offer everything: that is the old behaviour and a caller who has
+        // With no state known, offer everything: that is the old behavior and a caller who has
         // not filled Slots in should not lose the board.
         if (!_context.Slots.TryGetValue(_selectedSlot, out var slot))
         {
@@ -2031,6 +2135,10 @@ public sealed class MenuStateMachine
             "pass" => open && !mine && !asked,
             "mute" => !asked && !mine,
 
+            // A leg to move to, on a row you hold. The last leg is closed with DONE, and a
+            // one-point row has nothing to advance to, so both draw nothing here.
+            "advance" => mine && HasLegAfterCurrent(slot),
+
             // The coordinate is worth copying whatever state the row is in.
             "copy" => true,
             _ => false,
@@ -2054,7 +2162,7 @@ public sealed class MenuStateMachine
     /// Whether the MORE page draws this entry at all.
     /// </summary>
     /// <remarks>
-    /// An entry the agent cannot honour is absent, never shown and dead. Roles, match, people,
+    /// An entry the agent cannot honor is absent, never shown and dead. Roles, match, people,
     /// restart and link all returned a panel id nothing handles, so they closed the menu and did
     /// nothing, which is exactly the click this product refuses to offer anywhere else.
     /// </remarks>
@@ -2446,6 +2554,7 @@ public sealed class MenuStateMachine
         _modifierPage = 0;
         _digits.Clear();
         _points.Clear();
+        _pointDigits.Clear();
         _selectedSlot = 0;
         _snapshot = null;
         _context = new MenuContext();

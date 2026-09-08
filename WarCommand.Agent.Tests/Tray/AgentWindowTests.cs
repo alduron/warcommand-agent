@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -90,18 +90,18 @@ public class AgentWindowTests
             }
 
             // Every ground in this product is dark. A stray light one is the two-theme bug.
-            foreach (var (element, colour) in Grounds(window))
+            foreach (var (element, color) in Grounds(window))
             {
-                if (StateFills.Contains(colour.ToString(CultureInfo.InvariantCulture)))
+                if (StateFills.Contains(color.ToString(CultureInfo.InvariantCulture)))
                 {
                     continue;
                 }
 
-                var luminance = (0.2126 * colour.R) + (0.7152 * colour.G) + (0.0722 * colour.B);
+                var luminance = (0.2126 * color.R) + (0.7152 * color.G) + (0.0722 * color.B);
                 Assert.True(
-                    colour.A < 0x40 || luminance < 140,
+                    color.A < 0x40 || luminance < 140,
                     FormattableString.Invariant(
-                        $"{element} paints {colour}, too light for the agent's theme."));
+                        $"{element} paints {color}, too light for the agent's theme."));
             }
 
             window.Close();
@@ -121,18 +121,18 @@ public class AgentWindowTests
             var ground = (SolidColorBrush)window.FindResource("Ground");
             Assert.Equal(ground.Color, ((SolidColorBrush)window.Background).Color);
 
-            foreach (var (element, colour) in Grounds(window))
+            foreach (var (element, color) in Grounds(window))
             {
-                if (StateFills.Contains(colour.ToString(CultureInfo.InvariantCulture)))
+                if (StateFills.Contains(color.ToString(CultureInfo.InvariantCulture)))
                 {
                     continue;
                 }
 
-                var luminance = (0.2126 * colour.R) + (0.7152 * colour.G) + (0.0722 * colour.B);
+                var luminance = (0.2126 * color.R) + (0.7152 * color.G) + (0.0722 * color.B);
                 Assert.True(
-                    colour.A < 0x40 || luminance < 140,
+                    color.A < 0x40 || luminance < 140,
                     FormattableString.Invariant(
-                        $"{element} paints {colour}, too light for the agent's theme."));
+                        $"{element} paints {color}, too light for the agent's theme."));
             }
 
             window.Close();
@@ -140,11 +140,11 @@ public class AgentWindowTests
     }
 
     /// <summary>
-    /// Every colour any element paints as its ground. Gradients are flattened to their stops: the
+    /// Every color any element paints as its ground. Gradients are flattened to their stops: the
     /// first version of this walked solid brushes only, and the board's terrain gradient went
     /// straight past it.
     /// </summary>
-    private static IEnumerable<(string Element, Color Colour)> Grounds(DependencyObject root)
+    private static IEnumerable<(string Element, Color Color)> Grounds(DependencyObject root)
     {
         var count = VisualTreeHelper.GetChildrenCount(root);
         for (var i = 0; i < count; i++)
@@ -159,9 +159,9 @@ public class AgentWindowTests
                 _ => null,
             };
 
-            foreach (var colour in ColoursOf(background))
+            foreach (var color in ColorsOf(background))
             {
-                yield return (child.GetType().Name, colour);
+                yield return (child.GetType().Name, color);
             }
 
             foreach (var found in Grounds(child))
@@ -171,7 +171,7 @@ public class AgentWindowTests
         }
     }
 
-    private static IEnumerable<Color> ColoursOf(Brush? brush) => brush switch
+    private static IEnumerable<Color> ColorsOf(Brush? brush) => brush switch
     {
         SolidColorBrush solid => [solid.Color],
         GradientBrush gradient => gradient.GradientStops.Select(stop => stop.Color),

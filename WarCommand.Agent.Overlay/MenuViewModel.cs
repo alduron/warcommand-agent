@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Fire;
 using WarCommand.Agent.Core.Input;
@@ -140,7 +140,7 @@ public sealed record MenuViewModel
         var bearing = FormattableString.Invariant($"AZ {azimuth:0}");
 
         var mode = menu.RangeMode;
-        if (Metres(menu.ToolGun, menu.ToolTarget) is not { } range)
+        if (Meters(menu.ToolGun, menu.ToolTarget) is not { } range)
         {
             return FormattableString.Invariant($"{bearing}   MAP UNKNOWN");
         }
@@ -152,13 +152,13 @@ public sealed record MenuViewModel
     }
 
     /// <summary>
-    /// The straight-line range in metres, or null while the map scale is unknown.
+    /// The straight-line range in meters, or null while the map scale is unknown.
     /// </summary>
     /// <remarks>
     /// The scale is a served fact, never a number in this assembly, so an unmeasured map answers
     /// with nothing rather than with a plausible wrong distance.
     /// </remarks>
-    public static decimal? Metres(MapPoint from, MapPoint to)
+    public static decimal? Meters(MapPoint from, MapPoint to)
     {
         var ballistics = BundledContracts.Ballistics().Current;
         var scale = FireSolutionCalculator.UnitsToMeters(
@@ -204,7 +204,7 @@ public sealed record MenuViewModel
             return BoardRowViewModel.BracketParts(solution);
         },
             menu.RangeMode,
-            (gun, target) => Metres(gun, target) ?? 0m);
+            (gun, target) => Meters(gun, target) ?? 0m);
     }
 
     /// <summary>

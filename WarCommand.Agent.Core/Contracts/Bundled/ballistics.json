@@ -175,7 +175,7 @@
         ],
         "depends_on": "two map coordinates, nothing else",
         "azimuth_needs_no_units": "atan2 on two deltas. Unitless, exact, and correct the moment the readout is trusted.",
-        "range_needs_units": "hypot times map_units_to_meters. If that constant is uncalibrated, render range in MAP UNITS rather than refusing: a gunner comparing two targets is served by a relative number, and a wrong metre figure is worse than an honest unit figure.",
+        "range_needs_units": "hypot times map_units_to_meters. If that constant is uncalibrated, render range in MAP UNITS rather than refusing: a gunner comparing two targets is served by a relative number, and a wrong meter figure is worse than an honest unit figure.",
         "always_render": true
       },
       "elevation": {
@@ -230,7 +230,7 @@
       "the elevation the gunner actually fired",
       "the outcome the spotter called: over, short, left, right, or on target"
     ],
-    "why_it_wins": "Every mission is a labelled sample of the true solution at that gun-target pair, which absorbs terrain height, vehicle tilt, and whatever the community table gets wrong. Nobody else can build this because nobody else is holding the request board while it happens.",
+    "why_it_wins": "Every mission is a labeled sample of the true solution at that gun-target pair, which absorbs terrain height, vehicle tilt, and whatever the community table gets wrong. Nobody else can build this because nobody else is holding the request board while it happens.",
     "privacy": "Coordinates and outcomes only. No audio, no frames, no player identity beyond the group-scoped participant id. Consistent with the three promises in 12-security.md.",
     "consent": "Per group, off by default, and the group owner turns it on. It is telemetry about how somebody plays and it is not ours to take silently."
   }

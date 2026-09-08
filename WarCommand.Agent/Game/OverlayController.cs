@@ -1,4 +1,4 @@
-﻿
+
 using System.Windows.Threading;
 using System.Linq;
 using WarCommand.Agent.Core.Settings;
@@ -20,7 +20,7 @@ namespace WarCommand.Agent.Game;
 public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposable
 {
     /// <summary>
-    /// What Dim multiplies the chosen opacity by, for the unfocused behaviour and for the board
+    /// What Dim multiplies the chosen opacity by, for the unfocused behavior and for the board
     /// key's middle step. Dim is still readable at a glance; it is not "nearly gone", which would
     /// make the step useless to the people who ask for it.
     /// </summary>
@@ -102,7 +102,7 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
     ];
 
     /// <summary>
-    /// "display 2 (2560x1440)". The device name is what is persisted, but nobody recognises
+    /// "display 2 (2560x1440)". The device name is what is persisted, but nobody recognizes
     /// \.\DISPLAY2, and every monitor is called Generic PnP Monitor.
     /// </summary>
     public static string DisplayName(System.Windows.Forms.Screen screen, int index)
@@ -145,7 +145,7 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
 
     /// <summary>
     /// Adopts a settings change: the master switch, the anchor, the width, the opacity and the
-    /// unfocused behaviour, applied in one pass so a save can never half-land.
+    /// unfocused behavior, applied in one pass so a save can never half-land.
     /// </summary>
     public void ApplySettings(AgentSettings settings)
     {

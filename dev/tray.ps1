@@ -1,7 +1,7 @@
 # The tray's own iteration loop: no docker, no TLS proxy, no API, no window.
 #
 # Launches the tray icon and nothing else, and rebuilds and relaunches on every save. Right-click
-# the icon for the menu; "Dev: force icon state" switches green/amber/grey with no socket, which is
+# the icon for the menu; "Dev: force icon state" switches green/amber/gray with no socket, which is
 # the whole point of this loop. See DEVELOPING.md.
 #
 #   .\dev\tray.ps1            # watch loop, rebuilds on save
@@ -17,7 +17,7 @@ $repo = Split-Path -Parent $PSScriptRoot
 
 # Only one agent runs at a time, enforced by a mutex in App.OnStartup. Take the slot rather than
 # launching a second instance that would exit on its own and look like a failed build. Both names:
-# the published artefact is WarCommand.exe, a dotnet run is WarCommand.Agent.
+# the published artifact is WarCommand.exe, a dotnet run is WarCommand.Agent.
 Get-Process WarCommand, WarCommand.Agent -ErrorAction SilentlyContinue | Stop-Process -Force
 
 $env:WARCOMMAND_TRAY_ONLY = '1'

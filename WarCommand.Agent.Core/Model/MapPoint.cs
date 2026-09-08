@@ -15,7 +15,7 @@ public sealed record MapPoint(
     string? RawText,
     decimal? Confidence)
 {
-    /// <summary>Map-unit distance to another point. Unitless; multiply by units_to_meters for metres.</summary>
+    /// <summary>Map-unit distance to another point. Unitless; multiply by units_to_meters for meters.</summary>
     public decimal DistanceUnitsTo(MapPoint other)
     {
         ArgumentNullException.ThrowIfNull(other);

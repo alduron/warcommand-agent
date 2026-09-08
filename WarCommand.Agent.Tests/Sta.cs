@@ -11,7 +11,7 @@ namespace WarCommand.Agent.Tests;
 /// results and then hung.
 /// <para>
 /// It hung the release workflow for an hour and fifty minutes with no output past "Test", and the CI
-/// run before it was cancelled at three hours. It reproduces locally as a full run that reports pass
+/// run before it was canceled at three hours. It reproduces locally as a full run that reports pass
 /// counts and never returns, which is easy to mistake for a machine quirk because a filtered run
 /// that happens to skip the failing test exits cleanly.
 /// </para>

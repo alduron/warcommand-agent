@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Core.Tray;
+using WarCommand.Agent.Core.Tray;
 
 namespace WarCommand.Agent.Tests.Tray;
 
@@ -26,7 +26,7 @@ public class TrayMenuOverlayTests
     // --- the status word -------------------------------------------------------------------------
 
     /// <summary>
-    /// Connected and signed in are different questions with different fixes, so the dot's colour
+    /// Connected and signed in are different questions with different fixes, so the dot's color
     /// alone cannot answer them. Green plus "connected" means both.
     /// </summary>
     [Theory]

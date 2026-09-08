@@ -9,7 +9,7 @@ namespace WarCommand.Agent.Overlay;
 /// A <see cref="StatusSeverity"/> as the token it draws in.
 /// </summary>
 /// <remarks>
-/// The mapping lives here rather than on <see cref="StatusItem"/> so the item carries no colour at
+/// The mapping lives here rather than on <see cref="StatusItem"/> so the item carries no color at
 /// all, and the lookup is shared with the role hues so there is one loader and one fallback.
 /// </remarks>
 public sealed class SeverityBrushConverter : IValueConverter

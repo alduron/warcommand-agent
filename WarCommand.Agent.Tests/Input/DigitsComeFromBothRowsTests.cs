@@ -7,7 +7,7 @@ namespace WarCommand.Agent.Tests.Input;
 /// A digit is a digit, whichever row of the keyboard it came from.
 /// </summary>
 /// <remarks>
-/// The numpad did nothing. Its keys are labelled Numpad0 to Numpad9, and both the arming table and
+/// The numpad did nothing. Its keys are labeled Numpad0 to Numpad9, and both the arming table and
 /// the digit test only ever looked at the single-character labels of the number row, so a six digit
 /// invite code or an eight digit typed grid could not be entered on the pad at all. That is the
 /// place a hand goes to type numbers.

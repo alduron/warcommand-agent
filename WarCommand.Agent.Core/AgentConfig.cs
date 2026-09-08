@@ -155,9 +155,6 @@ public sealed record LocalSettings
     /// <summary>Shows what was heard for every utterance, not only failures.</summary>
     public bool RecognizedTextFeedback { get; init; }
 
-    /// <summary>Clobbers the clipboard on claim. One toggle, defaults on.</summary>
-    public bool AutoCopyOnClaim { get; init; } = true;
-
     /// <summary>A format id from coordinate_handoff in the game profile. Null uses its default_format.</summary>
     public string? ClipboardFormatId { get; init; }
 

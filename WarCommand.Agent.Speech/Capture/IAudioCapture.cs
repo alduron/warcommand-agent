@@ -25,7 +25,7 @@ public enum AudioCaptureState
     Failed,
 }
 
-/// <summary>Capture health, which drives the tray colour and the persistent overlay line.</summary>
+/// <summary>Capture health, which drives the tray color and the persistent overlay line.</summary>
 /// <param name="State">What capture is doing.</param>
 /// <param name="DeviceName">The device in use, or null when there is none.</param>
 /// <param name="Message">One line naming what happened, or null when nothing did.</param>

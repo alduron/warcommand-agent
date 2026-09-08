@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -426,7 +426,7 @@ public sealed class WarCommandApiClient : IWarCommandApiClient, IDisposable
                     {
                         Code = ErrorCodes.MalformedErrorBody,
                         Status = (int)response.StatusCode,
-                        Detail = $"{method} {path} deserialised to null.",
+                        Detail = $"{method} {path} deserialized to null.",
                     },
                     correlationId);
         }

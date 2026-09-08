@@ -4,7 +4,7 @@ using System.Drawing.Text;
 
 namespace WarCommand.Agent.Capture;
 
-/// <summary>One rendered glyph, normalised to a fixed cell so a match is scale free.</summary>
+/// <summary>One rendered glyph, normalized to a fixed cell so a match is scale free.</summary>
 public sealed class GlyphTemplate
 {
     internal GlyphTemplate(string glyph, float[] cell, double aspect)
@@ -15,7 +15,7 @@ public sealed class GlyphTemplate
     }
 
     /// <summary>
-    /// Ink width over ink height, before normalisation. The cell is square, so without this a 4 px
+    /// Ink width over ink height, before normalization. The cell is square, so without this a 4 px
     /// slice and a 7 px slice look identical and the solver happily splits one digit into two.
     /// </summary>
     public double Aspect { get; }
@@ -28,12 +28,12 @@ public sealed class GlyphTemplate
 }
 
 /// <summary>
-/// The glyph set from map_readout.glyphs, rendered from a font and normalised into fixed cells.
+/// The glyph set from map_readout.glyphs, rendered from a font and normalized into fixed cells.
 /// Everything about it comes from the served profile: the glyph list, the candidate typefaces and
 /// the margin floor. Nothing about Wardogs is written down here.
 /// </summary>
 /// <remarks>
-/// Normalising every glyph into the same cell is what makes ui_scales cheap. A captured run is
+/// Normalizing every glyph into the same cell is what makes ui_scales cheap. A captured run is
 /// scaled into the same cell before it is compared, so one atlas answers every scale and a new
 /// scale in the profile costs nothing.
 /// </remarks>

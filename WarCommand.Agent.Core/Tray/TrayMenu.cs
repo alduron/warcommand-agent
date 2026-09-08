@@ -1,15 +1,15 @@
-﻿using System.Linq;
+using System.Linq;
 using WarCommand.Agent.Core.Settings;
 
 namespace WarCommand.Agent.Core.Tray;
 
 /// <summary>
-/// What the tray icon's field colour is saying. Mapped from the realtime socket's state by the
+/// What the tray icon's field color is saying. Mapped from the realtime socket's state by the
 /// composition root; the menu model never sees a socket.
 /// </summary>
 public enum TrayIndicator
 {
-    /// <summary>Grey. Panicked, unpaired, or the socket is not up.</summary>
+    /// <summary>Gray. Panicked, unpaired, or the socket is not up.</summary>
     Offline = 0,
 
     /// <summary>Amber. Backing off and retrying.</summary>
@@ -76,7 +76,7 @@ public enum TrayCommand
 
 /// <summary>One monitor the overlay can be put on.</summary>
 /// <remarks>
-/// The device name is what is persisted and the label is what a person can recognise: nobody
+/// The device name is what is persisted and the label is what a person can recognize: nobody
 /// knows which panel is \.\DISPLAY2, and every monitor reports itself as Generic PnP Monitor.
 /// </remarks>
 public sealed record TrayDisplay(string DeviceName, string Label, bool IsPrimary);
@@ -91,7 +91,7 @@ public sealed record TrayMenuItem
     public required string Text { get; init; }
 
     /// <summary>
-    /// Right-aligned secondary text, in the mock's dim grey: '31 people', 'off', 'admin+'. This is
+    /// Right-aligned secondary text, in the mock's dim gray: '31 people', 'off', 'admin+'. This is
     /// how the design shows a toggle's state, rather than a checkmark.
     /// </summary>
     public string? Value { get; init; }
@@ -112,7 +112,7 @@ public sealed record TrayMenuItem
     /// </summary>
     public string? Argument { get; init; }
 
-    /// <summary>False renders greyed. Prefer omitting the row: a control you cannot use is noise.</summary>
+    /// <summary>False renders grayed. Prefer omitting the row: a control you cannot use is noise.</summary>
     public bool IsEnabled { get; init; } = true;
 
     /// <summary>Null when the row is not a toggle. True or false renders the check.</summary>
@@ -139,7 +139,7 @@ public sealed record TrayMenuItem
 /// </remarks>
 public sealed record TrayMenuState
 {
-    /// <summary>The field colour, which is also the header's state word.</summary>
+    /// <summary>The field color, which is also the header's state word.</summary>
     public TrayIndicator Indicator { get; init; } = TrayIndicator.Offline;
 
     /// <summary>True while Panic is engaged. Overrides <see cref="Indicator"/> in the header.</summary>
@@ -163,7 +163,7 @@ public sealed record TrayMenuState
     /// <summary>People on the match.</summary>
     public int MatchPeopleCount { get; init; }
 
-    /// <summary>Admin and owner only. Absent rather than greyed for a member; see 10-agent-spec.md.</summary>
+    /// <summary>Admin and owner only. Absent rather than grayed for a member; see 10-agent-spec.md.</summary>
     public bool CanRestartMatch { get; init; }
 
     /// <summary>
@@ -262,7 +262,7 @@ public sealed record TrayMenuState
     /// </summary>
     public string? Backend { get; init; }
 
-    /// <summary>False until the settings window exists. The row is absent, never greyed.</summary>
+    /// <summary>False until the settings window exists. The row is absent, never grayed.</summary>
     public bool SettingsAvailable { get; init; }
 
     /// <summary>Read from the HKCU Run key, never from settings.json. Null hides the row.</summary>
@@ -271,7 +271,7 @@ public sealed record TrayMenuState
     /// <summary>The version on offer, e.g. "1.4.0". Null when the agent is current.</summary>
     public string? UpdateVersion { get; init; }
 
-    /// <summary>True while the game is up, which defers the install rather than cancelling it.</summary>
+    /// <summary>True while the game is up, which defers the install rather than canceling it.</summary>
     public bool UpdateWaitingForGameToClose { get; init; }
 
     /// <summary>True from the click until the process exits, so the row cannot be clicked twice.</summary>
@@ -300,8 +300,8 @@ public static class TrayMenu
 
         var items = new List<TrayMenuItem>
         {
-            // The dot beside the name is the colour; the word beside it is the same thing said out
-            // loud, because a colour alone cannot distinguish "not connected" from "not signed in".
+            // The dot beside the name is the color; the word beside it is the same thing said out
+            // loud, because a color alone cannot distinguish "not connected" from "not signed in".
             new() { Text = "WarCommand", Value = StatusWord(state), IsTitle = true, IsEnabled = false },
             TrayMenuItem.Separator,
         };
@@ -389,7 +389,7 @@ public static class TrayMenu
         // glance, and the tray is the status.
         //
         // Gated on the URL, not on IsPaired. A row whose click has nowhere to go is exactly what
-        // Convention_WarCommandTrayMenuRendersOnlyHonourableRows forbids.
+        // Convention_WarCommandTrayMenuRendersOnlyHonorableRows forbids.
         if (state.WebBoardUrl is { } board)
         {
             items.Add(new TrayMenuItem
@@ -425,7 +425,7 @@ public static class TrayMenu
         {
             // The switch list is the submenu, not a "Switch deployment..." row leading nowhere.
             // The agent has no window to open a picker in, and a row whose click has nowhere to go
-            // is what Convention_WarCommandTrayMenuRendersOnlyHonourableRows forbids. End and
+            // is what Convention_WarCommandTrayMenuRendersOnlyHonorableRows forbids. End and
             // restart stay out until the client can perform them.
             var switchable = state.Deployments
                 .Where(d => !d.IsCurrent)
@@ -447,7 +447,7 @@ public static class TrayMenu
                 Children = switchable,
             });
 
-            // Top level because it happens every round, and absent rather than greyed for a member.
+            // Top level because it happens every round, and absent rather than grayed for a member.
             if (state.CanRestartMatch)
             {
                 items.Add(new TrayMenuItem
@@ -737,7 +737,7 @@ public static class TrayMenu
         }
         else if (state.UpdateWaitingForGameToClose)
         {
-            // Not greyed with no reason given: the row says why, because "why can I not click this"
+            // Not grayed with no reason given: the row says why, because "why can I not click this"
             // is the support ticket a disabled row without an explanation generates.
             items.Add(new TrayMenuItem
             {
@@ -785,7 +785,7 @@ public static class TrayMenu
                 },
                 new TrayMenuItem
                 {
-                    Text = "Offline (grey)",
+                    Text = "Offline (gray)",
                     Command = TrayCommand.DevForceOffline,
                     IsChecked = state is { PanicEngaged: false, Indicator: TrayIndicator.Offline },
                 },

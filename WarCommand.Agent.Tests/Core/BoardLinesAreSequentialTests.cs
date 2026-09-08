@@ -146,7 +146,7 @@ public class BoardLinesAreSequentialTests
         Assert.Equal("MTR-03", board.ById(drawn[2])!.TicketCode);
     }
 
-    /// <summary>A row that left the board resolves to nothing, rather than to its neighbour.</summary>
+    /// <summary>A row that left the board resolves to nothing, rather than to its neighbor.</summary>
     [Fact]
     public void A_row_that_left_is_not_silently_replaced()
     {

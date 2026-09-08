@@ -4,7 +4,7 @@ using WarCommand.Agent.Core.Contracts;
 namespace WarCommand.Agent.Client.Realtime;
 
 /// <summary>
-/// Reads and writes the envelope. Serialising a client frame goes through here rather than through
+/// Reads and writes the envelope. Serializing a client frame goes through here rather than through
 /// <see cref="Envelope"/>, because <c>seq</c> is assigned by the server and must be absent outbound,
 /// not present and null.
 /// </summary>
@@ -58,7 +58,7 @@ internal static class FrameCodec
         }
     }
 
-    /// <summary>Serialises a client frame. No <c>seq</c>: the server owns it.</summary>
+    /// <summary>Serializes a client frame. No <c>seq</c>: the server owns it.</summary>
     public static string Write(string id, string type, DateTimeOffset sentAt, object? payload)
     {
         var frame = new ClientFrame

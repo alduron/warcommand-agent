@@ -67,7 +67,7 @@
         "d1": "M3 12h11l6-2.5v5L14 12",
         "d2": "M5 9.5v5M8 10.5v3"
       },
-      "game_note": "Can kill armour. Infantry launchers, a tank crew, a crewed emplacement. Held alongside another role, not instead of one."
+      "game_note": "Can kill armor. Infantry launchers, a tank crew, a crewed emplacement. Held alongside another role, not instead of one."
     },
     {
       "id": "infantry",
@@ -1552,7 +1552,7 @@
         "attack.2"
       ],
       "multi_taker": true,
-      "game_note": "Replaces anti_armor_fire and the armour half of armor_support."
+      "game_note": "Replaces anti_armor_fire and the armor half of armor_support."
     },
     {
       "id": "attack_aircraft",
@@ -2088,6 +2088,15 @@
       "alias_note": "'splash' and 'rounds out' were aliases here and were WRONG. Both mean the shells are still in flight, not that the job is finished, so the most natural word in a gunner's vocabulary closed the mission early and the requester's strip read ROUNDS OUT as completion. 'splash', 'rounds out', 'shot' and 'on the way' are now aliases of NOTHING and must never be reattached here. See docs/design/17-review-findings.md C6."
     },
     {
+      "id": "advance",
+      "aliases": [
+        "advance",
+        "next leg"
+      ],
+      "note": "Moves a multi-point job to its next point: pickup done, dropoff next. It changes NO state and is not mid-job progress of the kind 'splash' was: the leg either happened or it did not, and the requester needs to see that the load is aboard. Offered only on a row you hold that has more than one point, and the last leg is closed with 'done'.",
+      "alias_note": "'next leg' is a phrase form, which cannot be misheard as one word. 'loaded' and 'picked up' were considered and left out: 'picked up' is the act on a transport but says nothing on an escort or a lift, and the verb has to name the same thing on all three."
+    },
+    {
       "id": "release",
       "aliases": [
         "release",
@@ -2352,7 +2361,7 @@
     "worked_example_2": "left is L EH1 F T and lift is L IH1 F T. One syllable each, same L onset, same F-T coda, differing only in the stressed vowel. One feature of four. REFUSED, which is why bare 'left' is forbidden outright. right versus ride fails the same way on coda voicing alone.",
     "cross_class_note": "The floor is computed PER POSITION CLASS. Moving a token to a class where its rival cannot appear is a legitimate fix and is not the same as suppressing the check: the recognizer genuinely never chooses between them. Moving a token to dodge a floor failure without checking it against its NEW class is the way to reintroduce the bug somewhere else."
   },
-  "ambiguous_aliases_note": "An alias listed under a type's ambiguous_aliases is recognised but NEVER resolved by confidence. When it is the top hypothesis and a competing type is within the margin, the agent shows a two-item menu instead of guessing. It costs one keypress in the rare case and makes a confidently wrong request impossible. The generator also adds any pair it finds within 1.25x the floor.",
+  "ambiguous_aliases_note": "An alias listed under a type's ambiguous_aliases is recognized but NEVER resolved by confidence. When it is the top hypothesis and a competing type is within the margin, the agent shows a two-item menu instead of guessing. It costs one keypress in the rare case and makes a confidently wrong request impossible. The generator also adds any pair it finds within 1.25x the floor.",
   "grammar_rules": {
     "max_slots": 9,
     "longest_match_wins": true,
@@ -2387,7 +2396,7 @@
     "left": "FORBIDDEN. One feature from 'lift' (same syllables, same L onset, same F-T coda). There is no class it is legal in: the adjust verb that once held it is gone.",
     "right": "FORBIDDEN. One feature from 'ride' (same syllables, same AY1, same R onset, coda differing only in voicing). There is no class it is legal in: the adjust verb that once held it is gone."
   },
-  "color_groups_note": "A colour group answers what the role DOES, so a queue glyph reads without its label: fire, recon, move, build, medic, command. It is not the domain the role sits in.",
+  "color_groups_note": "A color group answers what the role DOES, so a queue glyph reads without its label: fire, recon, move, build, medic, command. It is not the domain the role sits in.",
   "icon_note": "Two SVG path `d` strings on a 24x24 viewBox, stroke only, no fill. d2 may be empty. Served, never compiled in, so a glyph can be corrected without shipping a client.",
   "menu_branch_labels": {
     "items.1": "WEAPONS",
@@ -2500,5 +2509,5 @@
   "supply_kinds_note": "multi_taker and modifiers are per KIND, not per type. resupply is one request type spanning six crates: hammers come in three sizes and a FOB kit comes in one, and four of the six are jobs several drivers can run at once. The row stores the resolved value at submit.",
   "multi_taker_note": "multi_taker true means MANY people may accept the row: it stays on every board collecting takers instead of leaving on the first claim. False is the single-claimant path. Null on resupply only, where the chosen supply kind decides.",
   "catalog_v5_note": "v5. Outcome-first: a request names the effect wanted at a point, not the role that fills it. Retired: air_extract, air_move, anti_air_fire, anti_armor_fire, armor_support, close_air, fire_team, ground_extract, ground_move, overwatch, shell_mission, smoke_screen. Renamed: utility_medical->medical, utility_tactical->tactical, utility_recon->recon, utility_vehicle->vehicle. Every one needs a migration; stored type ids are never validated on read.",
-  "ttl_note": "ttl_s is the wait for a TAKER and nothing else. A single-taker row stops ageing the moment somebody accepts it, because there is no time limit on doing the job. A multi_taker row keeps ageing while it collects people, or it would never clean itself up."
+  "ttl_note": "ttl_s is the wait for a TAKER and nothing else. A single-taker row stops aging the moment somebody accepts it, because there is no time limit on doing the job. A multi_taker row keeps aging while it collects people, or it would never clean itself up."
 }

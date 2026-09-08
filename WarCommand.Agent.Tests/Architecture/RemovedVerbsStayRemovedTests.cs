@@ -6,7 +6,7 @@ namespace WarCommand.Agent.Tests.Architecture;
 /// Fails the build if a removed request verb comes back into this repo.
 /// </summary>
 /// <remarks>
-/// A request ends completed, cancelled or expired. The mid-mission progress verb and the
+/// A request ends completed or abandoned. The mid-mission progress verb and the
 /// spotter-correction verb were both deleted from contracts, api, web and agent. An AetherGraph
 /// response=block stops one being TYPED into a source file; nothing stops one arriving through a
 /// contract regeneration into Contracts/Bundled, a generated RequestTypes.g.cs, or a merge. This is
@@ -27,12 +27,12 @@ public class RemovedVerbsStayRemovedTests
         (@"(?i)quantity[ _\-]?delivered", "the deleted partial-completion count"),
         (@"(?i)no_longer" + "_required", "a deleted completion outcome"),
         (@"(?i)stood" + "_down", "a deleted terminal route, now abandoned"),
-        (@"\bRequestState\.(Cancelled|Expired)\b", "a retired request state, now Abandoned"),
-        (@"\bRequestEventKind\.(Cancelled|Expired|StoodDown)\b",
+        (@"\bRequestState\.(Cancel+ed|Expired)\b", "a retired request state, now Abandoned"),
+        (@"\bRequestEventKind\.(Cancel+ed|Expired|StoodDown)\b",
             "a retired event kind, now Abandoned"),
         (@"\bOutcome\.(Serviced|Unable|NoLongerRequired)\b",
             "the deleted completion outcome"),
-        (@"request\.(cancelled|expired)\b", "a retired realtime frame, now request.abandoned"),
+        (@"request\.(cancel+ed|expired)\b", "a retired realtime frame, now request.abandoned"),
     ];
 
     private static readonly string[] ScannedExtensions = [".cs", ".json", ".md"];
@@ -65,8 +65,8 @@ public class RemovedVerbsStayRemovedTests
 
         Assert.True(
             violations.Count == 0,
-            "A removed request verb is back in the tree. A request ends completed, cancelled or "
-            + "expired, and there is no non-terminal progress verb.\n"
+            "A removed request verb is back in the tree. A request ends completed or "
+            + "abandoned, and there is no non-terminal progress verb.\n"
             + string.Join("\n", violations));
     }
 

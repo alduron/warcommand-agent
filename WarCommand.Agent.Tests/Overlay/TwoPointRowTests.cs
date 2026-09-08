@@ -44,7 +44,7 @@ public class TwoPointRowTests
     }
 
     [Fact]
-    public void The_leg_is_metres_when_the_map_scale_is_known()
+    public void The_leg_is_meters_when_the_map_scale_is_known()
     {
         // 4.6847 units between these two points at 100 m per unit is 468.5, which formats to 469.
         var row = BoardRowViewModel.FromPrimary(Transport(), Viewer, DateTimeOffset.UtcNow, 100m);
@@ -55,14 +55,14 @@ public class TwoPointRowTests
     [Fact]
     public void The_leg_falls_back_to_map_units_when_the_scale_is_unknown()
     {
-        // An honest unitless number beats a confidently wrong metre count.
+        // An honest unitless number beats a confidently wrong meter count.
         var row = ViewModel(Transport());
 
         Assert.EndsWith("u", row.LegDisplay, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void A_long_leg_reads_in_kilometres()
+    public void A_long_leg_reads_in_kilometers()
     {
         var far = Row("TRANSPORT", "TPT-17",
         [

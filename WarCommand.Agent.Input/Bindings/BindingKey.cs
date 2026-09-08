@@ -47,7 +47,7 @@ public readonly struct BindingKey : IEquatable<BindingKey>
     public override string ToString() => Label;
 
     /// <summary>
-    /// Accepts a virtual-key code only if it carries a label. An unlabelled code yields false and no
+    /// Accepts a virtual-key code only if it carries a label. An unlabeled code yields false and no
     /// key, which is what keeps an arbitrary keystroke from ever being held or printed.
     /// </summary>
     public static bool TryFromVirtualKey(int virtualKey, out BindingKey key)
@@ -88,7 +88,7 @@ public readonly struct BindingKey : IEquatable<BindingKey>
     /// True when this key is the digit <paramref name="digit"/>. Read off the label, never the code.
     /// </summary>
     /// <remarks>
-    /// The numpad counts. Its keys are labelled Numpad0 to Numpad9, which is eight characters, so
+    /// The numpad counts. Its keys are labeled Numpad0 to Numpad9, which is eight characters, so
     /// the single-character test refused every one of them: an invite code or a typed grid could
     /// only be entered on the number row, and the numpad did nothing at all.
     /// </remarks>

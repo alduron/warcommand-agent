@@ -34,7 +34,7 @@ jobs:
   release:
     runs-on: windows-latest
     # A hung test used to run until somebody noticed: a release sat on "Test" for an hour
-    # and fifty minutes and the CI run before it was cancelled by hand at three hours. The
+    # and fifty minutes and the CI run before it was canceled by hand at three hours. The
     # whole suite finishes in eight seconds, so anything past this is a hang, not slowness.
     timeout-minutes: 20
     steps:
@@ -248,7 +248,7 @@ jobs:
             New-Item -ItemType Directory -Force -Path installer/notes | Out-Null
             "WarCommand Agent $version." | Set-Content $notesFile -Encoding utf8
           }
-          # Normalised to LF: the file is CRLF on a Windows runner, and the raw bytes land in
+          # Normalized to LF: the file is CRLF on a Windows runner, and the raw bytes land in
           # the JSON and in every client that renders `notes`. String.Replace on the CR code
           # point, because the backtick-escape form of this silently did not fire and 0.1.0
           # shipped with carriage returns inside the notes string.
@@ -271,7 +271,7 @@ jobs:
 
       # `releases/latest/download/agent-release.json` is the URL the API polls, and GitHub points
       # it at whichever release is newest. A prerelease is excluded from `latest`, which is exactly
-      # the behaviour wanted: tag a prerelease and nobody's download page moves.
+      # the behavior wanted: tag a prerelease and nobody's download page moves.
       - name: Publish the GitHub release
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2

@@ -19,7 +19,7 @@ public class OverlayLayoutTests
         OverlayLayout.Place(Game, anchor, width, slide);
 
     [Fact]
-    public void Right_is_against_the_right_edge_and_vertically_centred()
+    public void Right_is_against_the_right_edge_and_vertically_centered()
     {
         var placed = Place(OverlayAnchor.Right).Bounds;
 
@@ -61,32 +61,32 @@ public class OverlayLayoutTests
     [Theory]
     [InlineData(OverlayAnchor.Right)]
     [InlineData(OverlayAnchor.Left)]
-    [InlineData(OverlayAnchor.Centre)]
-    public void A_vertically_centred_anchor_slides_up_at_plus_one(OverlayAnchor anchor)
+    [InlineData(OverlayAnchor.Center)]
+    public void A_vertically_centered_anchor_slides_up_at_plus_one(OverlayAnchor anchor)
     {
         var up = Place(anchor, 1);
-        var centre = Place(anchor);
+        var center = Place(anchor);
         var down = Place(anchor, -1);
 
         Assert.Equal(OverlayLayout.Margin, up.Bounds.Top);
         Assert.Equal(1080 - down.Bounds.Height - OverlayLayout.Margin, down.Bounds.Top);
-        Assert.True(up.Bounds.Top < centre.Bounds.Top && centre.Bounds.Top < down.Bounds.Top);
-        Assert.Equal(centre.Bounds.Left, up.Bounds.Left);
+        Assert.True(up.Bounds.Top < center.Bounds.Top && center.Bounds.Top < down.Bounds.Top);
+        Assert.Equal(center.Bounds.Left, up.Bounds.Left);
     }
 
     [Theory]
     [InlineData(OverlayAnchor.Top)]
     [InlineData(OverlayAnchor.Bottom)]
-    public void A_horizontally_centred_anchor_slides_right_at_plus_one(OverlayAnchor anchor)
+    public void A_horizontally_centered_anchor_slides_right_at_plus_one(OverlayAnchor anchor)
     {
         var right = Place(anchor, 1);
-        var centre = Place(anchor);
+        var center = Place(anchor);
         var left = Place(anchor, -1);
 
         Assert.Equal(1920 - right.Bounds.Width - OverlayLayout.Margin, right.Bounds.Left);
         Assert.Equal(OverlayLayout.Margin, left.Bounds.Left);
-        Assert.True(left.Bounds.Left < centre.Bounds.Left && centre.Bounds.Left < right.Bounds.Left);
-        Assert.Equal(centre.Bounds.Top, right.Bounds.Top);
+        Assert.True(left.Bounds.Left < center.Bounds.Left && center.Bounds.Left < right.Bounds.Left);
+        Assert.Equal(center.Bounds.Top, right.Bounds.Top);
     }
 
     /// <summary>Right at +1 and Top at +1 are the same corner, which is what the sign promises.</summary>
@@ -116,7 +116,7 @@ public class OverlayLayoutTests
 
     /// <summary>
     /// The bias is what puts the board on the edge: the window is the height cap, so a top anchor
-    /// whose board centred inside it would draw a third of the way down the picture.
+    /// whose board centered inside it would draw a third of the way down the picture.
     /// </summary>
     [Fact]
     public void The_vertical_bias_follows_the_anchor_and_then_the_slide()
@@ -139,7 +139,7 @@ public class OverlayLayoutTests
     }
 
     [Fact]
-    public void An_out_of_range_share_is_clamped_rather_than_honoured()
+    public void An_out_of_range_share_is_clamped_rather_than_honored()
     {
         Assert.Equal(
             (int)(1920 * OverlayWidth.MaxFraction),

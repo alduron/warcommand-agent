@@ -338,7 +338,7 @@ internal sealed class TempDirectory : IDisposable
     }
 }
 
-/// <summary>Serialises a server frame the way the API would.</summary>
+/// <summary>Serializes a server frame the way the API would.</summary>
 internal static class ServerFrame
 {
     public static string Of(string type, object payload, long? seq = null)

@@ -122,7 +122,7 @@ public class DerivedRungTests
             SearchRadiusPx = 20,
         };
 
-    /// <summary>A grey field with one brighter square at the centre, which is the readout's core.</summary>
+    /// <summary>A gray field with one brighter square at the center, which is the readout's core.</summary>
     private static Frame Field(byte background, byte peak)
     {
         var pixels = new byte[40 * 40 * 4];
@@ -181,7 +181,7 @@ public class DerivedRungTests
     }
 
     [Fact]
-    public void A_saturated_colour_is_bright_and_is_not_text()
+    public void A_saturated_color_is_bright_and_is_not_text()
     {
         var pixels = new byte[4 * 4 * 4];
         for (var i = 0; i < pixels.Length; i += 4)

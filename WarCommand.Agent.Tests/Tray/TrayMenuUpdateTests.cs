@@ -59,7 +59,7 @@ public class TrayMenuUpdateTests
     }
 
     [Fact]
-    public void An_update_held_by_the_game_says_why_rather_than_greying_out_silently()
+    public void An_update_held_by_the_game_says_why_rather_than_graying_out_silently()
     {
         var state = new TrayMenuState { UpdateVersion = "1.4.0", UpdateWaitingForGameToClose = true };
         var row = Find(state, i => i.Text == "Update to 1.4.0");

@@ -9,7 +9,7 @@
   "default_min_digit_confidence": null,
   "default_min_digit_confidence_note": "Null means point_confidence.warn from contracts/game-profile.json, which is 0.75. A recording that only clears point_confidence.floor would render LOW CONF on every provider's overlay, so clearing the floor is not the bar a clean corpus recording has to meet.",
   "corpus_requirements": [
-    "Accented speakers. The floor approximates a recognizer's confusion behaviour and does not replace real utterances; a corpus of one native speaker measures that speaker.",
+    "Accented speakers. The floor approximates a recognizer's confusion behavior and does not replace real utterances; a corpus of one native speaker measures that speaker.",
     "Background gunfire at the level the game actually produces, mixed under the utterance rather than recorded in a quiet room.",
     "A headset mic held badly: off-axis, too close and clipping, and too far and quiet. That is the condition the product ships into.",
     "Both number readings of every axis, digit-by-digit and cardinal, because the parser tries digit-by-digit first and falls back.",

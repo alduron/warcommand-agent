@@ -1,4 +1,4 @@
-﻿using WarCommand.Agent.Core.Contracts;
+using WarCommand.Agent.Core.Contracts;
 
 namespace WarCommand.Agent.Capture;
 
@@ -28,7 +28,7 @@ public readonly record struct ReadoutGeometry(
 {
     /// <summary>
     /// The geometry for a client of this height. A height of zero falls back to the measured
-    /// numbers, which is the old behaviour and the right answer when there is no window to measure.
+    /// numbers, which is the old behavior and the right answer when there is no window to measure.
     /// </summary>
     public static ReadoutGeometry For(MapReadoutSection readout, int clientHeight)
     {
@@ -39,7 +39,7 @@ public readonly record struct ReadoutGeometry(
 
         // Clamped, but generously. Freezing the scale is not the safe option it looks like: a
         // merge gap that stops growing splits one run into fragments the solver can never
-        // reassemble, which is a silent no-read. Overshooting only risks pulling in a neighbouring
+        // reassemble, which is a silent no-read. Overshooting only risks pulling in a neighboring
         // piece of HUD text, which the pattern and the bounds gate then reject out loud.
         scale = Math.Clamp(scale, 0.5, 8.0);
 

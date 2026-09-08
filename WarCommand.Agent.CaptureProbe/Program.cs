@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using WarCommand.Agent.Capture;
 using WarCommand.Agent.Core.Contracts;
@@ -73,7 +73,7 @@ internal static class Program
         foreach (var w in windows.Take(25))
         {
             var shape = w.CoversItsMonitor
-                ? (w.IsBorderless ? "borderless-fullscreen" : "maximised")
+                ? (w.IsBorderless ? "borderless-fullscreen" : "maximized")
                 : "windowed";
             Console.WriteLine(
                 $"  {w.ProcessName,-28} {w.ClientWidth,5}x{w.ClientHeight,-5} {shape,-22} {Trim(w.Title, 40)}");
@@ -128,7 +128,7 @@ internal static class Program
         for (var i = 1; i <= frames; i++)
         {
             // The cursor is read FIRST. Reading it after the grab smears the offset by however far
-            // the mouse travelled during the copy, which is exactly the measurement being taken.
+            // the mouse traveled during the copy, which is exactly the measurement being taken.
             var cursor = byCursor ? GameWindow.CursorInClient(target.Handle) : null;
 
             var frame = DesktopFrameGrabber.Grab(area);

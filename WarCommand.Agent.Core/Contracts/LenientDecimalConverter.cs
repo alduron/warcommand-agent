@@ -16,7 +16,7 @@ namespace WarCommand.Agent.Core.Contracts;
 /// <para>
 /// Being liberal in what is accepted is the right side to be lenient on. The agent cannot deploy the
 /// server, and a client that drops a whole frame over the spelling of one number is a client that
-/// breaks every time a field's serialisation is tightened somewhere upstream. Writing stays strict:
+/// breaks every time a field's serialization is tightened somewhere upstream. Writing stays strict:
 /// what the agent SENDS is always a number, so it never contributes to the ambiguity.
 /// </para>
 /// </remarks>

@@ -1,12 +1,12 @@
-﻿namespace WarCommand.Agent.Core.Settings;
+namespace WarCommand.Agent.Core.Settings;
 
 /// <summary>Where the overlay sits. From the Overlay tab of docs/design/mocks/TraySettings.dc.html.</summary>
 public enum OverlayAnchor
 {
-    /// <summary>Left edge, vertically centred.</summary>
+    /// <summary>Left edge, vertically centered.</summary>
     Left = 0,
 
-    /// <summary>Right edge, vertically centred. The default.</summary>
+    /// <summary>Right edge, vertically centered. The default.</summary>
     Right = 1,
 
     TopRight = 2,
@@ -19,14 +19,14 @@ public enum OverlayAnchor
 
     BottomLeft = 5,
 
-    /// <summary>Top edge, horizontally centred.</summary>
+    /// <summary>Top edge, horizontally centered.</summary>
     Top = 6,
 
-    /// <summary>Bottom edge, horizontally centred.</summary>
+    /// <summary>Bottom edge, horizontally centered.</summary>
     Bottom = 7,
 
-    /// <summary>Both axes centred.</summary>
-    Centre = 8,
+    /// <summary>Both axes centered.</summary>
+    Center = 8,
 }
 
 /// <summary>The bounds of the width share, so the settings slider and the layout agree on one pair.</summary>
@@ -58,7 +58,7 @@ public enum BoardStep
 }
 
 /// <summary>What the overlay does while the game is not the foreground window.</summary>
-public enum UnfocusedBehaviour
+public enum UnfocusedBehavior
 {
     /// <summary>The default.</summary>
     Hide = 0,
@@ -161,7 +161,7 @@ public sealed record AgentSettings
     /// </remarks>
     public string? DisplayDeviceName { get; init; }
 
-    /// <summary>One of the nine grid positions. Right edge, vertically centred, by default.</summary>
+    /// <summary>One of the nine grid positions. Right edge, vertically centered, by default.</summary>
     public OverlayAnchor Anchor { get; init; } = OverlayAnchor.Right;
 
     /// <summary>
@@ -170,31 +170,28 @@ public sealed record AgentSettings
     /// corner, Top at -1 is the top left. A corner anchor has no free axis and ignores it.
     /// </summary>
     /// <remarks>
-    /// Default +0.20, which lifts the panel a fifth of its travel off centre and out of the way of
+    /// Default +0.20, which lifts the panel a fifth of its travel off center and out of the way of
     /// the crosshair band without leaving the right edge.
     /// </remarks>
     public double Slide { get; init; } = 0.20;
 
     /// <summary>
-    /// Panel width as a share of the game's width. 0.20 is the mocks' 380 px at 1920.
+    /// Panel width as a share of the game's width. Starts at the floor and widens from there.
     /// </summary>
     /// <remarks>
     /// A share rather than a pixel count: 380 px is a fifth of a 1080p picture and a fourteenth of
     /// a 32:9 one, so a pixel width that suits one screen is wrong on the next.
     /// </remarks>
-    public double WidthFraction { get; init; } = 0.20;
+    public double WidthFraction { get; init; } = OverlayWidth.MinFraction;
 
     public OverlayOpacity Opacity { get; init; } = OverlayOpacity.Normal;
 
     /// <summary>Swaps the green to #4C9AFF. Urgent keeps its red.</summary>
-    public bool ColourblindSafe { get; init; }
+    public bool ColorblindSafe { get; init; }
 
     public bool SecondScreenMode { get; init; }
 
-    public UnfocusedBehaviour WhenUnfocused { get; init; } = UnfocusedBehaviour.Hide;
-
-    /// <summary>On by default, and it clobbers whatever is on the clipboard.</summary>
-    public bool AutoCopyOnClaim { get; init; } = true;
+    public UnfocusedBehavior WhenUnfocused { get; init; } = UnfocusedBehavior.Hide;
 
     // Capture.
 

@@ -10,7 +10,7 @@ namespace WarCommand.Agent.Tray;
 /// for a toggle's state instead of a checkmark.
 /// </summary>
 /// <remarks>
-/// A renderer rather than owner-draw on each item: the colours are the design's tokens and belong
+/// A renderer rather than owner-draw on each item: the colors are the design's tokens and belong
 /// in one place, and every item added later inherits them without knowing they exist.
 /// </remarks>
 internal sealed class TrayMenuRenderer : ToolStripProfessionalRenderer
@@ -24,7 +24,7 @@ internal sealed class TrayMenuRenderer : ToolStripProfessionalRenderer
     internal static readonly Color Border = Color.FromArgb(0xD6, 0xD6, 0xD6);
     internal static readonly Color Ok = Color.FromArgb(0x0F, 0x7B, 0x0F);
     internal static readonly Color Warn = Color.FromArgb(0x9D, 0x5D, 0x00);
-    internal static readonly Color Grey = Color.FromArgb(0x8A, 0x8A, 0x8A);
+    internal static readonly Color Gray = Color.FromArgb(0x8A, 0x8A, 0x8A);
 
     internal TrayMenuRenderer()
         : base(new Colors())
@@ -98,8 +98,8 @@ internal sealed class TrayMenuRenderer : ToolStripProfessionalRenderer
     }
 
     /// <summary>
-    /// Kills the professional table's grey image gutter and its blue selection. Everything visible
-    /// is drawn above; this exists so nothing underneath paints a colour the design does not have.
+    /// Kills the professional table's gray image gutter and its blue selection. Everything visible
+    /// is drawn above; this exists so nothing underneath paints a color the design does not have.
     /// </summary>
     private sealed class Colors : ProfessionalColorTable
     {

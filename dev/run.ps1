@@ -44,7 +44,7 @@ if (-not (Test-Endpoint "$ApiBaseUrl/health/ready")) {
 
 # Only one agent runs at a time, enforced by a mutex in App.OnStartup. Take the slot rather than
 # launching a second instance that would exit on its own and look like a failed build.
-# Both names: the published artefact is WarCommand.exe, a dotnet run is WarCommand.Agent.
+# Both names: the published artifact is WarCommand.exe, a dotnet run is WarCommand.Agent.
 # Missing the first one left it holding the overlay DLL and the build failed on a file lock.
 Get-Process WarCommand, WarCommand.Agent -ErrorAction SilentlyContinue | Stop-Process -Force
 

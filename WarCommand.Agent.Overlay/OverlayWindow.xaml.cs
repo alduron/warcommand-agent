@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -26,7 +26,7 @@ public partial class OverlayWindow : Window
 
     /// <summary>
     /// How long it takes to follow the game window. Long enough to read as one movement rather
-    /// than a jump, short enough that an alt-tab back does not catch it still travelling.
+    /// than a jump, short enough that an alt-tab back does not catch it still traveling.
     /// </summary>
     private static readonly Duration MoveDuration = new(TimeSpan.FromMilliseconds(160));
 
@@ -169,7 +169,7 @@ public partial class OverlayWindow : Window
     }
 
     /// <summary>
-    /// Where the board sits inside the window: +1 against the top, -1 against the bottom, 0 centred,
+    /// Where the board sits inside the window: +1 against the top, -1 against the bottom, 0 centered,
     /// and anywhere between. The window is the cap height, so this is what makes a top anchor draw
     /// on the top edge rather than half way down.
     /// </summary>
