@@ -38,18 +38,13 @@ public enum RowAccent
 /// place instead of being reinvented in XAML converters.
 /// </summary>
 /// <remarks>
-/// The fields are the row anatomy drawn in docs/design/mocks/OverlayRows.dc.html: an edge bar, a
-/// digit, a label and coordinate line, an optional second point, a dim meta line, and an optional
+/// The fields are the row anatomy drawn in docs/design/mocks/OverlayRows.dc.html and, for the two
+/// arity-2 types, OverlayTwoPoint.dc.html: an edge bar, a digit, an identity and coordinate line,
+/// an optional second point under it in the same column, a dim meta line, and an optional
 /// countdown. A field with no value collapses its line rather than rendering an empty one.
 /// </remarks>
 public sealed class BoardRowViewModel : INotifyPropertyChanged
 {
-    /// <summary>The label column is 150 wide on every mock. Kept here so XAML cannot drift from it.</summary>
-    public const double LabelColumnWidth = 150;
-
-    /// <summary>The requester column on the meta line.</summary>
-    public const double RequesterColumnWidth = 80;
-
     public required string SlotDisplay
     {
         get => _slotDisplay;
@@ -112,10 +107,10 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     /// row that carries none, which collapses the line.
     /// </summary>
     /// <remarks>
-    /// Its own line because it does not fit beside the type. The label column is 150 units wide
-    /// and a role glyph takes 25 of them, so a rifle delivery carrying four tags rendered as
-    /// 'RIFLE MA...': the row said a rifle was wanted and dropped every fact about which one.
-    /// A tag line wraps instead, and costs height only on the rows that have tags.
+    /// On the meta line, never beside the type. The identity column is 100 units wide and a role
+    /// glyph takes 18 of them, so a rifle delivery carrying four tags rendered as 'RIFLE MA...':
+    /// the row said a rifle was wanted and dropped every fact about which one. The meta line
+    /// wraps instead, and costs height only on the rows that have tags.
     /// </remarks>
     public string TagsDisplay
     {
@@ -155,6 +150,34 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
     private IReadOnlyList<string> _tags = [];
 
+    /// <summary>
+    /// Everything the row draws as a bordered chip: the tags, then RETRY. One list, because they
+    /// share one band and the band is the only part of a row allowed to grow.
+    /// </summary>
+    /// <remarks>
+    /// RETRY joined the tags rather than keeping a slot of its own. The row is two lines and a
+    /// chip band, and a fixed slot for something present on one row in twenty spends width every
+    /// other row cannot give back.
+    /// <para>Sequence-compared, like <see cref="Tags"/>: the board reconciles in place.</para>
+    /// </remarks>
+    public IReadOnlyList<string> Chips
+    {
+        get => _chips;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (_chips.SequenceEqual(value, StringComparer.Ordinal))
+            {
+                return;
+            }
+
+            _chips = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Chips)));
+        }
+    }
+
+    private IReadOnlyList<string> _chips = [];
+
     public required string CoordinatesDisplay
     {
         get => _coordinatesDisplay;
@@ -162,18 +185,6 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     }
 
     private string _coordinatesDisplay = string.Empty;
-
-    /// <summary>
-    /// The catalog's own name for point 1, PICKUP or FROM. Empty on a type whose single point
-    /// needs no naming, which is every arity-1 type.
-    /// </summary>
-    public string FirstPointLabel
-    {
-        get => _firstPointLabel;
-        set => Set(ref _firstPointLabel, value);
-    }
-
-    private string _firstPointLabel = string.Empty;
 
     /// <summary>The second point of an arity-2 row. Null on a one-point row.</summary>
     public string? SecondPointDisplay
@@ -184,16 +195,10 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
     private string? _secondPointDisplay;
 
-    /// <summary>The catalog's own name for point 2, DROPOFF or TO. Null on a one-point row.</summary>
-    public string? SecondPointLabel
-    {
-        get => _secondPointLabel;
-        set => Set(ref _secondPointLabel, value);
-    }
-
-    private string? _secondPointLabel;
-
-    /// <summary>Bearing and range between the two points, in map units. Null on a one-point row.</summary>
+    /// <summary>
+    /// How far the load travels, point 1 to point 2. Metres with a map scale, map units without,
+    /// and never a bearing. Null on a one-point row.
+    /// </summary>
     public string? LegDisplay
     {
         get => _legDisplay;
@@ -218,15 +223,6 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     }
 
     private string _ageDisplay = string.Empty;
-
-    /// <summary>'RETRY x2' and the like. Null when the row has nothing extra to say.</summary>
-    public string? MetaExtra
-    {
-        get => _metaExtra;
-        set => Set(ref _metaExtra, value);
-    }
-
-    private string? _metaExtra;
 
     public required string TicketCode
     {
@@ -324,13 +320,13 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         TypeAndQualifier = other.TypeAndQualifier;
         TagsDisplay = other.TagsDisplay;
         Tags = other.Tags;
+        Chips = other.Chips;
         SolutionDisplay = other.SolutionDisplay;
         CoordinatesDisplay = other.CoordinatesDisplay;
         SecondPointDisplay = other.SecondPointDisplay;
         LegDisplay = other.LegDisplay;
         Requester = other.Requester;
         AgeDisplay = other.AgeDisplay;
-        MetaExtra = other.MetaExtra;
         StateWord = other.StateWord;
         Accent = other.Accent;
         RowOpacity = other.RowOpacity;
@@ -584,11 +580,6 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     /// Only an arity-2 row names its points. On a one-point row the coordinate is the whole
     /// request and a label beside it is noise.
     /// </remarks>
-    private static string PointLabel(BoardRow row, int ordinal) =>
-        row.Points.Count > 1 && ordinal < row.Points.Count
-            ? row.Points[ordinal].Label.ToUpperInvariant()
-            : string.Empty;
-
     /// <summary>
     /// The auto-cancel bar: how much of its 120 s an OPEN row has left before it drops off the
     /// queue on its own. Every open row carries one, draining over its whole life.
@@ -661,6 +652,16 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         var (accent, word) = Accented(row, mine, takenFromMe, urgent);
         var (showBar, barFraction) = Countdown(row, now);
 
+        // Urgency is already the red edge AND the state word, and the API leaves 'urgent' in the
+        // modifier list because it is what set the priority. Drawn as a chip as well it said the
+        // same thing three times on one row and pushed the facts that are only said once off the
+        // end. The chip comes BACK the moment the state word is something else, a claim or a
+        // moved requester, because then nothing else on the row is carrying it.
+        if (string.Equals(word, "URGENT", StringComparison.Ordinal))
+        {
+            tagList = [.. tagList.Where(t => !string.Equals(t, "URGENT", StringComparison.OrdinalIgnoreCase))];
+        }
+
         // YOU, not your own callsign. Your own request is always on your board, whatever roles you
         // run, because you have to be able to watch it and cancel it. Printed as a callsign it
         // looks identical to work addressed to you, which reads as the role filter being broken.
@@ -675,17 +676,13 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
             TypeAndQualifier = row.OverlayLabel.ToUpperInvariant(),
             TagsDisplay = tags.ToUpperInvariant(),
             Tags = tagList,
+            Chips = Chipped(tagList, row.ReleaseCount),
             CoordinatesDisplay = primary,
-            FirstPointLabel = PointLabel(row, 0),
             SecondPointDisplay = second,
-            SecondPointLabel = PointLabel(row, 1),
             LegDisplay = Leg(row, unitsToMeters),
             SolutionDisplay = Solution(row, fire, now),
             Requester = requester,
             AgeDisplay = FormatAge(now - row.CreatedAt),
-            MetaExtra = row.ReleaseCount > 0
-                ? $"RETRY x{row.ReleaseCount.ToString(CultureInfo.InvariantCulture)}"
-                : null,
             TicketCode = row.TicketCode,
             StateWord = word,
             Accent = accent,
@@ -768,6 +765,17 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
             Accent = accent,
             StateWord = counterparty,
         };
+    }
+
+    /// <summary>The tags plus RETRY, in the order the band draws them.</summary>
+    private static IReadOnlyList<string> Chipped(IReadOnlyList<string> tags, int releaseCount)
+    {
+        if (releaseCount <= 0)
+        {
+            return tags;
+        }
+
+        return [.. tags, $"RETRY x{releaseCount.ToString(CultureInfo.InvariantCulture)}"];
     }
 
     /// <summary>A callsign, uppercased, optionally with a one-word lead. Never a sentence.</summary>

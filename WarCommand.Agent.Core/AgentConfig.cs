@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Serialization;
+using WarCommand.Agent.Core.Settings;
 
 namespace WarCommand.Agent.Core;
 
@@ -130,9 +131,14 @@ public sealed record LocalSettings
     /// <summary>Requesters hidden on this board only. Client-side, instant, needs no permission.</summary>
     public IReadOnlyList<Guid> MutedParticipantIds { get; init; } = [];
 
-    public string OverlayAnchor { get; init; } = "top_left";
+    /// <summary>One of the nine grid positions. Same shape as AgentSettings.Anchor.</summary>
+    public OverlayAnchor OverlayAnchor { get; init; } = Settings.OverlayAnchor.Right;
 
-    public double OverlayWidthScale { get; init; } = 1.0;
+    /// <summary>Nudge along the anchor's free axis, -1 to +1. Positive is up or right.</summary>
+    public double OverlaySlide { get; init; } = 0.20;
+
+    /// <summary>Panel width as a share of the game's width. Never a pixel count.</summary>
+    public double OverlayWidthFraction { get; init; } = 0.20;
 
     public double OverlayOpacity { get; init; } = 1.0;
 

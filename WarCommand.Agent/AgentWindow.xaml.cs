@@ -133,7 +133,12 @@ public partial class AgentWindow : Window
             .ToList();
 
         OverlayModeBox.ItemsSource = new[] { "Always on", "Mirror Wardogs", "Hidden" };
-        AnchorBox.ItemsSource = new[] { "Left", "Right", "Top right", "Bottom right" };
+        AnchorBox.ItemsSource = new[]
+        {
+            "Top left", "Top centre", "Top right",
+            "Left centre", "Centre", "Right centre",
+            "Bottom left", "Bottom centre", "Bottom right",
+        };
         OverlayOpacityBox.ItemsSource = new[] { "Low", "Normal", "High" };
         WhenUnfocused.ItemsSource = new[] { "Hide", "Dim" };
         RecognizerName.Text = "Vosk small en-us";
@@ -208,8 +213,9 @@ public partial class AgentWindow : Window
         DisplayBox.SelectedItem = ((IEnumerable<DeviceChoice>)DisplayBox.ItemsSource)
             .FirstOrDefault(d => d.Id == settings.DisplayDeviceName)
             ?? ((IEnumerable<DeviceChoice>)DisplayBox.ItemsSource).FirstOrDefault();
-        AnchorBox.SelectedIndex = (int)settings.Anchor;
-        WidthPx.Value = settings.ClampedWidth;
+        AnchorBox.SelectedIndex = Math.Max(Array.IndexOf(AnchorOrder, settings.Anchor), 0);
+        Slide.Value = settings.ClampedSlide;
+        WidthFraction.Value = settings.ClampedWidthFraction;
         OverlayOpacityBox.SelectedIndex = (int)settings.Opacity;
         ColourblindSafe.IsChecked = settings.ColourblindSafe;
         WhenUnfocused.SelectedIndex = (int)settings.WhenUnfocused;
@@ -226,7 +232,23 @@ public partial class AgentWindow : Window
     {
         MasterVolumeValue.Text = MasterVolume.Value.ToString("P0", CultureInfo.InvariantCulture);
         ConfidenceValue.Text = ConfidenceFloor.Value.ToString("0.00", CultureInfo.InvariantCulture);
-        WidthValue.Text = FormattableString.Invariant($"{(int)WidthPx.Value} px");
+        WidthValue.Text = WidthFraction.Value.ToString("P0", CultureInfo.InvariantCulture);
+
+        // A corner has no free axis, so the slider is shown disabled rather than hidden: a control
+        // that vanishes reads as a bug, and the caption says which way the live one travels.
+        var anchor = SelectedAnchor();
+        var free = FreeAxisOf(anchor);
+
+        Slide.IsEnabled = free is not null;
+        SlideCaption.Text = free switch
+        {
+            "vertical" => "+ is up, - is down",
+            "horizontal" => "+ is right, - is left",
+            _ => "a corner has nothing to slide along",
+        };
+        SlideValue.Text = free is null
+            ? "-"
+            : Slide.Value.ToString("+0%;-0%;0%", CultureInfo.InvariantCulture);
     }
 
     /// <summary>Every control lands here. There is no Apply: a setting takes effect when set.</summary>
@@ -260,14 +282,34 @@ public partial class AgentWindow : Window
         ShowRecognizedText = ShowRecognizedText.IsChecked is true,
         OverlayMode = (OverlayMode)Math.Max(OverlayModeBox.SelectedIndex, 0),
         DisplayDeviceName = (DisplayBox.SelectedItem as DeviceChoice)?.Id,
-        Anchor = (OverlayAnchor)Math.Max(AnchorBox.SelectedIndex, 0),
-        WidthPx = (int)WidthPx.Value,
+        Anchor = SelectedAnchor(),
+        Slide = Slide.Value,
+        WidthFraction = WidthFraction.Value,
         Opacity = (OverlayOpacity)Math.Max(OverlayOpacityBox.SelectedIndex, 0),
         ColourblindSafe = ColourblindSafe.IsChecked is true,
         WhenUnfocused = (UnfocusedBehaviour)Math.Max(WhenUnfocused.SelectedIndex, 0),
         AutoCopyOnClaim = AutoCopyOnClaim.IsChecked is true,
         ScreenCaptureEnabled = ScreenCapture.IsChecked is true,
         VerboseLogging = VerboseLogging.IsChecked is true,
+    };
+
+    /// <summary>The nine anchors in reading order, which is the order the box lists them in.</summary>
+    private static readonly OverlayAnchor[] AnchorOrder =
+    [
+        OverlayAnchor.TopLeft, OverlayAnchor.Top, OverlayAnchor.TopRight,
+        OverlayAnchor.Left, OverlayAnchor.Centre, OverlayAnchor.Right,
+        OverlayAnchor.BottomLeft, OverlayAnchor.Bottom, OverlayAnchor.BottomRight,
+    ];
+
+    private OverlayAnchor SelectedAnchor() =>
+        AnchorOrder[Math.Clamp(AnchorBox.SelectedIndex, 0, AnchorOrder.Length - 1)];
+
+    /// <summary>Which axis the offset travels along, or null for a corner.</summary>
+    private static string? FreeAxisOf(OverlayAnchor anchor) => anchor switch
+    {
+        OverlayAnchor.Left or OverlayAnchor.Right or OverlayAnchor.Centre => "vertical",
+        OverlayAnchor.Top or OverlayAnchor.Bottom => "horizontal",
+        _ => null,
     };
 
     /// <summary>

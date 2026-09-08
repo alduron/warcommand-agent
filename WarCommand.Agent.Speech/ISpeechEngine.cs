@@ -27,6 +27,30 @@ public interface ISpeechEngine
     /// the hold, and closing it is letting go, exactly as pressing its digit would be.
     /// </remarks>
     ISpeechSession BeginSession(Grammar grammar);
+
+    /// <summary>
+    /// Opens a session constrained to an explicit phrase list rather than to the catalog.
+    /// </summary>
+    /// <remarks>
+    /// This is the menu's route. Voice selects the option a key would select, so the vocabulary
+    /// while a surface is drawn is that surface's own labels: a list the catalog has no view of,
+    /// because it is whatever <c>MenuStateMachine.Options</c> is showing at this instant.
+    /// </remarks>
+    ISpeechSession BeginSession(IReadOnlyList<string> phrases);
+
+    /// <summary>
+    /// Transcribes against the model's own lexicon, constrained by nothing.
+    /// </summary>
+    /// <remarks>
+    /// The near-miss route, and the only caller is a menu utterance the grammar sent to [unk].
+    /// A constrained decode cannot tell 'armor' from a word it does not hold, so the fallback asks
+    /// what was actually said and lets <c>MenuSpeech</c> measure that against the drawn lines.
+    /// <para>
+    /// Runs on its own recognizer under its own lock, never the grammar one: a session holds the
+    /// grammar recognizer for the whole hold, and this is called from inside that session.
+    /// </para>
+    /// </remarks>
+    Utterance Transcribe(ReadOnlySpan<short> samples);
 }
 
 /// <summary>

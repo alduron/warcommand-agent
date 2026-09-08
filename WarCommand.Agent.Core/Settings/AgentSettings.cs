@@ -3,10 +3,39 @@
 /// <summary>Where the overlay sits. From the Overlay tab of docs/design/mocks/TraySettings.dc.html.</summary>
 public enum OverlayAnchor
 {
+    /// <summary>Left edge, vertically centred.</summary>
     Left = 0,
-    Right,
-    TopRight,
-    BottomRight,
+
+    /// <summary>Right edge, vertically centred. The default.</summary>
+    Right = 1,
+
+    TopRight = 2,
+
+    BottomRight = 3,
+
+    // Appended, never reordered: settings.json holds the number, so a reorder silently moves
+    // everybody's overlay.
+    TopLeft = 4,
+
+    BottomLeft = 5,
+
+    /// <summary>Top edge, horizontally centred.</summary>
+    Top = 6,
+
+    /// <summary>Bottom edge, horizontally centred.</summary>
+    Bottom = 7,
+
+    /// <summary>Both axes centred.</summary>
+    Centre = 8,
+}
+
+/// <summary>The bounds of the width share, so the settings slider and the layout agree on one pair.</summary>
+public static class OverlayWidth
+{
+    /// <summary>Roughly the old 300 px floor at 1080p. Below this the coordinate column wraps.</summary>
+    public const double MinFraction = 0.16;
+
+    public const double MaxFraction = 0.40;
 }
 
 /// <summary>Three steps, not a slider: a number nobody can name is a setting nobody tunes.</summary>
@@ -90,7 +119,7 @@ public sealed record SoundMutes
 public sealed record AgentSettings
 {
     /// <summary>Bumped when a field is removed or its meaning changes, never for an addition.</summary>
-    public int Version { get; init; } = 1;
+    public int Version { get; init; } = 2;
 
     // Audio.
 
@@ -132,10 +161,28 @@ public sealed record AgentSettings
     /// </remarks>
     public string? DisplayDeviceName { get; init; }
 
+    /// <summary>One of the nine grid positions. Right edge, vertically centred, by default.</summary>
     public OverlayAnchor Anchor { get; init; } = OverlayAnchor.Right;
 
-    /// <summary>Panel width in pixels. The mocks draw 380 everywhere.</summary>
-    public int WidthPx { get; init; } = 380;
+    /// <summary>
+    /// Nudge along the anchor's free axis, -1 to +1. Positive is up on a vertical axis and right on
+    /// a horizontal one, so +1 always travels toward the top right: Right at +1 is the top right
+    /// corner, Top at -1 is the top left. A corner anchor has no free axis and ignores it.
+    /// </summary>
+    /// <remarks>
+    /// Default +0.20, which lifts the panel a fifth of its travel off centre and out of the way of
+    /// the crosshair band without leaving the right edge.
+    /// </remarks>
+    public double Slide { get; init; } = 0.20;
+
+    /// <summary>
+    /// Panel width as a share of the game's width. 0.20 is the mocks' 380 px at 1920.
+    /// </summary>
+    /// <remarks>
+    /// A share rather than a pixel count: 380 px is a fifth of a 1080p picture and a fourteenth of
+    /// a 32:9 one, so a pixel width that suits one screen is wrong on the next.
+    /// </remarks>
+    public double WidthFraction { get; init; } = 0.20;
 
     public OverlayOpacity Opacity { get; init; } = OverlayOpacity.Normal;
 
@@ -186,6 +233,10 @@ public sealed record AgentSettings
     public IReadOnlyDictionary<string, string> SecondaryBindings { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
-    /// <summary>The width the overlay actually renders at, clamped to what the mocks support.</summary>
-    public int ClampedWidth => Math.Clamp(WidthPx, 300, 560);
+    /// <summary>The width share the overlay actually renders at, clamped to what the mocks support.</summary>
+    public double ClampedWidthFraction =>
+        Math.Clamp(WidthFraction, OverlayWidth.MinFraction, OverlayWidth.MaxFraction);
+
+    /// <summary>The nudge the overlay actually renders at.</summary>
+    public double ClampedSlide => Math.Clamp(Slide, -1, 1);
 }

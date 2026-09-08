@@ -378,6 +378,8 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
                                             <TextBlock Text="Anchor position" Style="{StaticResource FieldLabel}" />
+                                            <TextBlock Text="Which corner or edge the panel hugs"
+                                                       Style="{StaticResource FieldCaption}" />
                                         </StackPanel>
                                         <ComboBox x:Name="AnchorBox" Grid.Column="1" Width="280"
                                                   VerticalAlignment="Center" SelectionChanged="OnDirty" />
@@ -391,14 +393,37 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                                            <TextBlock Text="Width scale" Style="{StaticResource FieldLabel}" />
-                                            <TextBlock Text="Panel width, in pixels"
+                                            <TextBlock Text="Offset" Style="{StaticResource FieldLabel}" />
+                                            <TextBlock x:Name="SlideCaption"
+                                                       Text="Along the free edge: + is up or right"
                                                        Style="{StaticResource FieldCaption}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal"
                                                     VerticalAlignment="Center">
-                                            <Slider x:Name="WidthPx" Width="240" Minimum="300" Maximum="560"
-                                                    TickFrequency="10" IsSnapToTickEnabled="True"
+                                            <Slider x:Name="Slide" Width="240" Minimum="-1" Maximum="1"
+                                                    TickFrequency="0.05" IsSnapToTickEnabled="True"
+                                                    VerticalAlignment="Center" ValueChanged="OnDirty" />
+                                            <TextBlock x:Name="SlideValue" Margin="12,0,0,0"
+                                                       Style="{StaticResource FieldValue}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource FieldRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                            <TextBlock Text="Width scale" Style="{StaticResource FieldLabel}" />
+                                            <TextBlock Text="Share of the game's width, never pixels"
+                                                       Style="{StaticResource FieldCaption}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                                    VerticalAlignment="Center">
+                                            <Slider x:Name="WidthFraction" Width="240" Minimum="0.16" Maximum="0.40"
+                                                    TickFrequency="0.01" IsSnapToTickEnabled="True"
                                                     VerticalAlignment="Center" ValueChanged="OnDirty" />
                                             <TextBlock x:Name="WidthValue" Margin="12,0,0,0"
                                                        Style="{StaticResource FieldValue}" />

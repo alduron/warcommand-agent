@@ -659,9 +659,12 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         var pressed = 0;
         foreach (var row in page)
         {
+            // IsClaimedBy, never the claimant column. A shared row you accepted leaves that column
+            // null and stays Open, so the menu read it as somebody else's and offered you ACCEPT
+            // on work you already had, with no DONE and no RELEASE anywhere.
             slots[++pressed] = new SlotState(
                 row.State,
-                row.ClaimantParticipantId == _viewerId,
+                row.IsClaimedBy(_viewerId),
                 row.RequestedByParticipantId == _viewerId,
                 row.Id);
         }

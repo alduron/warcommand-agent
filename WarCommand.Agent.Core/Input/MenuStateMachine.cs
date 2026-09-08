@@ -578,8 +578,30 @@ public sealed record MenuOptions
     /// </remarks>
     public int OrphanTimeoutMs { get; init; } = 1500;
 
-    /// <summary>Two integer digits and two decimals, per axis. The decimal point is implied.</summary>
-    public int DigitsPerAxis { get; init; } = 4;
+    /// <summary>
+    /// Digits per axis, whole plus two decimals, with the decimal point implied.
+    /// </summary>
+    /// <remarks>
+    /// FOUR IS NOT ENOUGH and was never right: two whole digits stop at 99.99 while both shipped
+    /// maps run to 160, so every coordinate past the halfway line of the map could not be typed or
+    /// said by anybody. Binding rule 5 also applies, the reach of a map being a fact about the
+    /// game: <see cref="ForMap"/> derives this from the served profile rather than guessing here.
+    /// </remarks>
+    public int DigitsPerAxis { get; init; } = 5;
+
+    /// <summary>
+    /// The width one axis needs to express a map that reaches <paramref name="coordMax"/>.
+    /// </summary>
+    public static int ForMap(decimal coordMax)
+    {
+        var whole = 1;
+        for (var reach = 10m; reach <= coordMax; reach *= 10)
+        {
+            whole++;
+        }
+
+        return whole + 2;
+    }
 
     public int InviteCodeDigits { get; init; } = 6;
 
@@ -805,8 +827,8 @@ public sealed class MenuStateMachine
     }
 
     /// <summary>
-    /// Drops every remembered row. The overlay going away ends the session the memory belonged to;
-    /// coming back to a menu you last touched two matches ago is not remembering, it is guessing.
+    /// Drops every remembered row. Open() already does this on every hold, so the memory never
+    /// outlives one interaction; this is the overlay-went-away path saying the same thing.
     /// </summary>
     public void ForgetPositions() => _positions.Clear();
 
@@ -842,6 +864,30 @@ public sealed class MenuStateMachine
 
     /// <summary>Digits typed at the coordinate or join level.</summary>
     public IReadOnlyList<int> Digits => _digits;
+
+    /// <summary>
+    /// True wherever a coordinate is being asked for, by any route.
+    /// </summary>
+    /// <remarks>
+    /// One rule, not a per-page special case: anywhere this is true the grid can be said as digits
+    /// or read off the screen with HERE. It covers the point level a request walks onto and an
+    /// armed end of the range tool, which asks for exactly the same thing from the same person.
+    /// </remarks>
+    public bool WantsCoordinate => Level is MenuLevel.Coordinate;
+
+    /// <summary>
+    /// True where the 0 key opens TOOLS, which is every level with a list on it.
+    /// </summary>
+    /// <remarks>
+    /// It short-circuits ahead of the per-level digit switch, so on these levels 0 opens TOOLS
+    /// whatever else is drawn beside that digit. Exposed because a key that does something has to
+    /// be sayable, and this one is drawn by no row on any of them.
+    /// </remarks>
+    public bool ZeroOpensTools => Level is not (MenuLevel.Closed or MenuLevel.More
+        or MenuLevel.Coordinate or MenuLevel.Join or MenuLevel.Confirm or MenuLevel.Roles);
+
+    /// <summary>Digits typed so far toward the coordinate being asked for.</summary>
+    public int DigitsTyped => _digits.Count;
 
     /// <summary>How many digits this level still wants, or 0 when it wants none.</summary>
     public int DigitsWanted => Level switch
@@ -909,6 +955,11 @@ public sealed class MenuStateMachine
     public MenuOutcome Open(DateTimeOffset now, MapPoint? snapshot = null, MenuContext? context = null)
     {
         _path.Clear();
+
+        // Row memory belongs to ONE hold. It exists so BACK lands where you left a level inside an
+        // interaction; carried across holds it made every new REQUEST open on the last category
+        // pressed, which reads as a menu stuck in the previous selection. A hold starts at the top.
+        _positions.Clear();
         _modifiers.Clear();
         _modifierPage = 0;
         _digits.Clear();
@@ -1160,8 +1211,31 @@ public sealed class MenuStateMachine
     /// <summary>
     /// Records a completed point and moves on: another point if the type wants one, confirm if not.
     /// </summary>
-    private MenuNavigated AcceptPoint(MapPoint point)
+    private MenuOutcome AcceptPoint(MapPoint point)
     {
+        // A range end, said or read on THE coordinate screen. Comes home to the page it was
+        // started from and never touches _points: a range is a calculator, not a request draft.
+        if (_rangeAwaiting is { } end)
+        {
+            _rangeAwaiting = null;
+            _digits.Clear();
+            Level = MenuLevel.RangeTool;
+
+            if (string.Equals(end, "range.origin", StringComparison.Ordinal))
+            {
+                _toolGun = point;
+                Highlight = GunIndex;
+
+                // One point, both consumers: the ARTILLERY section ranges from it and every mortar
+                // row draws its bracket from it. Returning a bare navigation fed neither.
+                return new MenuGunPositionSet(point);
+            }
+
+            _toolTarget = point;
+            Highlight = TargetIndex;
+            return new MenuNavigated(Level);
+        }
+
         // Never more points than the type takes. Appending past the arity is a request the server
         // refuses outright with point_count_mismatch, and the reading a user just took is the one
         // they meant, so it corrects the last point rather than becoming an extra one.
@@ -1181,6 +1255,7 @@ public sealed class MenuStateMachine
             // A two-point request comes back here for its second end, so pickup and dropoff are the
             // same interaction twice rather than two different ones.
             _snapshot = null;
+            _rangeAwaiting = null;
             Level = MenuLevel.Coordinate;
             return new MenuNavigated(Level);
         }
@@ -1194,33 +1269,8 @@ public sealed class MenuStateMachine
     {
         ArgumentNullException.ThrowIfNull(point);
 
-        // One read, three meanings, decided by what asked for it. On the range page the end that
-        // was pressed takes it and the page never moved in the first place, so the highlight stays
-        // where the finger left it and pressing again re-reads THAT end.
-        if (Level is MenuLevel.RangeTool)
-        {
-            _lastInput = now;
-            var origin = Awaiting("range.origin");
-            var awaited = _rangeAwaiting;
-            _rangeAwaiting = null;
-
-            if (awaited is null)
-            {
-                return MenuOutcome.None;
-            }
-
-            if (origin)
-            {
-                _toolGun = point;
-                Highlight = GunIndex;
-                return new MenuGunPositionSet(point);
-            }
-
-            _toolTarget = point;
-            Highlight = TargetIndex;
-            return new MenuNavigated(Level);
-        }
-
+        // One screen asks for a coordinate and one path answers it. The range page used to take a
+        // read of its own, which was a second way to do a thing already done here.
         if (Level is not MenuLevel.Coordinate)
         {
             return MenuOutcome.None;
@@ -1357,6 +1407,13 @@ public sealed class MenuStateMachine
                 _digits.Clear();
                 _points.Clear();
                 Level = MenuLevel.Coordinate;
+                return new MenuNavigated(Level);
+
+            case MenuLevel.Coordinate when _rangeAwaiting is not null:
+                // The grid level was entered from the range page, so back goes there rather than
+                // into the request tree, which this pass was never part of.
+                _rangeAwaiting = null;
+                Level = MenuLevel.RangeTool;
                 return new MenuNavigated(Level);
 
             case MenuLevel.Coordinate:
@@ -1536,26 +1593,49 @@ public sealed class MenuStateMachine
             {
                 Digit = 1,
                 Path = "range.origin",
-                Label = Awaiting("range.origin") ? "ORIGIN  POINT AND READ" : _toolGun is { } gun
-                    ? FormattableString.Invariant($"ORIGIN  x{gun.X:0.00} y{gun.Y:0.00}")
-                    : "ORIGIN  NOT SET",
+                Label = _toolGun is { } gun
+                    ? FormattableString.Invariant($"SET ORIGIN  x{gun.X:0.00} y{gun.Y:0.00}")
+                    : "SET ORIGIN",
             },
             new()
             {
                 Digit = 2,
                 Path = "range.target",
-                Label = Awaiting("range.target") ? "TARGET  POINT AND READ" : _toolTarget is { } target
-                    ? FormattableString.Invariant($"TARGET  x{target.X:0.00} y{target.Y:0.00}")
-                    : "TARGET  NOT SET",
+                Label = _toolTarget is { } target
+                    ? FormattableString.Invariant($"SET TARGET  x{target.X:0.00} y{target.Y:0.00}")
+                    : "SET TARGET",
             },
         };
+
+        // The calculator, as lines. It is a tool on the tools page like any other, so the thing it
+        // is set to is picked the way everything else here is picked. The cycle keys still step it,
+        // because a key can only step; a line can be named.
+        var modes = RangeModes;
+        if (modes.Count > 1)
+        {
+            // Read the count ONCE. AddRange enumerates lazily, so an entries.Count inside the
+            // projection grows as it goes and leaves holes: the page drew 1, 2, 3, 5, 7.
+            var next = entries.Count + 1;
+            entries.AddRange(modes.Select((mode, i) => new MenuEntry
+            {
+                Digit = next + i,
+                Path = "range.mode." + mode.Id,
+                Label = mode.Label,
+                IsChosen = string.Equals(mode.Id, RangeMode.Id, StringComparison.Ordinal),
+            }));
+        }
 
         // Only once there is something to clear. An origin read is what puts the range section on
         // the board and there was no way to take it off again: the section, and every bracket it
         // drew, was permanent for the rest of the session.
         if (_toolGun is not null || _toolTarget is not null)
         {
-            entries.Add(new MenuEntry { Digit = 3, Path = "range.clear", Label = "CLEAR" });
+            entries.Add(new MenuEntry
+            {
+                Digit = entries.Count + 1,
+                Path = "range.clear",
+                Label = "CLEAR",
+            });
         }
 
         return entries;
@@ -1586,9 +1666,21 @@ public sealed class MenuStateMachine
             return ClearRangeTool(now);
         }
 
+        if (entry.Path.StartsWith("range.mode.", StringComparison.Ordinal))
+        {
+            return SetRangeMode(entry.Path["range.mode.".Length..], now);
+        }
+
         _lastInput = now;
+
+        // THE coordinate screen. There is one in this app and this is it: say the grid, or say
+        // HERE and let the map be read. An end that collected its own point in place was a second
+        // interface for a question already answered somewhere else.
         _rangeAwaiting = entry.Path;
-        return new MenuCoordinateReadRequested();
+        _digits.Clear();
+        _snapshot = null;
+        Level = MenuLevel.Coordinate;
+        return new MenuNavigated(Level);
     }
 
     /// <summary>The modes this page can be set to, from the served ballistics.</summary>
@@ -1612,6 +1704,45 @@ public sealed class MenuStateMachine
     /// A mode, not a page. The same two points mean a different answer to a sniper and to a gun
     /// crew, and walking a menu to say which is a menu walked between every shot.
     /// </remarks>
+    /// <summary>
+    /// Sets the calculator by id: SNIPING, or one weapon.
+    /// </summary>
+    /// <remarks>
+    /// A key can only step, so the keyboard cycles. Voice does not have to: the modes are named on
+    /// the page and a gun crew knows which gun they are on, so saying MORTAR sets MORTAR rather
+    /// than pressing a key until it comes round. The generic 'weapon' verb that only stepped was
+    /// the wrong shape for a control whose values have names.
+    /// </remarks>
+    public MenuOutcome SetRangeMode(string modeId, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(modeId);
+
+        if (Level is not MenuLevel.RangeTool)
+        {
+            return MenuOutcome.None;
+        }
+
+        var modes = RangeModes;
+        var at = -1;
+        for (var i = 0; i < modes.Count; i++)
+        {
+            if (string.Equals(modes[i].Id, modeId, StringComparison.Ordinal))
+            {
+                at = i;
+                break;
+            }
+        }
+
+        if (at < 0)
+        {
+            return MenuOutcome.None;
+        }
+
+        _lastInput = now;
+        _rangeMode = at;
+        return new MenuNavigated(Level);
+    }
+
     public MenuOutcome CycleRangeMode(int step, DateTimeOffset now)
     {
         if (Level is not MenuLevel.RangeTool || step == 0)
@@ -1694,16 +1825,16 @@ public sealed class MenuStateMachine
 
         lines.Add($"PLAYERS {_context.MemberCount.ToString(CultureInfo.InvariantCulture)}");
 
+        if (_context.InviteCode is { } code)
+        {
+            lines.Add($"INVITE {code}");
+        }
+
         var entries = new List<MenuEntry>(Lines("match", lines));
 
-        if (_context.InviteCode is { } invite)
+        if (_context.InviteCode is not null)
         {
-            entries.Add(new MenuEntry
-            {
-                Digit = 1,
-                Path = "match.invite",
-                Label = $"INVITE {invite}   COPY",
-            });
+            entries.Add(new MenuEntry { Digit = 1, Path = "match.invite", Label = "COPY" });
         }
 
         if (_context.CanRestart)
@@ -1898,13 +2029,16 @@ public sealed class MenuStateMachine
 
         return verbId switch
         {
-            // Only an unclaimed row somebody else raised can be taken.
-            "accept" => open && !asked,
+            // Only an unclaimed row somebody else raised can be taken, and only once. A shared row
+            // stays Open after you join it, so without the !mine it offered ACCEPT on your own work.
+            "accept" => open && !asked && !mine,
 
-            // Only the person holding it can finish it, move it along, or give it back.
-            "done" => mine && working,
-            "release" => mine && working,
-            "rounds_away" => mine && working,
+            // Only the person holding it can finish it, move it along, or give it back. HOLDING,
+            // not "in a claimed state": a shared row you accepted is Open, and gating on the state
+            // left it on your list with no verb that could ever close it.
+            "done" => mine,
+            "release" => mine,
+            "rounds_away" => mine,
 
             // Only the person who asked for it can call it off, and doing so takes it off whoever
             // accepted it so they can go and do something else. Parsed from voice and offered
@@ -1984,6 +2118,9 @@ public sealed class MenuStateMachine
             return AcceptPoint(prefilled);
         }
 
+        // A request's point, never a range end. Whatever the range tool was waiting for is over:
+        // this coordinate belongs to the leaf that was just walked into.
+        _rangeAwaiting = null;
         Level = MenuLevel.Coordinate;
         return new MenuNavigated(Level);
     }
@@ -2318,6 +2455,10 @@ public sealed class MenuStateMachine
 
     private void Reset()
     {
+        // An armed range end is part of THIS interaction and nothing after it. Left set, the next
+        // coordinate the menu collected for anything at all was routed to the range tool: a supply
+        // drop's grid landed on the range page instead of on the request.
+        _rangeAwaiting = null;
         _path.Clear();
         _modifiers.Clear();
         _modifierPage = 0;

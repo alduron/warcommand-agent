@@ -7,6 +7,7 @@ using WarCommand.Agent.Dev;
 using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Contracts;
 using WarCommand.Agent.Core.Grammar;
+using WarCommand.Agent.Core.Input;
 using WarCommand.Agent.Speech;
 using WarCommand.Agent.Speech.Capture;
 using WarCommand.Agent.Speech.Recognition;
@@ -49,6 +50,12 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
     private readonly Func<BoardState?> _board;
     private readonly Func<IReadOnlyCollection<string>> _enabledRoleIds;
     private readonly Action<ParseResult> _onParsed;
+
+    // The surface being drawn right now, re-read on every chunk, and what saying one of its lines
+    // does. Voice selects the option the key would select, so these two are the whole of the menu
+    // route: the vocabulary IS this list and a match IS a key press.
+    private readonly Func<IReadOnlyList<MenuEntry>> _drawnOptions;
+    private readonly Action<MenuEntry> _onMenuSpoken;
     private readonly SilentHoldMonitor _silence;
     private readonly RollingFileLog _log;
     private readonly ISpeechLog _speech;
@@ -57,6 +64,16 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
     private VoskModel? _model;
     private ISpeechEngine? _engine;
     private AudioBuffer? _holding;
+
+    /// <summary>
+    /// Audio since the last utterance boundary, for the near-miss re-decode and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Capped and zeroed like the hold buffer, and reset the moment an utterance is handled, so it
+    /// never holds more than one thing somebody said. Binding rule 9 is unchanged: it is memory,
+    /// it is cleared, and no member on it writes anywhere.
+    /// </remarks>
+    private AudioBuffer? _utterance;
     private Channel<Chunk>? _chunks;
     private Task? _pump;
     private bool _disposed;
@@ -79,6 +96,12 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
     private int _vocabularyThisHold;
     private int _rolesThisHold;
 
+    // The peak of what the DECODER was fed, which is not the same measurement as the buffer's.
+    // The buffer is filled by the capture thread; the recognizer is fed from a pooled channel on
+    // the decode task. A hold with a healthy buffer peak and a dead fed peak means the chunks are
+    // being lost or cleared between the two, and nothing in the log could tell those apart.
+    private int _fedPeakThisHold;
+
     /// <summary>Builds the driver. The model is loaded on first use, not at startup.</summary>
     public VoiceDriver(
         IAudioCapture capture,
@@ -89,7 +112,9 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
         SilentHoldMonitor silence,
         RollingFileLog log,
         ISpeechLog speechLog,
-        SupportCounters counters)
+        SupportCounters counters,
+        Func<IReadOnlyList<MenuEntry>>? drawnOptions = null,
+        Action<MenuEntry>? onMenuSpoken = null)
     {
         ArgumentNullException.ThrowIfNull(capture);
         ArgumentNullException.ThrowIfNull(catalog);
@@ -110,6 +135,12 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
         _log = log;
         _speech = speechLog;
         _counters = counters;
+
+        // Optional so a test that only cares about request parsing constructs nothing extra. An
+        // agent that passes neither has no menu on screen by definition, and the catalog route is
+        // what a hold at rest has always used.
+        _drawnOptions = drawnOptions ?? (() => []);
+        _onMenuSpoken = onMenuSpoken ?? (_ => { });
     }
 
     /// <summary>True once the acoustic model is resident. False until the first hold.</summary>
@@ -120,6 +151,11 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
 
     /// <summary>NO AUDIO FROM the device once enough holds in a row heard nothing, else null.</summary>
     public string? Warning => _silence.Warning;
+
+    /// <summary>Peak of what the recognizer was actually fed this hold, in dBFS.</summary>
+    private double FedPeakDbfs => _fedPeakThisHold == 0
+        ? double.NegativeInfinity
+        : 20.0 * Math.Log10(_fedPeakThisHold / (double)short.MaxValue);
 
     /// <summary>
     /// Push-to-talk down: open the microphone and start decoding.
@@ -148,8 +184,10 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
             _chunksThisHold = 0;
             _utterancesThisHold = 0;
             _holdStartedTicks = Stopwatch.GetTimestamp();
+            _fedPeakThisHold = 0;
             _capture.Open(deviceId);
             _holding = new AudioBuffer();
+            _utterance = new AudioBuffer();
             _chunks = chunks;
 
             // The capture thread's whole job here: copy and return. Anything slower starves capture.
@@ -215,7 +253,7 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
         // not in the grammar, and none of them is a coordinate or anything anybody said.
         var keyDownMs = Stopwatch.GetElapsedTime(_holdStartedTicks).TotalMilliseconds;
         var shape = FormattableString.Invariant(
-            $"key down {keyDownMs:0} ms, {_chunksThisHold} chunks, peak {peak:0.0} dBFS, {_utterancesThisHold} utterances, vocabulary {_vocabularyThisHold} words from {_rolesThisHold} roles");
+            $"key down {keyDownMs:0} ms, {_chunksThisHold} chunks, buffer peak {peak:0.0} dBFS, decoder peak {FedPeakDbfs:0.0} dBFS, {_utterancesThisHold} utterances, vocabulary {_vocabularyThisHold} words from {_rolesThisHold} roles");
 
         if (_utterancesThisHold == 0)
         {
@@ -308,17 +346,46 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
                 return;
             }
 
-            _vocabularyThisHold = SpeechGrammarCompiler.Compile(grammar).AllWords.Count;
-            session = engine.BeginSession(grammar);
             var parser = new IntentParser(grammar, BundledContracts.NearFloorPairs());
+            IReadOnlyList<string>? loaded = null;
+            IReadOnlyList<MenuEntry> drawn = [];
 
             await foreach (var chunk in reader.ReadAllAsync().ConfigureAwait(false))
             {
                 try
                 {
-                    if (session.Feed(chunk.Samples.AsSpan(0, chunk.Length)) is { } utterance)
+                    // Re-read every chunk, not once at key down. A panel opens UNDER the hold, and
+                    // the moment it does its lines are the only words that mean anything.
+                    drawn = _drawnOptions();
+                    var wanted = VocabularyFor(drawn, grammar);
+                    if (loaded is null || !wanted.SequenceEqual(loaded, StringComparer.Ordinal))
                     {
-                        Heard(utterance, parser);
+                        session?.Dispose();
+                        session = wanted.Count > 0
+                            ? engine.BeginSession(wanted)
+                            : engine.BeginSession(grammar);
+                        loaded = wanted;
+                        _vocabularyThisHold = wanted.Count > 0
+                            ? wanted.Count
+                            : SpeechGrammarCompiler.Compile(grammar).AllWords.Count;
+                    }
+
+                    var fed = chunk.Samples.AsSpan(0, chunk.Length);
+                    _utterance?.Append(fed);
+                    foreach (var sample in fed)
+                    {
+                        var magnitude = Math.Abs((int)sample);
+                        if (magnitude > _fedPeakThisHold)
+                        {
+                            _fedPeakThisHold = magnitude;
+                        }
+                    }
+
+                    // The block above always leaves a session behind: loaded is null on the first
+                    // pass, so the rebuild runs before anything is ever fed.
+                    if (session!.Feed(fed) is { } utterance)
+                    {
+                        Heard(utterance, parser, drawn);
                     }
                 }
                 finally
@@ -327,9 +394,9 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
                 }
             }
 
-            if (session.Final() is { } last)
+            if (session?.Final() is { } last)
             {
-                Heard(last, parser);
+                Heard(last, parser, drawn);
             }
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
@@ -355,9 +422,89 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
     /// whole difference between a grammar gap and an incomplete sentence, and neither was
     /// recoverable from an export before.
     /// </remarks>
-    private void Heard(Utterance utterance, IntentParser parser)
+    private void Heard(Utterance utterance, IntentParser parser, IReadOnlyList<MenuEntry> drawn)
     {
         Interlocked.Increment(ref _utterancesThisHold);
+
+        // A drawn surface owns the words outright. Voice is not a second interface: saying a line
+        // presses that line, and while lines are on screen there is nothing else to have said.
+        if (drawn.Count > 0)
+        {
+            // Two readings of the same utterance, and they are not interchangeable. Matching reads
+            // the RAW text because a line's number is a digit token and Masked turns every digit
+            // into '#': matching on the masked form made 'two' unpressable while its label worked.
+            // The log only ever sees the masked form, because a spoken grid is a coordinate.
+            var spoken = Spoken(utterance);
+            var said = Masked(utterance);
+            var floor = (double)_catalog().GrammarRules.MinIntentConfidence;
+
+            if (MenuSpeech.Match(spoken, drawn) is { } entry)
+            {
+                // The floor gates a MATCH, never the fallback below it. The grammar carries its
+                // out-of-vocabulary sink, so a low score here is a line the decoder is unsure of
+                // rather than a word it was forced to guess, and pressing it would be the wrong
+                // line rather than merely a wasted press.
+                if (utterance.Confidence < floor)
+                {
+                    _log.Warn(FormattableString.Invariant(
+                        $"Heard '{said}' at {utterance.Confidence:0.00}, under the {floor:0.00} floor. Nothing pressed."));
+                    _counters.Utterance(matched: false);
+                    Rearm();
+                    return;
+                }
+
+                _log.Info($"Heard '{said}' -> line {entry.Digit} {entry.Label}");
+                _counters.Utterance(matched: true);
+                _onMenuSpoken(entry);
+                Rearm();
+                return;
+            }
+
+            // A RUN of lines in one breath, which is how a grid is actually said: eight numbers at
+            // speed come back as one utterance of eight words. Matched whole it reached nothing, so
+            // the coordinate page ignored everything said to it. Tried after the whole-utterance
+            // match so a two-word LABEL still wins over two lines that happen to be named its parts.
+            if (MenuSpeech.MatchRun(spoken, drawn) is { Count: > 0 } run)
+            {
+                _log.Info($"Heard '{said}' -> {run.Count} lines: {string.Join(", ", run.Select(r => r.Label))}");
+                _counters.Utterance(matched: true);
+                foreach (var spokenLine in run)
+                {
+                    _onMenuSpoken(spokenLine);
+                }
+
+                Rearm();
+                return;
+            }
+
+            // The grammar sent it to [unk], which is every word not on this page AND every near
+            // miss of one. Ask what was actually said and measure THAT against the drawn lines:
+            // 'armor' transcribes as armor and lands on AMMO, where the constrained decode could
+            // only say it was not one of the six.
+            if (Nearest(drawn) is { } near)
+            {
+                _log.Info($"Heard '{said}', re-read as '{near.Said}' -> line {near.Entry.Digit} {near.Entry.Label}");
+                _counters.Utterance(matched: true);
+                _onMenuSpoken(near.Entry);
+                Rearm();
+                return;
+            }
+
+            if (IsExclusive(drawn))
+            {
+                // WARN: a word said at a menu that matched no line on it is the report, and the
+                // lines it was measured against are the whole diagnosis.
+                _log.Warn($"Heard '{said}' at a menu drawing {drawn.Count} lines, matched none.");
+                _counters.Utterance(matched: false);
+                Rearm();
+                return;
+            }
+
+            // The armed hint draws three surface names and nothing else, so anything that is not
+            // one of them is a request. Falls through to the catalog rather than being refused.
+        }
+
+        Rearm();
 
         var parsed = parser.Parse(utterance);
         var masked = Masked(utterance);
@@ -380,6 +527,69 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
 
         _onParsed(parsed);
     }
+
+    /// <summary>
+    /// True when the drawn surface owns the words outright.
+    /// </summary>
+    /// <remarks>
+    /// A real list draws digits beside its lines. The armed hint draws three surface names and no
+    /// digits at all, and it is what an open hold shows before anybody has navigated, so treating
+    /// it as exclusive would take spoken requests away from the one moment they are most used.
+    /// </remarks>
+    private static bool IsExclusive(IReadOnlyList<MenuEntry> drawn) =>
+        drawn.Any(o => o.Digit >= 0);
+
+    /// <summary>
+    /// What the recognizer is constrained to: the drawn lines, plus the catalog when the surface is
+    /// only the armed hint. Empty means nothing is drawn and the catalog grammar is the whole of it.
+    /// </summary>
+    private static IReadOnlyList<string> VocabularyFor(IReadOnlyList<MenuEntry> drawn, Grammar grammar)
+    {
+        var labels = MenuSpeech.Vocabulary(drawn);
+        if (labels.Count == 0 || IsExclusive(drawn))
+        {
+            return labels;
+        }
+
+        return [.. labels
+            .Concat(SpeechGrammarCompiler.Compile(grammar).RecognizerPhrases)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    /// The line an unconstrained re-read of this utterance lands on, or null when it lands on none.
+    /// </summary>
+    /// <remarks>
+    /// Only ever reached after the grammar said [unk]. The constrained decode is the better reader
+    /// of a word that IS on the page, so this never overrides it: measured, the grammar hears MECH
+    /// where a free read hears 'mac', and FOB KIT where a free read hears 'five give'.
+    /// </remarks>
+    private (MenuEntry Entry, string Said)? Nearest(IReadOnlyList<MenuEntry> drawn)
+    {
+        if (_engine is not { } engine || _utterance is not { Length: > 0 } audio)
+        {
+            return null;
+        }
+
+        var free = engine.Transcribe(audio.Samples);
+        return MenuSpeech.Match(Spoken(free), drawn) is { } entry ? (entry, Masked(free)) : null;
+    }
+
+    /// <summary>Drops the audio behind the utterance just handled, so the next one stands alone.</summary>
+    private void Rearm() => _utterance?.Reset();
+
+    /// <summary>
+    /// The utterance as said, digits included. For MATCHING only, and never for a log line.
+    /// </summary>
+    /// <remarks>
+    /// A menu line's number is a digit token, so <see cref="Masked"/> is the wrong reading here: it
+    /// turns 'two' into '#' and makes every line unpressable by its number while its label still
+    /// works. Nothing this returns is written anywhere; it is compared against the drawn labels and
+    /// dropped.
+    /// </remarks>
+    private static string Spoken(Utterance utterance) =>
+        string.Join(' ', utterance.Tokens.Select(t => t.Text));
 
     /// <summary>
     /// The utterance with every digit token replaced by <c>#</c>. A grid cannot be read back out
@@ -420,6 +630,8 @@ public sealed class VoiceDriver : IDisposable, ISuspendable
     {
         _holding?.Dispose();
         _holding = null;
+        _utterance?.Dispose();
+        _utterance = null;
         _chunks = null;
         _pump = null;
     }

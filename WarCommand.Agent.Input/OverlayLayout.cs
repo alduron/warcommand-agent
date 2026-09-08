@@ -2,6 +2,21 @@ using WarCommand.Agent.Core.Settings;
 
 namespace WarCommand.Agent.Input;
 
+/// <summary>Where the panel sits, and where the board sits inside it.</summary>
+/// <param name="Bounds">The window's bounds in screen pixels.</param>
+/// <param name="VerticalBias">
+/// Where the board sits inside those bounds: +1 against the top, -1 against the bottom, 0 centred.
+/// The window is taller than the board, so the bias is what makes a top anchor draw on the top edge.
+/// </param>
+public readonly record struct OverlayPlacement(ScreenRect Bounds, double VerticalBias)
+{
+    /// <summary>No game window, so nothing to place against.</summary>
+    public static OverlayPlacement Empty => new(ScreenRect.Empty, 0);
+
+    /// <summary>True when there is nothing to draw.</summary>
+    public bool IsEmpty => Bounds.IsEmpty;
+}
+
 /// <summary>
 /// Where the overlay sits inside the game's client rect. Pure arithmetic: no window, no Win32, no
 /// DPI, so every anchor is testable without a message loop.
@@ -10,6 +25,10 @@ namespace WarCommand.Agent.Input;
 /// It places against the game's CLIENT RECT and never the monitor. On a 32:9 panel with the game
 /// windowed to the left two thirds, a monitor-anchored overlay lands on the desktop beside the
 /// game rather than against its edge. See 06-overlay-ux.md "Window".
+///
+/// Nothing here is measured in pixels the user chose. Width is a share of the game's width and the
+/// nudge is a share of the travel that anchor has left, so one setting means the same thing on a
+/// 1080p laptop and a 32:9 panel.
 /// </remarks>
 public static class OverlayLayout
 {
@@ -23,40 +42,110 @@ public static class OverlayLayout
     /// </summary>
     public const double MaxHeightFraction = 0.72;
 
-    /// <summary>The panel's bounds inside <paramref name="game"/>, in screen pixels.</summary>
+    /// <summary>Which third of an axis an anchor sits in.</summary>
+    private enum Band
+    {
+        Start,
+        Centre,
+        End,
+    }
+
+    /// <summary>The panel's placement inside <paramref name="game"/>, in screen pixels.</summary>
+    /// <param name="game">The game's client rect, or the chosen monitor's work area.</param>
+    /// <param name="anchor">One of the nine grid positions.</param>
+    /// <param name="widthFraction">Panel width as a share of the game's width.</param>
+    /// <param name="slide">
+    /// Nudge along the anchor's free axis, -1 to +1. Positive is up on a vertical axis and right on
+    /// a horizontal one, so +1 always travels toward the top right corner. A corner anchor has no
+    /// free axis and ignores it.
+    /// </param>
     /// <remarks>
-    /// Height is the cap rather than the drawn height: the window sizes to its content and the
-    /// caller hands this in as MaxHeight.
+    /// Bounds height is the cap rather than the drawn height: the board sizes to its content and
+    /// aligns inside the window by <see cref="OverlayPlacement.VerticalBias"/>.
     /// </remarks>
-    public static ScreenRect Place(ScreenRect game, OverlayAnchor anchor, int widthPx)
+    public static OverlayPlacement Place(
+        ScreenRect game,
+        OverlayAnchor anchor,
+        double widthFraction,
+        double slide)
     {
         if (game.IsEmpty)
         {
-            return ScreenRect.Empty;
+            return OverlayPlacement.Empty;
         }
 
         // Never wider than the game itself, which is the case on a small windowed launch and the
         // one where an unclamped width puts the panel off the side of the picture entirely.
-        var width = Math.Clamp(widthPx, 1, Math.Max(1, game.Width - (Margin * 2)));
+        var share = Math.Clamp(widthFraction, OverlayWidth.MinFraction, OverlayWidth.MaxFraction);
+        var width = Math.Clamp(
+            (int)Math.Round(game.Width * share),
+            1,
+            Math.Max(1, game.Width - (Margin * 2)));
         var height = MaxHeight(game);
+        var nudge = Math.Clamp(slide, -1, 1);
 
-        var left = anchor == OverlayAnchor.Left
-            ? game.Left + Margin
-            : game.Left + game.Width - width - Margin;
+        var horizontal = HorizontalBand(anchor);
+        var vertical = VerticalBand(anchor);
 
-        var top = anchor switch
+        // Exactly one axis is ever free, and vertical wins for the centre anchor so that Left,
+        // Right and Centre all nudge the same way.
+        var verticalFree = vertical == Band.Centre;
+        var horizontalFree = !verticalFree && horizontal == Band.Centre;
+
+        var left = Along(game.Left, game.Width, width, horizontal, horizontalFree ? nudge : 0);
+        var top = Along(game.Top, game.Height, height, vertical, verticalFree ? -nudge : 0);
+
+        var bias = vertical switch
         {
-            OverlayAnchor.TopRight => game.Top + Margin,
-            OverlayAnchor.BottomRight => game.Top + game.Height - height - Margin,
-
-            // Left and Right are both vertically centred. The default anchor in the spec.
-            _ => game.Top + ((game.Height - height) / 2),
+            Band.Start => 1.0,
+            Band.End => -1.0,
+            _ => verticalFree ? nudge : 0,
         };
 
-        return new ScreenRect(left, top, width, height);
+        return new OverlayPlacement(new ScreenRect(left, top, width, height), bias);
     }
 
     /// <summary>The height cap for a given game rect.</summary>
     public static int MaxHeight(ScreenRect game) =>
         Math.Max(120, (int)(game.Height * MaxHeightFraction));
+
+    /// <summary>
+    /// One axis. <paramref name="towardEnd"/> is the nudge expressed as travel toward the far edge,
+    /// so it reaches that edge exactly at 1 and the centre at 0.
+    /// </summary>
+    private static int Along(int origin, int span, int size, Band band, double towardEnd)
+    {
+        var start = origin + Margin;
+        var end = origin + span - size - Margin;
+        var centre = origin + ((span - size) / 2);
+
+        if (end < start)
+        {
+            // No room for the margin at all: centring is the least wrong answer.
+            return centre;
+        }
+
+        return band switch
+        {
+            Band.Start => start,
+            Band.End => end,
+            _ => Lerp(centre, towardEnd >= 0 ? end : start, Math.Abs(towardEnd)),
+        };
+    }
+
+    private static int Lerp(double from, double to, double t) => (int)Math.Round(from + ((to - from) * t));
+
+    private static Band HorizontalBand(OverlayAnchor anchor) => anchor switch
+    {
+        OverlayAnchor.Left or OverlayAnchor.TopLeft or OverlayAnchor.BottomLeft => Band.Start,
+        OverlayAnchor.Right or OverlayAnchor.TopRight or OverlayAnchor.BottomRight => Band.End,
+        _ => Band.Centre,
+    };
+
+    private static Band VerticalBand(OverlayAnchor anchor) => anchor switch
+    {
+        OverlayAnchor.Top or OverlayAnchor.TopLeft or OverlayAnchor.TopRight => Band.Start,
+        OverlayAnchor.Bottom or OverlayAnchor.BottomLeft or OverlayAnchor.BottomRight => Band.End,
+        _ => Band.Centre,
+    };
 }

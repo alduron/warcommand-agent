@@ -1,4 +1,4 @@
-using WarCommand.Agent.Core.Board;
+﻿using WarCommand.Agent.Core.Board;
 using WarCommand.Agent.Core.Model;
 
 namespace WarCommand.Agent.Tests.Core;
@@ -83,6 +83,36 @@ public sealed class SharedRowTests
         Assert.True(after.ClaimableByDigit);
         Assert.DoesNotContain(after, board.Yours);
         Assert.Equal(0, board.InProgressCount);
+    }
+
+    [Fact]
+    public void A_shared_row_this_viewer_took_is_never_expired_off_their_own_board()
+    {
+        // It stays Open while it collects people, so the expiry sweep used to take a job off the
+        // person holding it and drop it back into the queue. A job ends when the server says so.
+        var board = Board();
+        var row = Shared();
+        board.Upsert(row, T0);
+        board.ApplyClaim(row.Id, Rows.Viewer, "BEAR", 2, T0);
+
+        var tick = board.Tick(row.ExpiresAt + TimeSpan.FromSeconds(1));
+
+        Assert.Empty(tick.Expired);
+        Assert.NotNull(board.ById(row.Id));
+        Assert.Contains(board.Yours, r => r.Id == row.Id);
+    }
+
+    [Fact]
+    public void A_shared_row_nobody_took_still_expires()
+    {
+        var board = Board();
+        var row = Shared();
+        board.Upsert(row, T0);
+
+        var tick = board.Tick(row.ExpiresAt + TimeSpan.FromSeconds(1));
+
+        Assert.Single(tick.Expired);
+        Assert.Null(board.ById(row.Id));
     }
 
     [Fact]

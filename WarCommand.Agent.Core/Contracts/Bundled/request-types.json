@@ -287,7 +287,6 @@
         "urgent",
         "danger_close"
       ],
-      "takes_quantity": "pallets",
       "default_priority": "normal",
       "menu_paths": [
         "supply.1",
@@ -1520,7 +1519,6 @@
       ],
       "multi_taker": true,
       "game_note": "Any effect on a position or building. Replaces shell_mission, armor_support, close_air and fire_team: the requester names the target, not the deliverer.",
-      "takes_quantity": "rounds",
       "computes_solution": "l81_mortar",
       "solution_note": "The bracket is a tool for whoever is shooting indirect. A row taken by a helicopter simply ignores it."
     },
@@ -1991,7 +1989,6 @@
         "urgent",
         "danger_close"
       ],
-      "takes_quantity": "bodies",
       "default_priority": "low",
       "menu_paths": [
         "build.6"
@@ -2049,7 +2046,7 @@
       "multi_taker": false
     }
   ],
-  "quantity_note": "takes_quantity names the thing the count counts. It is NOT a modifier. Count used to be stuffed into modifiers text[], which made a partially delivered request unrepresentable: a driver asked for four runs who delivered two could only lie with 'done' or leave the row open, and two drivers could not split one request. It is now quantity_requested and quantity_delivered on Request, and the done verb carries a delivered count. A short completion re-opens the remainder under the SAME ticket rather than creating a second one. The numeral is still spoken in the modifier position class ('lift 6', 'mortar 6 rounds'); only its storage moved. A type with no takes_quantity has no quantity, and quantity is never inferred from a modifier.",
+  "quantity_note": "takes_quantity names the thing the count counts. It is NOT a modifier. Count used to be stuffed into modifiers text[], which made a partially delivered request unrepresentable: a driver asked for four runs who delivered two could only lie with 'done' or leave the row open, and two drivers could not split one request. It is now quantity_requested and quantity_delivered on Request, and the done verb carries a delivered count. A short completion re-opens the remainder under the SAME ticket rather than creating a second one. The numeral is still spoken in the modifier position class ('lift 6', 'resupply 4 pallets'); only its storage moved. A count belongs to a type only where the number IS the ask. Owner's call: move_transport keeps 'passengers' and nothing else does. attack_position lost 'rounds' (six target roles, and a fireteam cannot send three rounds to a position), resupply lost 'pallets' and build_builders lost 'bodies'. Do not add takes_quantity to a new type without asking. A type with no takes_quantity has no quantity, and quantity is never inferred from a modifier.",
   "command_verbs": [
     {
       "id": "accept",
@@ -2406,7 +2403,7 @@
     "armor": "Near-homophone of 'mortar'. Use 'tank'.",
     "air support": "Shares an unstressed distinguishing syllable with 'air transport'. Use 'close air'.",
     "air transport": "See above. Use 'lift'.",
-    "smoke": "Already a modifier on shell_mission and the tactical kit. For a screening mission use 'screen'.",
+    "smoke": "Already a modifier on attack_position and the tactical kit. For a screening mission use 'screen'.",
     "fuel": "Already a supply kind on resupply. For one stranded vehicle use 'refuel'.",
     "a t": "Letter names are the worst case for the recognizer and it collides with 'eight'. Use 'anti tank'.",
     "support": "Ambiguous across air_support, the two transports and the Wardogs Support track. Name the effect instead.",

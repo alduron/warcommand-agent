@@ -74,6 +74,11 @@
     <sys:Double x:Key="LabelSize">14</sys:Double>
     <sys:Double x:Key="SlotSize">24</sys:Double>
 
+    <!-- A chip in the band. _ovl.css .chip: 11px on a 15px line box, so a band of chips costs the
+         row 18 units, the same as a line of text, rather than 21. -->
+    <sys:Double x:Key="ChipSize">11</sys:Double>
+    <sys:Double x:Key="ChipLineHeight">15</sys:Double>
+
     <!-- The invite code. Larger than every other header cell because it is the one string on the
          surface a person reads out loud to somebody else. -->
     <sys:Double x:Key="InviteSize">18</sys:Double>
@@ -88,6 +93,24 @@
 
     <!-- Every panel is 380 wide, on every screen in the mocks. -->
     <sys:Double x:Key="PanelWidth">380</sys:Double>
+
+    <!--
+        OverlayTwoPoint.dc.html. The identity column: role glyph plus the type label, wide enough
+        for the longest overlay_label in the catalog, DEFEND POS, at LabelSize in the condensed
+        face. It is the reason every coordinate on the board starts at the same x, and on an
+        arity-2 row it holds the second point's caption instead of the type.
+    -->
+    <GridLength x:Key="TypeColumnWidth">100</GridLength>
+
+    <!-- The gap between the identity column and the coordinate, and the width of the arrow that
+         ties a dropoff to the pickup above it. -->
+    <GridLength x:Key="PointTieWidth">8</GridLength>
+
+    <!--
+        The coordinate column. FIXED, not Auto: a coordinate is always 13 monospaced characters,
+        and pinning the width is what holds the ticket code at one x on every row of the board.
+    -->
+    <GridLength x:Key="CoordColumnWidth">101</GridLength>
 
     <!-- _ovl.css .panel text-shadow. Applied only over the game, through PanelTextEffect: in the
          settings window there is no terrain to lift text off. -->
@@ -124,20 +147,17 @@
     </Style>
 
     <!--
-        The PICKUP / DROPOFF gutter on an arity-2 row. Right aligned in a fixed column so the two
-        coordinates line up under each other, and collapsed to zero on an arity-1 row: a fixed
-        width there steals 58px from the state word and clips URGENT to ENT.
+        DROPOFF, on the second line of an arity-2 row. It sits INSIDE the identity column, right
+        aligned against the coordinate it captions, so the second point costs the row no width at
+        all and lands exactly under the first. The first point is never captioned: on 55 of the 57
+        types there is only one, and a gutter beside it is a label for a thing with no alternative.
     -->
     <Style x:Key="PointLabel" TargetType="TextBlock" BasedOn="{StaticResource DimMono}">
-        <Setter Property="Width" Value="58" />
+        <Setter Property="FontFamily" Value="{StaticResource CondensedFont}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="{StaticResource SmallSize}" />
         <Setter Property="TextAlignment" Value="Right" />
-        <Setter Property="Margin" Value="0,0,6,0" />
-        <Style.Triggers>
-            <Trigger Property="Text" Value="">
-                <Setter Property="Width" Value="0" />
-                <Setter Property="Margin" Value="0" />
-            </Trigger>
-        </Style.Triggers>
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
 </ResourceDictionary>

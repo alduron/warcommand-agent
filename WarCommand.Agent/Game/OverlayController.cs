@@ -1,4 +1,4 @@
-
+﻿
 using System.Windows.Threading;
 using System.Linq;
 using WarCommand.Agent.Core.Settings;
@@ -290,11 +290,17 @@ public sealed class OverlayController : IGameWindowSink, ISuspendable, IDisposab
         // user picked, and keeps doing so with a game up: they asked for that monitor.
         var mirroring = _settings.OverlayMode == OverlayMode.MirrorGame && !_gameRect.IsEmpty;
         var target = mirroring ? _gameRect : ChosenWorkArea();
-        var bounds = OverlayLayout.Place(target, _settings.Anchor, _settings.ClampedWidth);
+        var placement = OverlayLayout.Place(
+            target,
+            _settings.Anchor,
+            _settings.ClampedWidthFraction,
+            _settings.ClampedSlide);
 
-        if (!bounds.IsEmpty)
+        if (!placement.IsEmpty)
         {
-            window.ApplyAnchor(_settings.Anchor);
+            var bounds = placement.Bounds;
+
+            window.ApplyVerticalBias(placement.VerticalBias);
             window.ApplyBounds(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
         }
 

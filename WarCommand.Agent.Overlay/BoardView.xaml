@@ -28,7 +28,7 @@
                         <TranslateTransform x:Name="EntranceSlide" X="10" />
                     </Border.RenderTransform>
                 <Border x:Name="RowRoot" BorderThickness="0,0,0,1" BorderBrush="{StaticResource RowDivider}"
-                        Padding="0,2,9,2" Opacity="{Binding RowOpacity}">
+                        Padding="0,1,9,1" Opacity="{Binding RowOpacity}">
                     <!-- The navigation highlight lands on the REAL row. The board is not redrawn
                          inside a menu panel, so what you move through is what you are looking at. -->
                     <Border.Style>
@@ -73,18 +73,36 @@
                                    Text="{Binding SlotDisplay}" FontFamily="{StaticResource CondensedFont}"
                                    FontWeight="Bold" FontSize="{StaticResource SlotSize}"
                                    Foreground="{StaticResource Ink}" Margin="0,0,8,0" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
+                        <!--
+                            TWO LINES AND A CHIP BAND, on one grid, from OverlayTwoPoint.dc.html.
+                            The board has to show NINE of these, so two lines is the budget and
+                            every field earns its slot inside it.
 
-                            <!-- One wrap for everything the row says. A fixed 150-unit type column
-                                 left the tags 49 of the panel 380 on a row whose type is one short
-                                 word, which is what forced them into a count. -->
-                            <WrapPanel Grid.Column="0" Orientation="Horizontal">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                            Margin="0,0,8,0">
+                            Nothing flows. Each slot has one meaning and one address on every row:
+                            type at 0 and callsign at 0, coordinate one and coordinate two both at
+                            108, state word at the right of line 1, leg and ticket at the right of
+                            line 2. The chip band is the only thing that grows, and it grows
+                            downward, so it moves nothing.
+
+                            Three faults, all the same fault, all fixed here. A flat WrapPanel let
+                            PICKUP and DROPOFF flow like words. A wrapping meta line put the
+                            callsign and the ticket wherever the tag count left them. Then giving
+                            the dropoff, the callsign and the ticket a line each made a tagged
+                            HOTDROP four lines tall, and nine of those do not fit on a screen.
+                        -->
+                        <StackPanel>
+                            <!-- Line 1. The identity column is fixed, so the coordinate starts at
+                                 the same x on every row of the board whatever the type is. -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{StaticResource TypeColumnWidth}" />
+                                    <ColumnDefinition Width="{StaticResource PointTieWidth}" />
+                                    <ColumnDefinition Width="{StaticResource CoordColumnWidth}" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                            VerticalAlignment="Center" ClipToBounds="True">
                                     <Canvas Width="24" Height="24" Margin="0,0,6,0" VerticalAlignment="Center"
                                             SnapsToDevicePixels="True">
                                         <Canvas.LayoutTransform>
@@ -108,63 +126,58 @@
                                                Text="{Binding TypeAndQualifier}" />
                                 </StackPanel>
 
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                            Margin="0,0,8,0">
-                                    <TextBlock Style="{StaticResource PointLabel}"
-                                               VerticalAlignment="Center"
-                                               Text="{Binding FirstPointLabel}" />
-                                    <TextBlock Style="{StaticResource Mono}"
-                                               VerticalAlignment="Center"
-                                               Text="{Binding CoordinatesDisplay}" />
-                                </StackPanel>
+                                <TextBlock Grid.Column="2" Style="{StaticResource Mono}"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding CoordinatesDisplay}" />
 
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                            Margin="0,0,8,0"
-                                            Visibility="{Binding SecondPointDisplay, Converter={StaticResource NullToVisibility}}">
-                                    <TextBlock Style="{StaticResource PointLabel}"
-                                               VerticalAlignment="Center"
-                                               Text="{Binding SecondPointLabel}" />
-                                    <TextBlock Style="{StaticResource DimMono}"
-                                               VerticalAlignment="Center"
-                                               Text="{Binding SecondPointDisplay}" />
-                                </StackPanel>
+                                <TextBlock x:Name="StateWord" Grid.Column="3"
+                                           Style="{StaticResource Up}"
+                                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                                           Text="{Binding StateWord}"
+                                           Foreground="{StaticResource Ink}" Margin="8,0,0,0" />
+                            </Grid>
 
-                                <!-- EVERY tag, one bordered chip each. The tags ARE the ask: which
-                                     rifle, which round, which size. A count never stands in. -->
-                                <ItemsControl x:Name="TagLine" VerticalAlignment="Center"
-                                              ItemsSource="{Binding Tags}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel Orientation="Horizontal" />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border BorderBrush="{StaticResource Edge}" BorderThickness="1"
-                                                    Margin="0,0,3,1" Padding="3,0,3,0"
-                                                    VerticalAlignment="Center"
-                                                    Background="{StaticResource Transparent}">
-                                                <TextBlock Style="{StaticResource Up}"
-                                                           FontSize="{StaticResource SmallSize}"
-                                                           Foreground="{StaticResource Dim}"
-                                                           Text="{Binding}" />
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                            <!--
+                                Line 2, always drawn and always the same shape. The second point,
+                                the gun bracket and nothing else share the coordinate column, and
+                                they can never collide: every type that computes a bracket carries
+                                a single point. The callsign takes the identity column under the
+                                type; the leg and the ticket take the right.
 
-                                <TextBlock Style="{StaticResource DimMono}" VerticalAlignment="Center"
-                                           Margin="0,0,8,0" Text="{Binding Requester}" />
-                                <TextBlock Style="{StaticResource Up}" VerticalAlignment="Center"
-                                           Foreground="{StaticResource Dim}" Margin="0,0,8,0"
-                                           Text="{Binding MetaExtra}" />
-                                <TextBlock Style="{StaticResource DimMono}" VerticalAlignment="Center"
-                                           Margin="0,0,8,0" Text="{Binding LegDisplay}" />
-                                <TextBlock Style="{StaticResource DimMono}" VerticalAlignment="Center"
-                                           Margin="0,0,8,0" Text="{Binding TicketCode}" />
+                                This line is where the height came back. The dropoff, the callsign
+                                and the ticket each had a line of their own, which made a tagged
+                                HOTDROP four lines tall, and nine of those do not fit on a screen.
+                                The DROPOFF caption went with them: the arrow in the tie column
+                                says the same thing in 8 units instead of 100.
+                            -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{StaticResource TypeColumnWidth}" />
+                                    <ColumnDefinition Width="{StaticResource PointTieWidth}" />
+                                    <ColumnDefinition Width="{StaticResource CoordColumnWidth}" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
 
-                                <!-- The opening bracket, gunners only. Empty for everybody else. -->
-                                <TextBlock x:Name="SolutionLine" VerticalAlignment="Center"
+                                <TextBlock Grid.Column="0" Style="{StaticResource DimMono}"
+                                           FontSize="{StaticResource SmallSize}"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                           Text="{Binding Requester}" />
+
+                                <Path Grid.Column="1" Data="M 3.5,1 L 3.5,9 L 8,9 M 6,7 L 8,9 L 6,11"
+                                      Stroke="{StaticResource Edge}" StrokeThickness="1"
+                                      Width="8" Height="18" VerticalAlignment="Center"
+                                      Visibility="{Binding SecondPointDisplay,
+                                                           Converter={StaticResource NullToVisibility}}" />
+
+                                <TextBlock Grid.Column="2" Style="{StaticResource DimMono}"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding SecondPointDisplay}" />
+
+                                <!-- The opening bracket, gunners only, in the same slot. Empty for
+                                     everybody else, and never beside a second point. -->
+                                <TextBlock x:Name="SolutionLine" Grid.Column="2"
+                                           VerticalAlignment="Center"
                                            Foreground="{StaticResource Squad}"
                                            Text="{Binding SolutionDisplay}">
                                     <TextBlock.Style>
@@ -178,13 +191,46 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                            </WrapPanel>
 
-                            <TextBlock x:Name="StateWord" Grid.Column="1" Style="{StaticResource Up}"
-                                       HorizontalAlignment="Right" VerticalAlignment="Top"
-                                       Text="{Binding StateWord}"
-                                       Foreground="{StaticResource Ink}" Margin="8,0,0,0" />
-                        </Grid>
+                                <TextBlock Grid.Column="3" Style="{StaticResource DimMono}"
+                                           FontSize="{StaticResource SmallSize}"
+                                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                                           Margin="8,0,0,0" Text="{Binding LegDisplay}" />
+
+                                <TextBlock Grid.Column="4" Style="{StaticResource DimMono}"
+                                           FontSize="{StaticResource SmallSize}"
+                                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                                           Margin="8,0,0,0" Text="{Binding TicketCode}" />
+                            </Grid>
+
+                            <!--
+                                The chip band. Everything that qualifies the ask and varies in
+                                number: the tags, then RETRY. Its own full-width line so it grows
+                                DOWNWARD and moves nothing, and zero height when there is none,
+                                which is most rows and every bare HOTDROP.
+                            -->
+                            <ItemsControl x:Name="TagLine" ItemsSource="{Binding Chips}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{StaticResource Edge}" BorderThickness="1"
+                                                Margin="0,0,3,1" Padding="3,0,3,0"
+                                                VerticalAlignment="Center"
+                                                Background="{StaticResource Transparent}">
+                                            <TextBlock Style="{StaticResource Up}"
+                                                       FontSize="{StaticResource ChipSize}"
+                                                       LineHeight="{StaticResource ChipLineHeight}"
+                                                       Foreground="{StaticResource Dim}"
+                                                       Text="{Binding}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
                     </DockPanel>
                   </Grid>
                 </Border>

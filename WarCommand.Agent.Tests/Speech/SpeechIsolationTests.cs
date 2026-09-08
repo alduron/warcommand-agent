@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using WarCommand.Agent.Speech;
@@ -161,12 +161,19 @@ public class SpeechIsolationTests
     }
 
     [Fact]
-    public void The_engine_contract_is_the_two_methods_the_spec_writes()
+    public void The_engine_contract_is_the_four_methods_the_spec_writes()
     {
-        // Two, not one: a whole buffer and a streamed session. The session exists because a panel
-        // only lives while the hold key is down, so decoding on release could never reach one.
+        // Four. A whole buffer, a session over the catalog grammar, a session over an explicit
+        // phrase list, and an unconstrained read. The session exists because a panel only lives
+        // while the hold key is down, so decoding on release could never reach one. The phrase-list
+        // overload exists because a drawn menu's vocabulary is its own labels, which the catalog has
+        // no view of. Transcribe exists because a constrained decode cannot tell a near miss of a
+        // drawn label from a word that is not on the page: both come back as [unk].
         var methods = typeof(ISpeechEngine).GetMethods();
-        Assert.Equal(2, methods.Length);
+        Assert.Equal(4, methods.Length);
+
+        var transcribe = Assert.Single(methods, m => m.Name == "Transcribe");
+        Assert.Equal(typeof(WarCommand.Agent.Core.Grammar.Utterance), transcribe.ReturnType);
 
         var recognize = Assert.Single(methods, m => m.Name == "RecognizeAsync");
         Assert.Equal(typeof(Task<WarCommand.Agent.Core.Grammar.Utterance>), recognize.ReturnType);
@@ -179,11 +186,17 @@ public class SpeechIsolationTests
             },
             recognize.GetParameters().Select(p => p.ParameterType));
 
-        var session = Assert.Single(methods, m => m.Name == "BeginSession");
-        Assert.Equal(typeof(ISpeechSession), session.ReturnType);
+        var sessions = methods.Where(m => m.Name == "BeginSession").ToList();
+        Assert.Equal(2, sessions.Count);
+        Assert.All(sessions, s => Assert.Equal(typeof(ISpeechSession), s.ReturnType));
         Assert.Equal(
-            new[] { typeof(WarCommand.Agent.Core.Grammar.Grammar) },
-            session.GetParameters().Select(p => p.ParameterType));
+            [
+                [typeof(WarCommand.Agent.Core.Grammar.Grammar)],
+                [typeof(IReadOnlyList<string>)],
+            ],
+            sessions
+                .Select(s => s.GetParameters().Select(p => p.ParameterType).ToArray())
+                .OrderBy(p => p[0].Name, StringComparer.Ordinal));
     }
 
     /// <summary>

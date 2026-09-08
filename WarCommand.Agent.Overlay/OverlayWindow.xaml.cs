@@ -169,15 +169,17 @@ public partial class OverlayWindow : Window
     }
 
     /// <summary>
-    /// Which edge of the anchor rect the board sits against. Left and Right centre it; the two
-    /// corner anchors push it to that corner, which is the whole point of choosing one.
+    /// Where the board sits inside the window: +1 against the top, -1 against the bottom, 0 centred,
+    /// and anywhere between. The window is the cap height, so this is what makes a top anchor draw
+    /// on the top edge rather than half way down.
     /// </summary>
-    public void ApplyAnchor(OverlayAnchor anchor) => Board.VerticalAlignment = anchor switch
+    public void ApplyVerticalBias(double bias)
     {
-        OverlayAnchor.TopRight => VerticalAlignment.Top,
-        OverlayAnchor.BottomRight => VerticalAlignment.Bottom,
-        _ => VerticalAlignment.Center,
-    };
+        var b = Math.Clamp(bias, -1, 1);
+
+        LeadRow.Height = new GridLength(1 - b, GridUnitType.Star);
+        TrailRow.Height = new GridLength(1 + b, GridUnitType.Star);
+    }
 
     /// <summary>
     /// Applies the four extended styles. Done here rather than in the constructor because there is

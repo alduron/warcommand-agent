@@ -393,8 +393,14 @@ public sealed class BoardState
         // overflow, demoted, passed or muted row past its expiry stayed forever: the overflow count
         // stayed inflated, and Admit could hand a bright digit to a request that had already
         // expired, which the server then refuses.
+        // NOT a row this viewer is holding. A shared row stays Open while it collects people, so
+        // the expiry sweep took a job off the person who had accepted it and put it back in the
+        // queue. Nothing local ends a job: it leaves ACTIVE when the server says completed, and on
+        // nothing else.
         var expired = new List<BoardRow>();
-        foreach (var row in _rows.Values.Where(r => r.IsOpen && now >= r.ExpiresAt).ToList())
+        foreach (var row in _rows.Values
+            .Where(r => r.IsOpen && now >= r.ExpiresAt && !r.RendersInYours(ViewerParticipantId))
+            .ToList())
         {
             Remove(row.Id, now);
             expired.Add(row);

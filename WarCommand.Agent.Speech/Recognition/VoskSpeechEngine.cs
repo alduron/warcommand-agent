@@ -31,6 +31,16 @@ public sealed class VoskSpeechEngine : ISpeechEngine, IDisposable
     private string? _fingerprint;
     private bool _disposed;
 
+    /// <summary>The unconstrained recognizer, built on first use. Never the grammar one.</summary>
+    /// <remarks>
+    /// Separate instance and separate lock on purpose: <see cref="BeginSession(Grammar)"/> holds
+    /// the grammar recognizer and its gate for the whole hold, and the near-miss fallback runs
+    /// from inside that hold. Sharing either would deadlock.
+    /// </remarks>
+    private readonly object _freeLock = new();
+    private Vosk.VoskRecognizer? _free;
+    private short[] _freeScratch = [];
+
     /// <summary>Binds an engine to an already-loaded model.</summary>
     public VoskSpeechEngine(VoskModel model, ISpeechLog? log = null)
     {
@@ -100,6 +110,68 @@ public sealed class VoskSpeechEngine : ISpeechEngine, IDisposable
         }
     }
 
+    /// <inheritdoc />
+    public ISpeechSession BeginSession(IReadOnlyList<string> phrases)
+    {
+        ArgumentNullException.ThrowIfNull(phrases);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        _gate.Wait();
+        try
+        {
+            var recognizer = Recognizer(GrammarJson(phrases), FingerprintFor(phrases));
+            recognizer.Reset();
+            return new Session(recognizer, _gate);
+        }
+        catch
+        {
+            _gate.Release();
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public Utterance Transcribe(ReadOnlySpan<short> samples)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (samples.IsEmpty)
+        {
+            return VoskResultReader.Empty;
+        }
+
+        lock (_freeLock)
+        {
+            _free ??= Built();
+
+            if (_freeScratch.Length < samples.Length)
+            {
+                Array.Clear(_freeScratch);
+                _freeScratch = new short[samples.Length];
+            }
+
+            samples.CopyTo(_freeScratch);
+            try
+            {
+                _free.Reset();
+                _free.AcceptWaveform(_freeScratch, samples.Length);
+                return VoskResultReader.Read(_free.FinalResult());
+            }
+            finally
+            {
+                // The audio is gone before the lock is, same rule the session's scratch follows.
+                Array.Clear(_freeScratch, 0, samples.Length);
+            }
+        }
+
+        Vosk.VoskRecognizer Built()
+        {
+            var recognizer = new Vosk.VoskRecognizer(_model.Handle, AudioBuffer.SampleRateHz);
+            recognizer.SetWords(true);
+            return recognizer;
+        }
+    }
+
     /// <summary>Releases the recognizer. The model outlives the engine and is disposed by its owner.</summary>
     public void Dispose()
     {
@@ -111,6 +183,15 @@ public sealed class VoskSpeechEngine : ISpeechEngine, IDisposable
         _disposed = true;
         _recognizer?.Dispose();
         _recognizer = null;
+
+        lock (_freeLock)
+        {
+            _free?.Dispose();
+            _free = null;
+            Array.Clear(_freeScratch);
+            _freeScratch = [];
+        }
+
         _gate.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -180,21 +261,57 @@ public sealed class VoskSpeechEngine : ISpeechEngine, IDisposable
         return VoskResultReader.Read(recognizer.FinalResult());
     }
 
-    private Vosk.VoskRecognizer Recognizer(CompiledSpeechGrammar compiled)
+    private Vosk.VoskRecognizer Recognizer(CompiledSpeechGrammar compiled) =>
+        Recognizer(compiled.ToRecognizerGrammarJson(), compiled.Fingerprint);
+
+    /// <summary>
+    /// The recognizer for one phrase list, rebuilt only when the list changes.
+    /// </summary>
+    /// <remarks>
+    /// A menu surface changes under the hold, so this is hit on every panel that opens. The
+    /// fingerprint check is what keeps that to one FST rebuild per distinct surface rather than one
+    /// per chunk.
+    /// </remarks>
+    private Vosk.VoskRecognizer Recognizer(string grammarJson, string fingerprint)
     {
-        if (_recognizer is not null && string.Equals(_fingerprint, compiled.Fingerprint, StringComparison.Ordinal))
+        if (_recognizer is not null && string.Equals(_fingerprint, fingerprint, StringComparison.Ordinal))
         {
             return _recognizer;
         }
 
         _recognizer?.Dispose();
-        _recognizer = new Vosk.VoskRecognizer(
-            _model.Handle,
-            AudioBuffer.SampleRateHz,
-            compiled.ToRecognizerGrammarJson());
+        _recognizer = new Vosk.VoskRecognizer(_model.Handle, AudioBuffer.SampleRateHz, grammarJson);
         _recognizer.SetWords(true);
-        _fingerprint = compiled.Fingerprint;
-        _log.Note(SpeechEvent.RecognizerRebuilt, compiled.Fingerprint);
+        _fingerprint = fingerprint;
+        _log.Note(SpeechEvent.RecognizerRebuilt, fingerprint);
         return _recognizer;
+    }
+
+    /// <summary>
+    /// The phrase array for a drawn surface, with the out-of-vocabulary sink appended.
+    /// </summary>
+    /// <remarks>
+    /// The sink is not optional, and it was measured. Dropping it forces the decoder to pick one of
+    /// the drawn lines for ANY audio, and on a six line page 'attack' came back as MECH at
+    /// confidence 1.00: the score does not separate a forced guess from a real word, so no floor
+    /// can catch it. With the sink the same page decodes every one of its own labels, resolves
+    /// 'hammer' to HAMMERS, and returns [unk] for attack, helicopter and supply, which press
+    /// nothing.
+    /// <para>
+    /// What the sink costs is the deliberate near miss: 'armor' against a page holding AMMO also
+    /// lands in it. Pressing a line nobody named is the worse failure of the two, so that case
+    /// wants a second decode of the same audio rather than a decoder made to guess.
+    /// </para>
+    /// </remarks>
+    private static string GrammarJson(IReadOnlyList<string> phrases) =>
+        System.Text.Json.JsonSerializer.Serialize<IReadOnlyList<string>>(
+            [.. phrases, CompiledSpeechGrammar.UnknownPhrase]);
+
+    /// <summary>Stable hash of a phrase list. A changed one rebuilds the recognizer.</summary>
+    internal static string FingerprintFor(IReadOnlyList<string> phrases)
+    {
+        var bytes = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(string.Join('\n', phrases)));
+        return System.Convert.ToHexString(bytes.AsSpan(0, 8)).ToLowerInvariant();
     }
 }

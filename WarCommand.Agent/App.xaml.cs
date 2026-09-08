@@ -218,6 +218,17 @@ public partial class App : Application, IDisposable
 
     /// <summary>Pages the last render spanned. Read on the hook thread, same rule as the slots.</summary>
     private volatile int _boardPages = 1;
+
+    /// <summary>
+    /// The lines the last render drew. THE vocabulary while a menu is up.
+    /// </summary>
+    /// <remarks>
+    /// Read on the DECODE thread, so it is a snapshot for the same reason the slots are: the state
+    /// machine belongs to the dispatcher and enumerating its options from the recognizer's task is
+    /// a torn read. Written only in <c>RenderMenu</c>, which is already the one place that knows
+    /// what is on screen.
+    /// </remarks>
+    private volatile IReadOnlyList<MenuEntry> _drawnOptions = [];
     private Composition.VoiceDriver? _voice;
     private RealtimeClient? _realtime;
     private BoardRealtimeObserver? _observer;
@@ -511,7 +522,12 @@ public partial class App : Application, IDisposable
             new SilentHoldMonitor(BundledContracts.GameProfile().Current.Speech, SpeechEvents()),
             log,
             SpeechEvents(),
-            _counters);
+            _counters,
+            // The drawn surface is the vocabulary, and saying a line is pressing it. Both hop the
+            // dispatcher: the first is a snapshot the render left behind, the second touches the
+            // state machine and the overlay.
+            () => _drawnOptions,
+            entry => Dispatcher.BeginInvoke(() => OnSpokenMenuEntry(entry)));
 
         _input = Composition.InputComposition.Start(
             _bindings,
@@ -581,7 +597,7 @@ public partial class App : Application, IDisposable
                 // The tree is compiled once at arm time; everything else reads the store live, so
                 // this is the only thing an adopted catalog leaves stale.
                 var adopted = BundledContracts.Catalog().Current;
-                menu.Retarget(new MenuStateMachine(MenuTree.Compile(adopted), adopted));
+                menu.Retarget(new MenuStateMachine(MenuTree.Compile(adopted), adopted, GridOptions(adopted)));
                 RenderArtillery();
                 log.Info("Adopted a served catalog: menu rebuilt.");
             }
@@ -634,11 +650,31 @@ public partial class App : Application, IDisposable
     }
 
     /// <summary>Compiles the menu for the current catalog and wires its outcomes.</summary>    /// <summary>Compiles the menu for the current catalog and wires its outcomes.</summary>
+    /// <summary>
+    /// The grid's shape, taken from the maps the profile serves rather than assumed.
+    /// </summary>
+    /// <remarks>
+    /// Binding rule 5: how far a map reaches is a fact about the game. The default was two whole
+    /// digits, which stops at 99.99, and both shipped maps run to 160, so every coordinate past the
+    /// middle of the map could not be typed or said by anybody at all.
+    /// </remarks>
+    private static MenuOptions GridOptions(Catalog catalog)
+    {
+        var maps = BundledContracts.GameProfile().Current.Maps;
+        var reach = maps.Count > 0 ? maps.Max(m => m.CoordMax) : 0m;
+
+        return new MenuOptions
+        {
+            InviteCodeDigits = catalog.GrammarRules.InviteCodeDigits,
+            DigitsPerAxis = MenuOptions.ForMap(reach),
+        };
+    }
+
     private Composition.MenuDriver BuildMenu(BoardPresenter presenter, RollingFileLog log)
     {
         var catalog = BundledContracts.Catalog().Current;
         var tree = MenuTree.Compile(catalog);
-        var machine = new MenuStateMachine(tree, catalog);
+        var machine = new MenuStateMachine(tree, catalog, GridOptions(catalog));
         return new Composition.MenuDriver(
             Dispatcher,
             machine,
@@ -899,6 +935,109 @@ public partial class App : Application, IDisposable
         _counters.ScreenReadAccepted();
         _observer?.SetFault(null);
         OnMenuOutcome(menu.Menu.AcceptReadCoordinate(point, DateTimeOffset.UtcNow), presenter, log);
+    }
+
+    /// <summary>
+    /// The three surfaces an armed hold draws, as speakable lines.
+    /// </summary>
+    /// <remarks>
+    /// The overlay's armed hint IS this list: "W REQUEST   S BOARD   E TOOLS". They carry no digit
+    /// because no digit presses them, so <see cref="OnSpokenMenuEntry"/> routes them by path onto
+    /// the same MenuDriver calls their keys make. Synthetic rather than catalog entries on purpose:
+    /// a surface is not a request type and putting it in the catalog would need a published
+    /// contract before a word already on screen could be said.
+    /// </remarks>
+    private static readonly IReadOnlyList<MenuEntry> ArmedSurface =
+    [
+        new() { Digit = -1, Path = "surface.request", Label = "REQUEST" },
+        new() { Digit = -1, Path = "surface.board", Label = "BOARD" },
+        new() { Digit = -1, Path = "surface.tools", Label = "TOOLS" },
+    ];
+
+    /// <summary>
+    /// A line on the drawn surface was spoken. Press it.
+    /// </summary>
+    /// <remarks>
+    /// Voice is not a second interface and this is the whole of it: the entry came from the render
+    /// snapshot, it carries the digit the overlay drew beside it, and this routes that digit
+    /// through the same <c>MenuDriver</c> the keyboard uses. Every gate, every refusal and every
+    /// outcome is therefore the one the key gets, and a surface cannot draw a line that voice
+    /// cannot reach, because the vocabulary was built from the same list.
+    /// </remarks>
+    private void OnSpokenMenuEntry(MenuEntry entry)
+    {
+        if (_menu is not { } menu)
+        {
+            return;
+        }
+
+        // The three armed surfaces first: they are drawn without digits, and each one is a key of
+        // its own rather than a line on a list. UP is the request menu, DOWN is the board, TOOLS
+        // has its own key. Exactly what MenuDriver.Scroll and MenuDriver.Tools do for those keys.
+        switch (entry.Path)
+        {
+            // Live on every level, and the one word that was in no vocabulary at all: BACK is a key
+            // rather than a row, so a vocabulary built from rows alone could never carry it.
+            // The board is a window over a longer list and these are the only keys that move it, so
+            // saying DOWN off the last row turns the page exactly as pressing it does.
+            case MenuSpeech.Keys.Up:
+                menu.Scroll(-1);
+                RenderMenuNow();
+                return;
+
+            case MenuSpeech.Keys.Down:
+                menu.Scroll(1);
+                RenderMenuNow();
+                return;
+
+
+            // Takes whatever the highlight is on, which is what UP and DOWN leave behind. On the
+            // coordinate level it is the map read, the same act HERE names.
+            case MenuSpeech.Keys.Select:
+                menu.Commit();
+                RenderMenuNow();
+                return;
+
+            case MenuSpeech.Keys.Back:
+                menu.Back();
+                RenderMenuNow();
+                return;
+
+            // The coordinate level's Select key. Routed through the same MenuDriver call so the
+            // screen read, its refusal and its diagnostic are the ones the key produces.
+            case MenuSpeech.Keys.Here:
+                menu.Commit();
+                RenderMenuNow();
+                return;
+
+            case "surface.request":
+                menu.Scroll(-1);
+                RenderMenuNow();
+                return;
+
+            case "surface.board":
+                menu.Scroll(1);
+                RenderMenuNow();
+                return;
+
+            case "surface.tools":
+                menu.Tools();
+                RenderMenuNow();
+                return;
+
+            default:
+                break;
+        }
+
+        // A line with no digit is an info line, and the vocabulary excludes those, so this is a
+        // render that moved between the snapshot and the utterance rather than a reachable state.
+        if (entry.Digit < 0)
+        {
+            return;
+        }
+
+        menu.Digit(entry.Digit);
+        RenderMenuNow();
     }
 
     /// <summary>
@@ -1233,6 +1372,14 @@ public partial class App : Application, IDisposable
                     + $"{KeyLabel(BindingAction.NavDown)} BOARD   "
                     + $"{KeyLabel(BindingAction.NavTools)} TOOLS")
                 : MenuViewModel.Closed);
+
+        // What the recognizer is constrained to from here until the next render. Voice selects the
+        // option a key would select, so drawing a surface IS publishing its vocabulary. An armed
+        // hold draws three words and no list, and those three are as speakable as any line: they
+        // are on screen, so they are the vocabulary.
+        _drawnOptions = menu.Menu.IsOpen
+            ? MenuSpeech.SurfaceOf(menu.Menu)
+            : _holdHeld ? ArmedSurface : [];
 
         // Straight away, not on the next tick: reading the map for a gun or a target is the moment
         // the crew wants the numbers, and a second's wait reads as the key not having worked.

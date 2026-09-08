@@ -245,7 +245,7 @@ public sealed class AWholeSessionTests
     }
 
     [Fact]
-    public void Back_lands_on_the_row_it_was_entered_through_until_the_overlay_closes()
+    public void Back_lands_on_the_row_it_was_entered_through_until_the_hold_ends()
     {
         var session = new Session();
         var menu = session.Machine;
@@ -265,17 +265,15 @@ public sealed class AWholeSessionTests
         Assert.Equal(MenuLevel.Root, menu.Level);
         Assert.Equal(entered, menu.Highlight);
 
-        // A second open, key released and pressed again, is the same session and remembers.
+        // The memory belongs to THIS hold and nothing beyond it. Key released and pressed again is
+        // a new request, and a new request opens at the root of the tree. It used to remember, so
+        // the first thing on screen was the category you happened to press last.
         menu.Back(T0);
         Assert.False(menu.IsOpen);
         menu.Open(T0, context: session.ContextNow());
-        Assert.Equal(entered, menu.Highlight);
-
-        // The overlay going away ends it. Nothing is remembered across that.
-        menu.ForgetPositions();
-        menu.Back(T0);
-        menu.Open(T0, context: session.ContextNow());
+        Assert.Equal(MenuLevel.Root, menu.Level);
         Assert.NotEqual(entered, menu.Highlight);
+        Assert.Equal(0, menu.Highlight);
     }
 
     [Fact]

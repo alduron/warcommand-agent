@@ -394,7 +394,74 @@ public class MenuStateMachineTests
     }
 
     [Fact]
-    public void The_range_tool_keeps_both_ends_and_never_leaves_the_page()
+    public void A_range_end_takes_a_spoken_grid_on_the_same_screen_a_request_does()
+    {
+        // Both ends were read-only, so with capture off, or the game not in front of you, the tool
+        // could be opened and never finished by any input at all.
+        var menu = Machine();
+        menu.OpenTools(T0, new MenuContext());
+        menu.Digit(menu.Options.Single(o => o.VerbId == "range").Digit, T0);
+
+        menu.Digit(menu.Options.Single(o => o.Path == "range.origin").Digit, T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+
+        var wanted = menu.DigitsWanted;
+        Assert.True(wanted > 0);
+        for (var i = 0; i < wanted; i++)
+        {
+            menu.Digit(1, T0);
+        }
+
+        // Home to the page it was started from, with no request draft touched on the way.
+        Assert.Equal(MenuLevel.RangeTool, menu.Level);
+        Assert.NotNull(menu.ToolGun);
+        Assert.Null(menu.ToolTarget);
+
+        // Backing off an end returns to the range page, not into the request tree it was never in.
+        menu.Digit(menu.Options.Single(o => o.Path == "range.target").Digit, T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+        menu.Back(T0);
+        Assert.Equal(MenuLevel.RangeTool, menu.Level);
+        Assert.Null(menu.ToolTarget);
+        Assert.NotNull(menu.ToolGun);
+    }
+
+    [Fact]
+    public void An_abandoned_range_end_never_captures_a_later_request()
+    {
+        // Reported: a supply drop's coordinate page came up showing SNIPING, MORTAR and ARTILLERY.
+        // An armed range end was still set from a range the user had walked away from, so the next
+        // coordinate the menu collected for ANYTHING was routed to the range tool and the request
+        // was silently replaced by a range reading.
+        var menu = Machine();
+        menu.OpenTools(T0, new MenuContext());
+        menu.Digit(menu.Options.Single(o => o.VerbId == "range").Digit, T0);
+        menu.Digit(menu.Options.Single(o => o.Path == "range.origin").Digit, T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+
+        // Walk away without finishing it, the way Escape and a new hold do.
+        menu.Escape(T0);
+
+        // Now an ordinary request, all the way to its point.
+        menu.Open(T0);
+        menu.Digit(ContractFixtures.Catalog.MenuCategories["attack"], T0);
+        menu.Digit(1, T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+
+        var wanted = menu.DigitsWanted;
+        for (var i = 0; i < wanted; i++)
+        {
+            menu.Digit(1, T0);
+        }
+
+        // The request's own confirm step, not the range page, and no end was set behind its back.
+        Assert.Equal(MenuLevel.Confirm, menu.Level);
+        Assert.Null(menu.ToolGun);
+        Assert.Null(menu.ToolTarget);
+    }
+
+    [Fact]
+    public void Both_range_ends_are_set_on_the_one_coordinate_screen()
     {
         var menu = Machine();
         menu.OpenTools(T0, new MenuContext());
@@ -402,23 +469,30 @@ public class MenuStateMachineTests
         menu.Digit(menu.Options.Single(o => o.VerbId == "range").Digit, T0);
         Assert.Equal(MenuLevel.RangeTool, menu.Level);
 
-        // Pressing an end reads the map where it stands. Each end used to be a level of its own, so
-        // setting both meant four presses through two pages that drew nothing but a prompt.
+        // The rows say what they do, and they do it on the screen every other coordinate in the
+        // app is asked for on. An end that collected a point in place was a second interface for a
+        // question already answered somewhere else.
+        Assert.Equal("SET ORIGIN", menu.Options[0].Label);
+        Assert.Equal("SET TARGET", menu.Options[1].Label);
+
+        menu.Digit(menu.Options.Single(o => o.Path == "range.origin").Digit, T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
+        Assert.True(menu.WantsCoordinate);
+
+        // HERE, on that screen, is the same read request it is anywhere else.
         Assert.IsType<MenuCoordinateReadRequested>(menu.Select(T0));
-        Assert.Equal(MenuLevel.RangeTool, menu.Level);
         menu.AcceptReadCoordinate(new MapPoint(10m, 10m, "map_readout", null, null), T0);
         Assert.Equal(MenuLevel.RangeTool, menu.Level);
         Assert.Equal(10m, menu.ToolGun?.X);
+        Assert.StartsWith("SET ORIGIN  x10.00", menu.Options[0].Label, StringComparison.Ordinal);
 
-        // Then the target, from the same page, without leaving it.
-        menu.Scroll(1, T0);
-        Assert.IsType<MenuCoordinateReadRequested>(menu.Select(T0));
+        // The other end, the same way. And a re-read of an end already set just replaces it.
+        menu.Digit(menu.Options.Single(o => o.Path == "range.target").Digit, T0);
         menu.AcceptReadCoordinate(new MapPoint(20m, 20m, "map_readout", null, null), T0);
         Assert.Equal(MenuLevel.RangeTool, menu.Level);
         Assert.Equal(20m, menu.ToolTarget?.X);
 
-        // And the target can be re-read over and over, which is the whole point of the tool.
-        menu.Select(T0);
+        menu.Digit(menu.Options.Single(o => o.Path == "range.target").Digit, T0);
         menu.AcceptReadCoordinate(new MapPoint(30m, 30m, "map_readout", null, null), T0);
         Assert.Equal(30m, menu.ToolTarget?.X);
         Assert.Equal(10m, menu.ToolGun?.X);
@@ -441,6 +515,32 @@ public class MenuStateMachineTests
         // And off the top goes to the bottom.
         menu.Scroll(-1, T0);
         Assert.Equal(count - 1, menu.Highlight);
+    }
+
+    [Fact]
+    public void A_new_hold_opens_at_the_top_of_the_tree_not_on_the_last_selection()
+    {
+        var menu = Machine();
+
+        // Walk down the root list and drill in, so the root carries a remembered row.
+        menu.Open(T0, Snapshot);
+        menu.Scroll(2, T0);
+        var moved = menu.Highlight;
+        Assert.NotEqual(0, moved);
+        menu.Select(T0);
+        Assert.Equal(MenuLevel.Branch, menu.Level);
+
+        // Inside the SAME hold, backing out lands where the level was left. That is the point of
+        // the memory and it stays.
+        menu.Back(T0);
+        Assert.Equal(MenuLevel.Root, menu.Level);
+        Assert.Equal(moved, menu.Highlight);
+
+        // A new hold does not. REQUEST always opens at the root of the tree.
+        menu.KeyUp(T0);
+        menu.Open(T0, Snapshot);
+        Assert.Equal(MenuLevel.Root, menu.Level);
+        Assert.Equal(0, menu.Highlight);
     }
 
     [Fact]
@@ -494,7 +594,7 @@ public class MenuStateMachineTests
     }
 
     [Fact]
-    public void With_no_capture_the_coordinate_level_takes_eight_digits()
+    public void With_no_capture_the_coordinate_level_takes_a_typed_grid()
     {
         var menu = Machine();
         menu.Open(T0);
@@ -502,14 +602,18 @@ public class MenuStateMachineTests
         menu.Digit(1, T0);
 
         Assert.Equal(MenuLevel.Coordinate, menu.Level);
-        foreach (var digit in new[] { 8, 5, 5, 3, 6, 9, 4, 2 })
+
+        // THREE whole digits per axis, not two. Both shipped maps reach 160, so a grid capped at
+        // 99.99 could not express half of either of them by any input at all.
+        Assert.Equal(10, menu.DigitsWanted);
+        foreach (var digit in new[] { 1, 0, 7, 4, 3, 0, 6, 9, 4, 2 })
         {
             menu.Digit(digit, T0);
         }
 
         Assert.Equal(MenuLevel.Confirm, menu.Level);
         var ready = Assert.IsType<MenuRequestReady>(menu.KeyUp(T0));
-        Assert.Equal(85.53m, ready.Point.X);
+        Assert.Equal(107.43m, ready.Point.X);
         Assert.Equal(69.42m, ready.Point.Y);
         Assert.Equal("typed_grid", ready.Point.Source);
         Assert.Null(ready.Point.Confidence);
@@ -741,6 +845,10 @@ public class MenuStateMachineTests
         var menu = Machine();
         menu.OpenTools(T0, new MenuContext());
         menu.Digit(menu.Options.Single(o => o.VerbId == "range").Digit, T0);
+
+        // SET ORIGIN goes to THE coordinate screen, the one every other coordinate is asked for on.
+        menu.Digit(menu.Options.Single(o => o.Path == "range.origin").Digit, T0);
+        Assert.Equal(MenuLevel.Coordinate, menu.Level);
         Assert.IsType<MenuCoordinateReadRequested>(menu.Select(T0));
 
         // One read, both consumers: the ARTILLERY section ranges from it and every mortar row
@@ -777,6 +885,25 @@ public class MenuStateMachineTests
 
         Assert.Equal("copy", action.VerbId);
         Assert.Equal(3, action.Slot);
+    }
+
+    [Fact]
+    public void A_shared_row_you_took_offers_done_and_release_and_never_accept_again()
+    {
+        // It stays Open after you join it, so gating the working verbs on a claimed state left the
+        // one row you had work to do on with no verb that could close it, and offered ACCEPT twice.
+        var menu = Machine();
+        menu.OpenOnBoard(T0, new MenuContext
+        {
+            OccupiedSlots = [1],
+            Slots = new Dictionary<int, SlotState> { [1] = new(RequestState.Open, true) },
+        });
+        menu.Select(T0);
+
+        var verbs = menu.Options.Select(o => o.VerbId).ToList();
+        Assert.Contains("done", verbs);
+        Assert.Contains("release", verbs);
+        Assert.DoesNotContain("accept", verbs);
     }
 
     [Fact]

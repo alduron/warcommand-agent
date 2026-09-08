@@ -57,7 +57,7 @@ public class OverlayWindowTests
         {
             var overlay = new OverlayWindow();
             overlay.Show();
-            overlay.ApplyAnchor(OverlayAnchor.Right);
+            overlay.ApplyVerticalBias(0);
             overlay.ApplyBounds(1524, 150, 380, 777);
 
             Assert.True(overlay.IsVisible);

@@ -14,25 +14,20 @@ public class TwoPointRowTests
     private static readonly Guid Viewer = Guid.NewGuid();
 
     [Fact]
-    public void A_two_point_row_names_each_point_from_the_catalog()
+    public void A_second_point_costs_the_row_no_extra_line()
     {
+        // It shares line 2 with the callsign and the ticket, which every row already draws. The
+        // caption that used to name it is an arrow in the 8-unit tie column instead.
         var row = ViewModel(Transport());
 
-        Assert.Equal("PICKUP", row.FirstPointLabel);
-        Assert.Equal("DROPOFF", row.SecondPointLabel);
+        Assert.Equal("x91.44 y58.02", row.SecondPointDisplay);
     }
 
     [Fact]
-    public void A_one_point_row_carries_no_label_at_all()
+    public void A_one_point_row_leaves_the_second_slot_empty()
     {
-        // A fixed-width gutter on a one-point row steals space from the state word, which is how
-        // URGENT came to render as ENT.
         var row = ViewModel(Mortar());
 
-        // Empty rather than null on purpose: the gutter collapses via a XAML trigger on Text="",
-        // and a null binding does not fire it, so the 58px would stay reserved.
-        Assert.Equal(string.Empty, row.FirstPointLabel);
-        Assert.Equal(string.Empty, row.SecondPointLabel);
         Assert.Null(row.SecondPointDisplay);
     }
 
@@ -89,6 +84,40 @@ public class TwoPointRowTests
 
         Assert.NotNull(row.SecondPointDisplay);
         Assert.DoesNotContain("->", row.SecondPointDisplay, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_urgent_open_row_says_urgent_once()
+    {
+        // The red edge and the state word already carry it, and the API leaves 'urgent' in the
+        // modifiers because that is what set the priority. Three times on one row pushed the facts
+        // that are only said once off the end.
+        var row = BoardRowViewModel.FromPrimary(
+            Transport() with { Priority = Priority.Urgent, Modifiers = ["urgent", "danger_close"] },
+            Viewer,
+            DateTimeOffset.UtcNow);
+
+        Assert.Equal("URGENT", row.StateWord);
+        Assert.DoesNotContain("URGENT", row.Tags);
+        Assert.Contains("DANGER CLOSE", row.Tags);
+    }
+
+    [Fact]
+    public void The_urgent_chip_comes_back_when_the_state_word_is_something_else()
+    {
+        // A moved requester takes the state word, so nothing else on the row is carrying urgency.
+        var row = BoardRowViewModel.FromPrimary(
+            Transport() with
+            {
+                Priority = Priority.Urgent,
+                Modifiers = ["urgent"],
+                RequesterMoved = true,
+            },
+            Viewer,
+            DateTimeOffset.UtcNow);
+
+        Assert.Equal("REQUESTER MOVED", row.StateWord);
+        Assert.Contains("URGENT", row.Tags);
     }
 
     private static BoardRowViewModel ViewModel(BoardRow row) =>
