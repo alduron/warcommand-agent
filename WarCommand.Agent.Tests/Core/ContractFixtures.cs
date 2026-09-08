@@ -20,10 +20,14 @@ internal static class ContractFixtures
     private static readonly Lazy<Ballistics> LazyBallistics =
         new(() => Load<Ballistics>(BundledContracts.BallisticsResource));
 
-    private static readonly Lazy<string?> LazyNearFloorJson = new(() => TryReadUmbrella("contracts/generated/near-floor-pairs.json"));
+    private static readonly Lazy<string?> LazyNearFloorJson =
+        new(() => TryRead(UmbrellaDependencies.NearFloorPairs));
 
     private static readonly Lazy<string?> LazyUtterancesYaml =
-        new(() => TryReadUmbrella("warcommand-api/tests/unit/fixtures/utterances.yaml"));
+        new(() => TryRead(UmbrellaDependencies.Utterances));
+
+    private static readonly Lazy<string?> LazyRowFieldsJson =
+        new(() => TryRead(UmbrellaDependencies.RowFields));
 
     public static Catalog Catalog => LazyCatalog.Value;
 
@@ -42,42 +46,28 @@ internal static class ContractFixtures
     /// Convention_WarCommandUtteranceFixtureIsSharedByBothSuites it is never copied or forked, so it
     /// is reachable only from inside the umbrella.
     /// </summary>
-    public static string UtterancesYaml =>
-        LazyUtterancesYaml.Value
-        ?? throw new InvalidOperationException(
-            "warcommand-api/tests/unit/fixtures/utterances.yaml was not found above the solution. It is "
-            + "the shared parse spec and is never copied into this repo; run scripts/bootstrap.ps1 in "
-            + "the umbrella.");
+    public static string UtterancesYaml => Require(UmbrellaDependencies.Utterances, LazyUtterancesYaml.Value);
 
     public static GrammarRulesDef Rules => Catalog.GrammarRules;
-
-    /// <summary>The umbrella's copy of a served contract, or null in a standalone clone.</summary>
-    public static string? UmbrellaContract(string fileName) => TryReadUmbrella($"contracts/{fileName}");
 
     /// <summary>
     /// The row-field parity list. Not a served contract and not bundled: it is the shared fixture
     /// the web suite reads too, so it is reachable only from inside the umbrella.
     /// </summary>
-    public static string RowFieldsJson =>
-        UmbrellaContract("row-fields.json")
-        ?? throw new InvalidOperationException(
-            "contracts/row-fields.json was not found above the solution. It is shared with the web "
-            + "suite and is never copied into this repo; run scripts/bootstrap.ps1 in the umbrella.");
+    public static string RowFieldsJson => Require(UmbrellaDependencies.RowFields, LazyRowFieldsJson.Value);
 
-    private static T Load<T>(string resourceName)
-        where T : class, IValidatableContract
-    {
-        var validation = new ContractValidation();
-        return ContractStore.Parse<T>(BundledContracts.Read(resourceName), validation)
-               ?? throw new InvalidOperationException($"bundled {resourceName} did not parse: {validation}");
-    }
-
-    private static string? TryReadUmbrella(string relative)
+    /// <summary>
+    /// The contents of a DECLARED outside file, or null in a standalone clone. Taking the
+    /// dependency rather than a path is the point: a caller cannot name a file that release.yml
+    /// knows nothing about, which is what made a green local push ship a red release.
+    /// </summary>
+    public static string? TryRead(UmbrellaDependency dependency)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        var relative = dependency.WorkspacePath.Replace('/', Path.DirectorySeparatorChar);
         while (directory is not null)
         {
-            var candidate = Path.Combine(directory.FullName, relative.Replace('/', Path.DirectorySeparatorChar));
+            var candidate = Path.Combine(directory.FullName, relative);
             if (File.Exists(candidate))
             {
                 return File.ReadAllText(candidate);
@@ -87,6 +77,20 @@ internal static class ContractFixtures
         }
 
         return null;
+    }
+
+    private static string Require(UmbrellaDependency dependency, string? content) =>
+        content
+        ?? throw new InvalidOperationException(
+            $"{dependency.WorkspacePath} was not found above the solution. {dependency.Why} Run "
+            + "scripts/bootstrap.ps1 in the umbrella, and see UmbrellaDependencies for how CI fetches it.");
+
+    private static T Load<T>(string resourceName)
+        where T : class, IValidatableContract
+    {
+        var validation = new ContractValidation();
+        return ContractStore.Parse<T>(BundledContracts.Read(resourceName), validation)
+               ?? throw new InvalidOperationException($"bundled {resourceName} did not parse: {validation}");
     }
 }
 

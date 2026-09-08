@@ -83,12 +83,14 @@ public class BundledContractsTests
     }
 
     [Theory]
-    [InlineData(BundledContracts.RequestTypesResource, "request-types.json")]
-    [InlineData(BundledContracts.GameProfileResource, "game-profile.json")]
-    [InlineData(BundledContracts.BallisticsResource, "ballistics.json")]
-    public void The_bundle_matches_the_umbrella_source(string resourceName, string fileName)
+    [InlineData(BundledContracts.RequestTypesResource, "contracts/request-types.json")]
+    [InlineData(BundledContracts.GameProfileResource, "contracts/game-profile.json")]
+    [InlineData(BundledContracts.BallisticsResource, "contracts/ballistics.json")]
+    public void The_bundle_matches_the_umbrella_source(string resourceName, string workspacePath)
     {
-        var umbrella = ContractFixtures.UmbrellaContract(fileName);
+        // By declared dependency, never by a free path: ByWorkspacePath throws on one nothing
+        // knows about rather than quietly reading nothing.
+        var umbrella = ContractFixtures.TryRead(UmbrellaDependencies.ByWorkspacePath(workspacePath));
         if (umbrella is null)
         {
             // A standalone clone has no umbrella to compare against. scripts/contracts.ps1 -Check is

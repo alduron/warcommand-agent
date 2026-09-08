@@ -174,7 +174,11 @@ jobs:
           PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
           PFX_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         shell: pwsh
-        run: ./installer/sign.ps1 -Path publish/WarCommand.Agent.exe
+        # WarCommand.exe, not WarCommand.Agent.exe: the project sets AssemblyName to WarCommand
+        # and that is what publish/ and the installer both carry. sign.ps1 returns before its
+        # Test-Path with no certificate configured, so the wrong name here was silent and would
+        # have gone red on the first signed release.
+        run: ./installer/sign.ps1 -Path publish/WarCommand.exe
 
       # The runner image usually ships Inno Setup already. Reaching for Chocolatey when it is
       # right there is a network call that can rate-limit or 5xx, and it took a release down for

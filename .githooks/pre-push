@@ -3,7 +3,22 @@
 # actually ships. release.yml repeats the gates on a tag, but that is the release, not a gate on
 # main. RELEASE, not Debug: Directory.Build.props sets TreatWarningsAsErrors, so a Debug-only check
 # misses the analyzer gate that CI applies.
+#
+# WHAT IS VERIFIED: the COMMIT being pushed, checked out into a throwaway `git worktree`, never the
+# working tree. A push carries commits; the working tree is a different thing that merely resembles
+# them. Verifying the tree meant a file that was never `git add`ed passed here and failed
+# release.yml, and it meant another session's unrelated in-flight edit turned a green commit red.
+# Both are the same defect and this is the fix. The worktree is removed on success, on failure and
+# on interrupt.
+#
+# The agent suite reads files from OUTSIDE this repo (see UmbrellaDependencies), so the sibling
+# layout is rebuilt beside the temporary checkout with directory junctions: <tmp>/contracts and
+# <tmp>/warcommand-api sit beside <tmp>/warcommand-agent exactly as they do in the umbrella clone.
+# A junction is a link, so cleanup NEVER recurses through one: it unlinks first, then deletes.
+#
 # Set SKIP_VERIFY=1 to bypass the gates, which is for a broken toolchain, never for a red step.
+# Set WARCMD_VERIFY_WORKTREE=0 to run the gates against the WORKING TREE instead, which is the old
+# behaviour and is for debugging this hook, never for a push you intend to keep.
 # Set WARCMD_AUTOTAG=0 to push main without cutting a tag.
 # The body is ONE brace group ending in `exit`, and that is load-bearing rather than style.
 # Bash reads a script from its file in chunks, seeking back to just past the last command it
@@ -27,23 +42,122 @@
   # Read it before anything else: the gates below take minutes and nothing else consumes it.
   main_sha=""
   main_was=""
+  shas=""
   while read -r _local_ref local_sha remote_ref remote_was; do
-    if [ "$remote_ref" = "refs/heads/main" ] && [ "$local_sha" != "$zero" ]; then
+    if [ -z "${local_sha:-}" ] || [ "$local_sha" = "$zero" ]; then continue; fi
+    if [ "$remote_ref" = "refs/heads/main" ]; then
       main_sha="$local_sha"
       main_was="$remote_was"
     fi
+    case " $shas " in *" $local_sha "*) ;; *) shas="$shas $local_sha" ;; esac
   done
 
-  if [ "${SKIP_VERIFY:-0}" = "1" ]; then
-    echo "pre-push: SKIP_VERIFY=1, not verifying." >&2
-  else
-    cd "$(git rev-parse --show-toplevel)"
-    echo "pre-push: running the agent CI locally, Release."
+  root="$(git rev-parse --show-toplevel)"
+  cd "$root"
 
+  # The umbrella clone this repo sits in, or empty in a standalone clone.
+  umbrella=""
+  if [ -f "$root/../contracts/request-types.json" ]; then
+    umbrella="$(cd "$root/.." && pwd)"
+  fi
+
+  # Every check release.yml runs, in the order it runs them.
+  gates() {
+    echo "pre-push: running the agent CI locally, Release."
     dotnet restore WarCommand.Agent.sln
     dotnet build WarCommand.Agent.sln -c Release --no-restore
     dotnet test WarCommand.Agent.sln -c Release --no-build
+  }
 
+  # ---------------------------------------------------------------------------------------------
+  # Worktree plumbing. tmp, tree and links are everything cleanup has to undo.
+  # ---------------------------------------------------------------------------------------------
+  tmp=""
+  tree=""
+  links=""
+
+  cleanup() {
+    trap - EXIT INT TERM HUP
+    if [ -z "$tmp" ]; then return 0; fi
+    stuck=""
+    oldifs="$IFS"
+    IFS=$'\n'
+    for link in $links; do
+      if [ -z "$link" ]; then continue; fi
+      # NEVER `rm -rf` a link: on Windows these are junctions, and recursing one deletes the real
+      # sibling repo it points at. Unlink only.
+      if [ -L "$link" ]; then
+        rm -f "$link" 2>/dev/null || true
+      elif [ -e "$link" ]; then
+        rmdir "$link" 2>/dev/null || true
+      fi
+      if [ -e "$link" ] || [ -L "$link" ]; then stuck="$stuck $link"; fi
+    done
+    IFS="$oldifs"
+    if [ -n "$tree" ]; then
+      git worktree remove --force "$tree" >/dev/null 2>&1 || rm -rf "$tree" 2>/dev/null || true
+    fi
+    git worktree prune >/dev/null 2>&1 || true
+    if [ -n "$stuck" ]; then
+      echo "pre-push: could not unlink$stuck; leaving $tmp on disk rather than deleting through a link." >&2
+    else
+      rm -rf "$tmp" 2>/dev/null || true
+    fi
+    tmp=""
+    tree=""
+    links=""
+  }
+
+  # A directory junction on Windows, a symlink elsewhere. Silent no-op when the source is absent:
+  # a standalone clone has no siblings, and the suite is written to degrade rather than lie.
+  link_dir() {
+    src="$1"
+    dst="$2"
+    if [ ! -d "$src" ]; then return 0; fi
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*)
+        pwsh -NoProfile -NonInteractive -Command \
+          "New-Item -ItemType Junction -Path '$(cygpath -w "$dst")' -Target '$(cygpath -w "$src")' | Out-Null" \
+          >/dev/null
+        ;;
+      *)
+        ln -s "$src" "$dst"
+        ;;
+    esac
+    links="$links"$'\n'"$dst"
+  }
+
+  verify_commit() {
+    sha="$1"
+    tmp="$(mktemp -d)"
+    trap cleanup EXIT INT TERM HUP
+    tree="$tmp/warcommand-agent"
+    # No -c core.autocrlf here, deliberately. The checkout must be filtered EXACTLY as this
+    # machine's own checkout is, because several checks hash a file in the worktree against
+    # the same file in a sibling working tree; a different filter makes them differ over line
+    # endings alone. See Caveat_WarCommandContractCopiesAreComparedByteForByte.
+    git worktree add --detach --quiet "$tree" "$sha"
+    if [ -n "$umbrella" ]; then
+      link_dir "$umbrella/contracts" "$tmp/contracts"
+      link_dir "$umbrella/warcommand-api" "$tmp/warcommand-api"
+    fi
+    ( cd "$tree" && gates )
+    cleanup
+  }
+
+  if [ "${SKIP_VERIFY:-0}" = "1" ]; then
+    echo "pre-push: SKIP_VERIFY=1, not verifying." >&2
+  elif [ "${WARCMD_VERIFY_WORKTREE:-1}" != "1" ]; then
+    echo "pre-push: WARCMD_VERIFY_WORKTREE=0, verifying the WORKING TREE and not what is pushed." >&2
+    gates
+    echo "pre-push: green."
+  elif [ -z "$shas" ]; then
+    echo "pre-push: no commit on stdin, nothing to verify."
+  else
+    for sha in $shas; do
+      echo "pre-push: verifying $sha in a clean worktree."
+      verify_commit "$sha"
+    done
     echo "pre-push: green."
   fi
 
