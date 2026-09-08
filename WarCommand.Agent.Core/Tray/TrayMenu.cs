@@ -72,6 +72,13 @@ public enum TrayCommand
 
     /// <summary>Dev profile only.</summary>
     DevForceOffline,
+
+    /// <summary>
+    /// Dev profile only. Runs the fake coordinate sweep through OnSimulatePttAsync: DevPanel's own
+    /// button is unreachable because OverlayWindow force-collapses it, so this is the one surface
+    /// left to reach that path.
+    /// </summary>
+    SimulatePtt,
 }
 
 /// <summary>One monitor the overlay can be put on.</summary>
@@ -765,6 +772,10 @@ public static class TrayMenu
         {
             return;
         }
+
+        // DevPanel's own button never renders: OverlayWindow always calls SetOverlayMode(true),
+        // which force-collapses it regardless of SetDevControlsVisible. This is the reachable path.
+        items.Add(new TrayMenuItem { Text = "Simulate PTT", Command = TrayCommand.SimulatePtt });
 
         items.Add(new TrayMenuItem
         {

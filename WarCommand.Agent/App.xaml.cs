@@ -1970,6 +1970,9 @@ public partial class App : Application, IDisposable
             case TrayCommand.SelectBackend:
                 SelectBackend(invoked.Argument);
                 break;
+            case TrayCommand.SimulatePtt:
+                _ = OnSimulatePttAsync(null);
+                break;
             case TrayCommand.Quit:
                 Shutdown();
                 break;
@@ -2603,7 +2606,12 @@ public partial class App : Application, IDisposable
     /// the real PTT path would use, so this proves the fake source's wiring rather than just its
     /// constructor. There is no game, no capture and no microphone anywhere in this call.
     /// </summary>
-    private async Task OnSimulatePttAsync(BoardView window)
+    /// <param name="window">
+    /// The overlay's board, or null from the dev tray row: DevPanel's own button never renders
+    /// because OverlayWindow force-collapses it, so that path has nowhere to write and reports
+    /// through the status strip instead.
+    /// </param>
+    private async Task OnSimulatePttAsync(BoardView? window)
     {
         if (_devCoordinateSources is null)
         {
@@ -2611,9 +2619,17 @@ public partial class App : Application, IDisposable
         }
 
         var point = await _devCoordinateSources.ReadAsync(CancellationToken.None).ConfigureAwait(true);
-        window.ShowSimulatedPoint(point is null
+        var text = point is null
             ? "no coordinate source answered"
-            : FormattableString.Invariant($"{point.Source}: x{point.X:0.00} y{point.Y:0.00}"));
+            : FormattableString.Invariant($"{point.Source}: x{point.X:0.00} y{point.Y:0.00}");
+
+        if (window is not null)
+        {
+            window.ShowSimulatedPoint(text);
+            return;
+        }
+
+        _observer?.SetFault(text);
     }
 
     private async Task RunAgentLoopAsync(AgentProfile profile, AgentPaths paths, RollingFileLog log, BoardPresenter presenter)

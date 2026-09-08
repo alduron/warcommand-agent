@@ -194,6 +194,15 @@ public class TrayMenuTests
     }
 
     [Fact]
+    public void Simulate_ptt_is_dev_only()
+    {
+        Assert.Null(Find(TrayMenu.Build(Empty), TrayCommand.SimulatePtt));
+
+        var dev = TrayMenu.Build(Empty with { IsDev = true });
+        Assert.NotNull(Find(dev, TrayCommand.SimulatePtt));
+    }
+
+    [Fact]
     public void Every_rendered_row_is_a_label_a_parent_or_a_command()
     {
         var full = new TrayMenuState
