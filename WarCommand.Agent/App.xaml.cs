@@ -406,6 +406,9 @@ public partial class App : Application, IDisposable
             {
                 var surface = new OverlayWindow();
                 presenter.Add(surface.BoardView);
+                // Dev-only: OnSimulatePttAsync no-ops when _devCoordinateSources is unset, which is
+                // every non-dev profile.
+                surface.BoardView.SimulatePttRequested += (_, _) => _ = OnSimulatePttAsync(surface.BoardView);
                 return surface;
             },
             // The one case the strip cannot answer: the overlay cannot draw over exclusive
