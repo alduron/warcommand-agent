@@ -90,10 +90,6 @@ public interface IRealtimeObserver
     {
     }
 
-    void OnRequestStarted(RequestStartedPayload payload)
-    {
-    }
-
     /// <summary>On outcome unable the row returns to open and the payload carries the whole body.</summary>
     void OnRequestCompleted(RequestCompletedPayload payload)
     {

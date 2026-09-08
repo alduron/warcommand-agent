@@ -525,10 +525,6 @@ public sealed class RealtimeClient : IAsyncDisposable
                 Deliver<RequestClaimedPayload>(envelope, _observer.OnRequestClaimed);
                 break;
 
-            case FrameTypes.RequestStarted:
-                Deliver<RequestStartedPayload>(envelope, _observer.OnRequestStarted);
-                break;
-
             case FrameTypes.RequestCompleted:
                 Deliver<RequestCompletedPayload>(envelope, _observer.OnRequestCompleted);
                 break;

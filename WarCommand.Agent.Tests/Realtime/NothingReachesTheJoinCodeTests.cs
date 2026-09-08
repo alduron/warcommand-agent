@@ -83,7 +83,7 @@ public sealed class NothingReachesTheJoinCodeTests
             "Attach", "Detach", "Render", "TurnPage", "ExpireNotice",
             "SetFault", "SetNote", "SetHint", "SetRoles", "SetGunPosition",
             "OnConnectionStateChanged", "OnReady", "OnBoardStalenessChanged", "OnAnotherDeviceOnBoard",
-            "OnRequestSubmitted", "OnRequestClaimed", "OnRequestStarted",
+            "OnRequestSubmitted", "OnRequestClaimed",
             "OnRequestReleased", "OnRequestEscalated", "OnRequestCompleted", "OnRequestAdvanced",
             "OnRequestAbandoned", "OnRequestReopened", "OnRequestSuperseded", "OnClaimsReconcile",
             "OnErrorFrame", "OnBoardCleared", "OnDeploymentEntered", TheOneWriter,

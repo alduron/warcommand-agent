@@ -274,27 +274,6 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     }
 
     /// <summary>
-    /// START moved the row on. The local VERSION has to move with it.
-    /// </summary>
-    /// <remarks>
-    /// This frame was never handled, so the row kept the version it had before START while the
-    /// server bumped it. Every later DONE, RELEASE or START sent the stale version, the server's
-    /// conditional update matched nothing, and the 409 was swallowed. A provider who pressed START
-    /// could never close the job, and a claimed row never expires, so it sat there until the
-    /// deployment did.
-    /// </remarks>
-    public void OnRequestStarted(RequestStartedPayload payload)
-    {
-        ArgumentNullException.ThrowIfNull(payload);
-
-        OnUi(() =>
-        {
-            _board?.ApplyProgress(payload.RequestId, RequestState.InProgress, payload.Version);
-            Render();
-        });
-    }
-
-    /// <summary>
     /// The server refused something. Say so.
     /// </summary>
     /// <remarks>

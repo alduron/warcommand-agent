@@ -24,7 +24,6 @@ public static class FrameTypes
     // Server to client, domain.
     public const string RequestSubmitted = "request.submitted";
     public const string RequestClaimed = "request.claimed";
-    public const string RequestStarted = "request.started";
     public const string RequestAdvanced = "request.advanced";
     public const string RequestCompleted = "request.completed";
     public const string RequestReleased = "request.released";
@@ -343,13 +342,6 @@ public sealed record RequestClaimedPayload
     public required Guid ClaimedByParticipantId { get; init; }
 
     public required string Callsign { get; init; }
-
-    public required int Version { get; init; }
-}
-
-public sealed record RequestStartedPayload
-{
-    public required Guid RequestId { get; init; }
 
     public required int Version { get; init; }
 }
