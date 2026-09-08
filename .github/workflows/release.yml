@@ -19,6 +19,13 @@ on:
 permissions:
   contents: write
 
+# One release at a time. Two tags pushed close together both write the same `latest` pointer that
+# the API polls, and the loser wins silently. Never cancel one in flight: a half-published release
+# leaves an installer with no manifest beside it.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 defaults:
   run:
     working-directory: warcommand-agent
@@ -31,8 +38,9 @@ jobs:
     # whole suite finishes in eight seconds, so anything past this is a hang, not slowness.
     timeout-minutes: 20
     steps:
-      # The umbrella layout, for the same reason ci.yml uses it: three tests read the shared parse
-      # spec out of the sibling repo by walking up from the solution.
+      # Checked out into warcommand-agent/ rather than the workspace root: three tests read the
+      # shared parse spec out of the SIBLING repo by walking up from the solution. That is the
+      # umbrella layout, and this job has to reproduce it or those tests cannot run.
       - uses: actions/checkout@v4
         with:
           path: warcommand-agent
@@ -55,6 +63,7 @@ jobs:
       # without it: two IntentParser rows resolve differently. Sparse, read-only, same deploy-key
       # pattern as above.
       - name: Check out the generated contracts
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: alduron/warcommand
@@ -69,9 +78,14 @@ jobs:
         shell: bash
         working-directory: .
         run: |
+          # Tolerant on purpose. If the umbrella checkout was skipped, dying here with a raw `cp`
+          # error hides the reason; the next step names the missing deploy key instead.
           mkdir -p contracts
-          cp -r _umbrella/contracts/generated contracts/generated
-          test -f contracts/generated/near-floor-pairs.json
+          if [ -d _umbrella/contracts/generated ]; then
+            cp -r _umbrella/contracts/generated contracts/generated
+          else
+            echo "the umbrella checkout produced nothing; the next step reports why"
+          fi
 
       - name: Confirm the parse spec is present
         shell: bash
@@ -107,8 +121,18 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           "setup=WarCommand-Setup-$version.exe" >> $env:GITHUB_OUTPUT
 
+      # Three attempts, because this is the one step that reaches nuget.org and a transient 5xx
+      # there has nothing to do with the code being released.
       - name: Restore
-        run: dotnet restore WarCommand.Agent.sln
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if dotnet restore WarCommand.Agent.sln; then exit 0; fi
+            echo "restore attempt $attempt failed"
+            sleep $((attempt * 15))
+          done
+          echo "::error::dotnet restore failed three times. nuget.org, not this repo."
+          exit 1
 
       - name: Build
         run: dotnet build WarCommand.Agent.sln -c Release --no-restore -p:Version=${{ steps.version.outputs.version }}
@@ -140,14 +164,46 @@ jobs:
         shell: pwsh
         run: ./installer/sign.ps1 -Path publish/WarCommand.Agent.exe
 
-      - name: Install Inno Setup
+      # The runner image usually ships Inno Setup already. Reaching for Chocolatey when it is
+      # right there is a network call that can rate-limit or 5xx, and it took a release down for
+      # a reason that had nothing to do with the agent. Look first, install only if missing, and
+      # pin the version so a new upstream release cannot change the installer under us.
+      - name: Ensure Inno Setup
+        id: inno
         shell: pwsh
-        run: choco install innosetup --no-progress -y
+        run: |
+          # Found, never assumed. The old line hardcoded "Inno Setup 6", so the day the pin moves
+          # to 7 the build would install fine and then fail looking in the wrong folder.
+          function Find-Iscc {
+            Get-ChildItem -Path @("${env:ProgramFiles(x86)}", $env:ProgramFiles) `
+              -Filter ISCC.exe -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+
+          $iscc = Find-Iscc
+          if (-not $iscc) {
+            Write-Host "Inno Setup is not on the image, installing $env:INNO_VERSION."
+            foreach ($attempt in 1..3) {
+              choco install innosetup --version=$env:INNO_VERSION --no-progress -y
+              $iscc = Find-Iscc
+              if ($iscc) { break }
+              Write-Host "attempt $attempt failed"
+              Start-Sleep -Seconds ($attempt * 15)
+            }
+          }
+          if (-not $iscc) {
+            Write-Host "::error::Inno Setup could not be installed after three attempts. Chocolatey, not this repo."
+            exit 1
+          }
+          Write-Host "ISCC: $iscc"
+          "iscc=$iscc" >> $env:GITHUB_OUTPUT
+        env:
+          INNO_VERSION: '6.2.2'
 
       - name: Build the installer
         shell: pwsh
         run: |
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          $iscc = '${{ steps.inno.outputs.iscc }}'
           & $iscc `
             /DAppVersion=${{ steps.version.outputs.version }} `
             /Oartifacts `

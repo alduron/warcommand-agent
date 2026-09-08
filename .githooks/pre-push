@@ -1,20 +1,36 @@
 #!/usr/bin/env bash
-# Runs the build and test gates from .github/workflows/ci.yml and refuses the push if either
-# fails. RELEASE, not Debug: Directory.Build.props sets TreatWarningsAsErrors, so a Debug-only
-# check misses the analyzer gate that CI applies.
+# Runs the build and test gates and refuses the push if either fails. release.yml repeats them
+# on a tag, but that is the release, not a gate on main. RELEASE, not Debug: Directory.Build.props
+# sets TreatWarningsAsErrors, so a Debug-only check misses the analyzer gate that CI applies.
 # Set SKIP_VERIFY=1 to bypass, which is for a broken toolchain, never for a red step.
-set -euo pipefail
+# The body is ONE brace group ending in `exit`, and that is load-bearing rather than style.
+# Bash reads a script from its file in chunks, seeking back to just past the last command it
+# parsed, so a script edited WHILE IT RUNS resumes at a stale byte offset and runs garbage. A
+# parallel session touching this file mid-push produced exactly that:
+#
+#   .githooks/pre-push: line 18: nt.sln: command not found
+#
+# and the push was refused for a reason that had nothing to do with the code. A brace group is
+# parsed in full before any of it runs, and the `exit` means nothing past the closing brace is
+# ever read. Several sessions work in these repos at once; a gate somebody else's editor can
+# break is not a gate.
 
-if [ "${SKIP_VERIFY:-0}" = "1" ]; then
-  echo "pre-push: SKIP_VERIFY=1, not verifying." >&2
+{
+  set -euo pipefail
+
+  if [ "${SKIP_VERIFY:-0}" = "1" ]; then
+    echo "pre-push: SKIP_VERIFY=1, not verifying." >&2
+    exit 0
+  fi
+
+  cd "$(git rev-parse --show-toplevel)"
+  echo "pre-push: running the agent CI locally, Release."
+
+  dotnet restore WarCommand.Agent.sln
+  dotnet build WarCommand.Agent.sln -c Release --no-restore
+  dotnet test WarCommand.Agent.sln -c Release --no-build
+
+  echo "pre-push: green."
+
   exit 0
-fi
-
-cd "$(git rev-parse --show-toplevel)"
-echo "pre-push: running the agent CI locally, Release."
-
-dotnet restore WarCommand.Agent.sln
-dotnet build WarCommand.Agent.sln -c Release --no-restore
-dotnet test WarCommand.Agent.sln -c Release --no-build
-
-echo "pre-push: green."
+}
