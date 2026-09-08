@@ -21,11 +21,30 @@ internal static class Sta
     /// <summary>How long a UI body may take before the test fails rather than waits.</summary>
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(60);
 
+    /// <summary>One STA body at a time, across the whole run.</summary>
+    /// <remarks>
+    /// xUnit runs test classes in parallel, so without this two STA threads call
+    /// Application.LoadComponent at once. That walks System.IO.Packaging.PackagePart, whose
+    /// CleanUpRequestedStreamsList is not thread safe: it throws ArgumentOutOfRangeException out of
+    /// List.RemoveAt and the XAML load fails for a reason that has nothing to do with the test.
+    /// It is a race, so it passes locally and fails on a CI runner, which is where it failed the
+    /// v0.4.7 release build with 1128 of 1129 green.
+    /// </remarks>
+    private static readonly object Gate = new();
+
     /// <summary>Runs <paramref name="body"/> on a background STA thread and rethrows what it threw.</summary>
     public static void Run(Action body)
     {
         ArgumentNullException.ThrowIfNull(body);
 
+        lock (Gate)
+        {
+            RunAlone(body);
+        }
+    }
+
+    private static void RunAlone(Action body)
+    {
         Exception? failure = null;
 
         var thread = new Thread(() =>
