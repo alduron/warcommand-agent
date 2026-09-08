@@ -129,17 +129,31 @@ public sealed class BoardState
         [.. AllLines.Skip(Page * PageSize).Take(PageSize)];
 
     /// <summary>
-    /// Every actionable row on every page, in board order: the claimable rows, the ones in YOURS
-    /// that hold a digit, then overflow.
+    /// Every actionable row on every page, in board order: the claimable rows, ALL of YOURS, then
+    /// overflow.
     /// </summary>
     /// <remarks>
     /// Overflow is on the end rather than absent. A digit is a scarce resource and nine is all
     /// there are, but a row past nine was unreachable by ANY route: it drew as part of a
     /// <c>...12 more</c> count, answered to no number, and the only thing that ever brought it
     /// back was a digit falling free. On a saturated board that is a queue nobody can work.
+    /// <para>
+    /// YOURS is taken WHOLE, not filtered to slot holders. A slot is an admission token for the
+    /// claimable queue and a row in YOURS is past being claimed: ApplyClaim releases the digit for
+    /// everyone who is not the claimant, the requester included, and their row still draws in
+    /// YOURS. Filtering on it meant a job you asked for and somebody else took answered to no
+    /// number at all, so CANCEL existed for a row no key could reach.
+    /// </para>
+    /// <para>
+    /// Overflow drops anything already counted in YOURS: a shared row you joined stays Open and
+    /// holds no digit, so it satisfies both and would otherwise draw twice on one page.
+    /// </para>
     /// </remarks>
     private IReadOnlyList<BoardRow> AllLines =>
-        [.. Rows, .. Yours.Where(r => r.HoldsSlot), .. Overflow];
+        [.. Rows, .. Yours, .. Overflow.Where(r => !r.RendersInYours(ViewerParticipantId))];
+
+    /// <summary>How many lines the board spans across every page.</summary>
+    public int LineCount => AllLines.Count;
 
     /// <summary>Lines on one page. Nine, because that is how many digits there are.</summary>
     public int PageSize => Allocator.MaxSlots;
@@ -292,7 +306,7 @@ public sealed class BoardState
     }
 
     /// <summary>
-    /// Moves a row along without changing who holds it: start, rounds away, adjust.
+    /// Moves a row along without changing who holds it.
     /// </summary>
     /// <remarks>
     /// The VERSION is the point. Every transition is a conditional update on it, so a row whose

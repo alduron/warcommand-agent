@@ -149,8 +149,7 @@ public class BoardStateTests
     [Fact]
     public void A_row_the_viewer_claimed_moves_to_yours_and_keeps_its_digit()
     {
-        // The digit has to survive: done, start, splash, adjust, release, solution and copy all
-        // address a row by it.
+        // The digit has to survive: done, release, solution and copy all address a row by it.
         var board = NewBoard();
         var row = Rows.A();
         board.Upsert(row, T0);

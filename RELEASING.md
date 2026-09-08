@@ -3,10 +3,24 @@
 One tag ships the agent. Nothing else moves: no API deploy, no web deploy, no edit to a JSON file
 in another repo.
 
+**A push to `main` cuts that tag for you.** `.githooks/pre-push` runs the gates, then tags the
+pushed commit with the next patch version and pushes the tag. An untagged main reaches nobody: the
+update check correctly reports the last published release, so code that only sits on main reads to
+every installed agent as a broken updater.
+
+```powershell
+git push origin main        # gates, then tags v0.4.4 and pushes it
+```
+
+Cut a minor or major by hand, before the branch push, and the hook leaves it alone:
+
 ```powershell
 git tag v1.4.0
 git push origin v1.4.0
+git push origin main
 ```
+
+`WARCMD_AUTOTAG=0` pushes main without a tag, for a commit that genuinely ships nothing.
 
 `.github/workflows/release.yml` then builds, tests, packages, and publishes a GitHub Release. Within
 five minutes `warcommand.app/download` shows the new version and checksum.

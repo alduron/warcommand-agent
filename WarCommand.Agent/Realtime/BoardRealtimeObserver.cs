@@ -294,31 +294,6 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         });
     }
 
-    /// <inheritdoc />
-    /// <remarks>Non-terminal: the row stays in progress and only its version moves.</remarks>
-    public void OnRequestRoundsAway(RequestRoundsAwayPayload payload)
-    {
-        ArgumentNullException.ThrowIfNull(payload);
-
-        OnUi(() =>
-        {
-            _board?.ApplyProgress(payload.RequestId, RequestState.InProgress, payload.Version);
-            Render();
-        });
-    }
-
-    /// <inheritdoc />
-    public void OnRequestAdjusted(RequestAdjustedPayload payload)
-    {
-        ArgumentNullException.ThrowIfNull(payload);
-
-        OnUi(() =>
-        {
-            _board?.ApplyProgress(payload.RequestId, RequestState.InProgress, payload.Version);
-            Render();
-        });
-    }
-
     /// <summary>
     /// The server refused something. Say so.
     /// </summary>
@@ -354,28 +329,22 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
     public void OnRequestCompleted(RequestCompletedPayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
-
-        if (payload.ReturnsToOpen)
-        {
-            Upsert(payload.ReopenedRow);
-            return;
-        }
-
         Remove(payload.RequestId);
     }
 
     /// <inheritdoc />
-    public void OnRequestCancelled(RequestCancelledPayload payload)
+    public void OnRequestAbandoned(RequestAbandonedPayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
         Remove(payload.RequestId);
     }
 
     /// <inheritdoc />
-    public void OnRequestExpired(RequestExpiredPayload payload)
+    /// <remarks>A full row, because the board dropped it when it went terminal.</remarks>
+    public void OnRequestReopened(RequestReopenedPayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        Remove(payload.RequestId);
+        Upsert(payload);
     }
 
     /// <summary>Terminal. The successor arrives as its own submitted frame.</summary>
@@ -628,14 +597,21 @@ public sealed class BoardRealtimeObserver : IRealtimeObserver
         // because a digit naming a row nobody can see is a key that does the wrong thing.
         var yours = board.Yours
             .Select(r => BoardRowViewModel
-                .FromSecondary(r, now, unitsToMeters, _viewerId, line.TryGetValue(r.Id, out var n) ? n : null)
+                .FromPrimary(
+                    r,
+                    _viewerId,
+                    now,
+                    unitsToMeters,
+                    fire,
+                    _catalog(),
+                    line.TryGetValue(r.Id, out var n) ? n : null,
+                    RowSurface.Active)
                 .WithGlyph(glyphs))
             .ToList();
 
         // Rows off this page, not rows without a digit. With paging the two stopped being the same
         // thing: on page 2 of 3 the count is what is still behind and ahead of the window.
-        var offPage = board.Overflow.Count + board.Rows.Count + board.Yours.Count(r => r.HoldsSlot)
-            - page.Count;
+        var offPage = board.LineCount - page.Count;
         var urgent = board.Overflow.Count(r => r.Priority == Priority.Urgent);
 
         _presenter.RenderBoard(

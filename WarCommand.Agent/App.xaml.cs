@@ -131,6 +131,9 @@ public partial class App : Application, IDisposable
     private LocalPairingListener? _localLink;
     private string? _currentUserId;
 
+    /// <summary>Callsign of the held account. Served on the loopback hello so a page can name it.</summary>
+    private string? _currentCallsign;
+
     /// <summary>True once a provider account is held. A guest is not one. See ArmForAccount.</summary>
     private bool _hasProviderAccount;
     private TokenStore? _tokenStore;
@@ -1072,13 +1075,7 @@ public partial class App : Application, IDisposable
                 break;
 
             case ParsedCommand { Slot: { } slot } command:
-                RunBoardVerb(
-                    new MenuBoardAction(command.VerbId, slot)
-                    {
-                        Direction = command.Direction,
-                        Metres = command.Metres,
-                    },
-                    log);
+                RunBoardVerb(new MenuBoardAction(command.VerbId, slot), log);
                 break;
 
             // The verbs that name no row. clear is the only undo mute has, and BoardState.ClearMutes
@@ -1646,20 +1643,16 @@ public partial class App : Application, IDisposable
         var sent = action.VerbId switch
         {
             "accept" => realtime.Claim(row.Id, row.Version),
-            "done" => realtime.Complete(row.Id, Outcome.Serviced, null, null, row.Version),
+            "done" => realtime.Complete(row.Id, row.Version),
             "release" => realtime.Release(row.Id, row.Version),
             "pass" => board.Pass(row.Id, DateTimeOffset.UtcNow),
             "mute" => board.MuteRequester(row.RequestedByParticipantId, DateTimeOffset.UtcNow) > 0,
             "copy" => CopyPoint(row),
 
-            // These parse from voice and used to fall to the default, so "splash 3", "adjust 3",
-            // "cancel 3" and "recall 3" did nothing but write a log line reading "refused". The
-            // whole spotter correction loop was unreachable, and a requester had no way to cancel
-            // their own request from the agent at all.
-            "rounds_away" => realtime.RoundsAway(row.Id, row.Version),
-            "cancel" or "recall" => realtime.Cancel(row.Id, row.Version),
-            "adjust" when action.Direction is { } direction =>
-                realtime.Adjust(row.Id, direction, action.Metres, row.Version),
+            // These parse from voice and used to fall to the default, so "cancel 3" and "recall 3"
+            // did nothing but write a log line reading "refused", and a requester had no way to
+            // cancel their own request from the agent at all.
+            "cancel" or "recall" => realtime.Abandon(row.Id, row.Version),
             _ => false,
         };
 
@@ -2739,6 +2732,7 @@ public partial class App : Application, IDisposable
     private void AdoptAccount(MeResponse me)
     {
         _currentUserId = me.User.Id.ToString();
+        _currentCallsign = me.User.Callsign;
         _hasProviderAccount = me.User.AuthProvider is { Length: > 0 } provider
             && !string.Equals(provider, GuestAuthProvider, StringComparison.OrdinalIgnoreCase);
         _menuState = _menuState with
@@ -3587,7 +3581,8 @@ public partial class App : Application, IDisposable
             },
             () => _currentUserId,
             log,
-            () => tokenStore.DeviceId?.ToString());
+            () => tokenStore.DeviceId?.ToString(),
+            () => _currentCallsign);
 
         // Raised on the listener's thread, so the reload is marshalled back onto the dispatcher.
         _localLink.Paired += (_, _) => Dispatcher.InvokeAsync(async () =>
@@ -3694,7 +3689,15 @@ public partial class App : Application, IDisposable
                 .WithGlyph(glyphs))
             .ToList();
         var yours = board.Yours
-            .Select(r => BoardRowViewModel.FromSecondary(r, now, unitsToMeters, viewerId).WithGlyph(glyphs))
+            .Select(r => BoardRowViewModel
+                .FromPrimary(
+                    r,
+                    viewerId,
+                    now,
+                    unitsToMeters,
+                    catalog: BundledContracts.Catalog().Current,
+                    surface: RowSurface.Active)
+                .WithGlyph(glyphs))
             .ToList();
         var overflow = board.Overflow;
         var overflowUrgent = overflow.Count(r => r.Priority == Priority.Urgent);

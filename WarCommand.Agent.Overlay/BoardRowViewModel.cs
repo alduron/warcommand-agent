@@ -33,6 +33,19 @@ public enum RowAccent
 }
 
 /// <summary>
+/// Which list a row is being built for. It changes the state word and nothing else: every other
+/// fact is carried on both.
+/// </summary>
+public enum RowSurface
+{
+    /// <summary>The claimable queue. The state word says whether the row is the viewer's.</summary>
+    Queue = 0,
+
+    /// <summary>ACTIVE, the viewer's own work. The state word names the counterparty.</summary>
+    Active,
+}
+
+/// <summary>
 /// One row, already formatted for display. The window binds to this rather than to
 /// <see cref="BoardRow"/> directly, so every formatting rule from 06-overlay-ux.md lives in one
 /// place instead of being reinvented in XAML converters.
@@ -224,6 +237,15 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
     private string _ageDisplay = string.Empty;
 
+    /// <summary>The requester's note, quoted. Empty on a row carrying none, which collapses it.</summary>
+    public string NoteDisplay
+    {
+        get => _noteDisplay;
+        set => Set(ref _noteDisplay, value);
+    }
+
+    private string _noteDisplay = string.Empty;
+
     public required string TicketCode
     {
         get => _ticketCode;
@@ -327,6 +349,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         LegDisplay = other.LegDisplay;
         Requester = other.Requester;
         AgeDisplay = other.AgeDisplay;
+        NoteDisplay = other.NoteDisplay;
         StateWord = other.StateWord;
         Accent = other.Accent;
         RowOpacity = other.RowOpacity;
@@ -631,7 +654,8 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         decimal? unitsToMeters = null,
         FireContext? fire = null,
         Catalog? catalog = null,
-        int? line = null)
+        int? line = null,
+        RowSurface surface = RowSurface.Queue)
     {
         ArgumentNullException.ThrowIfNull(row);
 
@@ -649,7 +673,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         var takenFromMe = row.IsHeld && !mine && row.IsRequestedBy(viewerParticipantId);
         var urgent = row.Priority == Priority.Urgent && row.IsOpen;
 
-        var (accent, word) = Accented(row, mine, takenFromMe, urgent);
+        var (accent, word) = Accented(row, mine, takenFromMe, urgent, surface);
         var (showBar, barFraction) = Countdown(row, now);
 
         // Urgency is already the red edge AND the state word, and the API leaves 'urgent' in the
@@ -665,7 +689,7 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
         // YOU, not your own callsign. Your own request is always on your board, whatever roles you
         // run, because you have to be able to watch it and cancel it. Printed as a callsign it
         // looks identical to work addressed to you, which reads as the role filter being broken.
-        var requester = row.IsRequestedBy(viewerParticipantId) ? "YOU" : row.RequestedByCallsign;
+        var requester = Requesters(row, viewerParticipantId);
 
         return new BoardRowViewModel
         {
@@ -676,13 +700,14 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
             TypeAndQualifier = row.OverlayLabel.ToUpperInvariant(),
             TagsDisplay = tags.ToUpperInvariant(),
             Tags = tagList,
-            Chips = Chipped(tagList, row.ReleaseCount),
+            Chips = Chipped(tagList, row),
             CoordinatesDisplay = primary,
             SecondPointDisplay = second,
             LegDisplay = Leg(row, unitsToMeters),
             SolutionDisplay = Solution(row, fire, now),
             Requester = requester,
             AgeDisplay = FormatAge(now - row.CreatedAt),
+            NoteDisplay = string.IsNullOrWhiteSpace(row.Note) ? string.Empty : $"\"{row.Note.Trim()}\"",
             TicketCode = row.TicketCode,
             StateWord = word,
             Accent = accent,
@@ -696,20 +721,28 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     /// One accent per row, in the precedence the row gallery draws: the viewer's own claim wins,
     /// then a warning about the point, then urgency.
     /// </summary>
+    /// <remarks>
+    /// The state word names the counterparty in both directions and in one shape: FOR the person
+    /// who asked, BY the person doing it. In ACTIVE every row is already the viewer's, so [YOU]
+    /// carries nothing and the counterparty takes the slot.
+    /// </remarks>
     private static (RowAccent Accent, string? Word) Accented(
         BoardRow row,
         bool mine,
         bool takenFromMe,
-        bool urgent)
+        bool urgent,
+        RowSurface surface)
     {
         if (mine)
         {
-            return (RowAccent.Mine, "[YOU]");
+            return surface == RowSurface.Active
+                ? (RowAccent.Mine, Fragment("FOR", row.RequestedByCallsign) ?? "[YOU]")
+                : (RowAccent.Mine, "[YOU]");
         }
 
         if (takenFromMe)
         {
-            return (RowAccent.Warned, row.ClaimantCallsign?.ToUpperInvariant() ?? "TAKEN");
+            return (RowAccent.Warned, Fragment("BY", row.ClaimantCallsign) ?? "TAKEN");
         }
 
         if (row.RequesterMoved)
@@ -726,56 +759,35 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// A row for the YOURS section: one the viewer claimed, or one of theirs somebody took.
+    /// The tags, then RETRY, then the roles past the one the glyph draws, in band order.
     /// </summary>
-    /// <remarks>
-    /// The right-hand word is always the OTHER person, because that is who you would talk to. If
-    /// you took the job it names who wants it; if somebody took your request it names who has it.
-    /// Which side you are on is carried by the colour, green for yours to do and amber for news.
-    /// </remarks>
-    public static BoardRowViewModel FromSecondary(
-        BoardRow row,
-        DateTimeOffset now,
-        decimal? unitsToMeters = null,
-        Guid viewerParticipantId = default,
-        int? line = null)
+    private static IReadOnlyList<string> Chipped(IReadOnlyList<string> tags, BoardRow row)
     {
-        ArgumentNullException.ThrowIfNull(row);
-        var primary = row.Points.Count > 0 ? FormatCoordinate(row.Points[0].Point) : string.Empty;
+        var chips = new List<string>(tags.Count + 2);
+        chips.AddRange(tags);
 
-        var mine = row.IsClaimedBy(viewerParticipantId);
-        var takenFromMe = row.IsHeld && !mine && row.IsRequestedBy(viewerParticipantId);
-
-        var (accent, counterparty) = mine
-            ? (RowAccent.Mine, Fragment("FOR", row.RequestedByCallsign))
-            : takenFromMe
-                ? (RowAccent.Warned, Fragment(null, row.ClaimantCallsign))
-                : (RowAccent.None, StripState(row, now));
-
-        return new BoardRowViewModel
+        if (row.ReleaseCount > 0)
         {
-            SlotDisplay = Number(line, row),
-            RoleId = row.TargetRoleIds.Count > 0 ? row.TargetRoleIds[0] : string.Empty,
-            TypeAndQualifier = row.OverlayLabel.ToUpperInvariant(),
-            CoordinatesDisplay = primary,
-            Requester = row.RequestedByCallsign,
-            AgeDisplay = FormatAge(now - row.CreatedAt),
-            TicketCode = row.TicketCode,
-            LegDisplay = Leg(row, unitsToMeters),
-            Accent = accent,
-            StateWord = counterparty,
-        };
-    }
-
-    /// <summary>The tags plus RETRY, in the order the band draws them.</summary>
-    private static IReadOnlyList<string> Chipped(IReadOnlyList<string> tags, int releaseCount)
-    {
-        if (releaseCount <= 0)
-        {
-            return tags;
+            chips.Add($"RETRY x{row.ReleaseCount.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        return [.. tags, $"RETRY x{releaseCount.ToString(CultureInfo.InvariantCulture)}"];
+        if (row.TargetRoleIds.Count > 1)
+        {
+            chips.Add($"+{(row.TargetRoleIds.Count - 1).ToString(CultureInfo.InvariantCulture)} ROLES");
+        }
+
+        return chips.Count == tags.Count ? tags : chips;
+    }
+
+    /// <summary>
+    /// Who asked. YOU for the viewer's own row, and '+N' for the others coalesced onto it.
+    /// </summary>
+    private static string Requesters(BoardRow row, Guid viewerParticipantId)
+    {
+        var lead = row.IsRequestedBy(viewerParticipantId) ? "YOU" : row.RequestedByCallsign;
+        return row.CoRequesterCount > 1
+            ? $"{lead} +{(row.CoRequesterCount - 1).ToString(CultureInfo.InvariantCulture)}"
+            : lead;
     }
 
     /// <summary>A callsign, uppercased, optionally with a one-word lead. Never a sentence.</summary>
@@ -788,23 +800,5 @@ public sealed class BoardRowViewModel : INotifyPropertyChanged
 
         var name = callsign.ToUpperInvariant();
         return lead is null ? name : $"{lead} {name}";
-    }
-
-    /// <summary>
-    /// The strip's right-hand word, from the requester-feedback list in OverlayStrip.dc.html: who
-    /// holds it and for how long, or what ended it.
-    /// </summary>
-    private static string StripState(BoardRow row, DateTimeOffset now)
-    {
-        var age = FormatAge(now - row.CreatedAt);
-        var who = row.ClaimantCallsign?.ToUpperInvariant();
-
-        return row.State switch
-        {
-            RequestState.InProgress when who is not null => $"{who} WORKING {age}",
-            RequestState.Claimed when who is not null => $"{who} {age}",
-            RequestState.Open => $"OPEN {age}",
-            _ => age,
-        };
     }
 }

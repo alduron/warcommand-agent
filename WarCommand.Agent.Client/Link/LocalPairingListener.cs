@@ -22,6 +22,10 @@ public sealed record LocalPairingHello
     [JsonPropertyName("user_id")]
     public string? UserId { get; init; }
 
+    /// <summary>Callsign of the account the agent holds, so a page can name it. Null when unheld.</summary>
+    [JsonPropertyName("user_callsign")]
+    public string? UserCallsign { get; init; }
+
     /// <summary>This device's registration, so the devices page can mark which row is this machine.</summary>
     [JsonPropertyName("device_id")]
     public string? DeviceId { get; init; }
@@ -69,6 +73,7 @@ public sealed class LocalPairingListener : IDisposable
     private readonly LocalPairingOptions _options;
     private readonly Func<string, CancellationToken, Task> _redeem;
     private readonly Func<string?> _currentUserId;
+    private readonly Func<string?> _currentUserCallsign;
     private readonly Func<string?> _currentDeviceId;
     private readonly IClientLog _log;
     private readonly CancellationTokenSource _stopping = new();
@@ -81,7 +86,8 @@ public sealed class LocalPairingListener : IDisposable
         Func<string, CancellationToken, Task> redeem,
         Func<string?> currentUserId,
         IClientLog? log = null,
-        Func<string?>? currentDeviceId = null)
+        Func<string?>? currentDeviceId = null,
+        Func<string?>? currentUserCallsign = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(redeem);
@@ -91,6 +97,7 @@ public sealed class LocalPairingListener : IDisposable
         _redeem = redeem;
         _currentUserId = currentUserId;
         _currentDeviceId = currentDeviceId ?? (static () => null);
+        _currentUserCallsign = currentUserCallsign ?? (static () => null);
         _log = log ?? NullClientLog.Instance;
     }
 
@@ -194,6 +201,7 @@ public sealed class LocalPairingListener : IDisposable
                 Paired = userId is not null,
                 Version = _options.AgentVersion,
                 UserId = userId,
+                UserCallsign = userId is null ? null : _currentUserCallsign(),
                 DeviceId = _currentDeviceId(),
             };
             await WriteAsync(context, HttpStatusCode.OK, JsonSerializer.Serialize(hello, Json), origin, cancellationToken)

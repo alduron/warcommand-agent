@@ -2,7 +2,7 @@ namespace WarCommand.Agent.Core.Model;
 
 /// <summary>
 /// Request states, matching ops.request_state. Release is an edge back to Open, never a state.
-/// There is no Abandoned member and there never may be.
+/// Abandoned records no route: a withdrawal, a TTL and a stand-down are the same state.
 /// </summary>
 public enum RequestState
 {
@@ -10,8 +10,7 @@ public enum RequestState
     Claimed,
     InProgress,
     Completed,
-    Cancelled,
-    Expired,
+    Abandoned,
 }
 
 /// <summary>Admission key when a slot frees. Never a sort key: the board sorts by slot ascending.</summary>
@@ -22,17 +21,7 @@ public enum Priority
     Urgent,
 }
 
-/// <summary>Outcome on a completed event. Unable is the one outcome that is not terminal.</summary>
-public enum Outcome
-{
-    Serviced,
-    NoLongerRequired,
-
-    /// <summary>Returns the request to Open. The frame carries the full request body.</summary>
-    Unable,
-}
-
-/// <summary>Reason on a released event. Unable is deliberately not a member: it is an Outcome.</summary>
+/// <summary>Reason on a released event. Release hands a row back and is never an ending.</summary>
 public enum ReleaseReason
 {
     Voluntary,
@@ -41,34 +30,19 @@ public enum ReleaseReason
 }
 
 /// <summary>
-/// Rows in ops.request_events. RoundsAway, Adjusted and Escalated change no state.
-/// There is no Abandoned kind, ever.
+/// Rows in ops.request_events. Escalated changes no state. Completion carries no outcome.
 /// </summary>
 public enum RequestEventKind
 {
     Submitted,
     Claimed,
     Started,
-    RoundsAway,
-    Adjusted,
     Completed,
     Released,
-    Cancelled,
+    Abandoned,
     Superseded,
-    Expired,
-    StoodDown,
+    Reopened,
 }
-
-/// <summary>Spotter correction direction. Its own position class; never an initial-class token.</summary>
-#pragma warning disable CA1720 // 'Short' is the wire value in contracts/events.md, not a type name.
-public enum AdjustDirection
-{
-    Over,
-    Short,
-    Left,
-    Right,
-}
-#pragma warning restore CA1720
 
 /// <summary>Who an escalation widened the audience to. No state change either way.</summary>
 public enum EscalationLevel

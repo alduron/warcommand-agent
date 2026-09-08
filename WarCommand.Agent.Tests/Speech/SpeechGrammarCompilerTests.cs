@@ -15,8 +15,6 @@ namespace WarCommand.Agent.Tests.Speech;
 /// </remarks>
 public class SpeechGrammarCompilerTests
 {
-    private static readonly string[] AdjustEntryAliases = ["adjust", "correction"];
-
     private static CompiledSpeechGrammar Everything =>
         SpeechGrammarCompiler.Compile(ContractFixtures.Catalog, GrammarContext.Everything);
 
@@ -38,14 +36,16 @@ public class SpeechGrammarCompilerTests
     [InlineData("right")]
     [InlineData("over")]
     [InlineData("short")]
-    public void An_adjust_direction_is_never_a_candidate_in_the_initial_position(string direction)
+    public void A_removed_correction_word_is_a_candidate_nowhere(string direction)
     {
         var compiled = Everything;
 
-        Assert.False(
-            compiled.For(PositionClass.Initial).Contains(direction),
-            $"'{direction}' reached the initial class, where the phonetic floor refuses it");
-        Assert.True(compiled.For(PositionClass.AdjustDirection).Contains(direction));
+        foreach (var positionClass in PositionClasses.All)
+        {
+            Assert.False(
+                compiled.For(positionClass).Contains(direction),
+                $"'{direction}' reached {positionClass}, and the verb that held it is gone");
+        }
     }
 
     [Fact]
@@ -143,31 +143,18 @@ public class SpeechGrammarCompilerTests
     }
 
     [Fact]
-    public void The_five_verb_fields_the_compiler_reads_are_carried_through()
+    public void The_verb_fields_the_compiler_reads_are_carried_through()
     {
-        var adjust = Assert.Single(
-            Everything.Verbs.Where(v => string.Equals(v.Id, "adjust", StringComparison.Ordinal)));
-
-        Assert.Equal(PositionClass.AdjustDirection, adjust.AliasClass);
-        Assert.Equal(AdjustEntryAliases, adjust.EntryAliases);
-        Assert.Contains("left", adjust.Aliases);
-        Assert.True(adjust.TakesMetres);
-        Assert.False(adjust.Terminal);
-
         var done = Assert.Single(
             Everything.Verbs.Where(v => string.Equals(v.Id, "done", StringComparison.Ordinal)));
 
         Assert.True(done.Terminal);
-        Assert.True(done.TakesQuantity);
+
+        // done carries an outcome and nothing else. The one count in the catalog belongs to
+        // move_transport and is set once at submit.
+        Assert.False(done.TakesQuantity);
         Assert.Equal(PositionClass.Initial, done.AliasClass);
         Assert.Empty(done.EntryAliases);
-    }
-
-    [Fact]
-    public void A_verb_that_takes_metres_loads_the_number_words_the_recognizer_needs()
-    {
-        // 'adjust 3 over fifty' cannot be heard if 'fifty' was never handed to the decoder.
-        Assert.Contains("fifty", Everything.RecognizerPhrases);
     }
 
     [Fact]

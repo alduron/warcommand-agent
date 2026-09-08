@@ -40,9 +40,6 @@ public sealed record BoardRow
     /// <summary>Null on a type with no takes_quantity. Never inferred from a modifier.</summary>
     public int? QuantityRequested { get; init; }
 
-    /// <summary>Short of QuantityRequested re-opens the remainder under the same ticket.</summary>
-    public int? QuantityDelivered { get; init; }
-
     /// <summary>Every point the type's arity required, in ordinal order.</summary>
     public required IReadOnlyList<BoardPoint> Points { get; init; }
 
@@ -113,7 +110,7 @@ public sealed record BoardRow
         State is RequestState.Claimed or RequestState.InProgress
         || (MultiTaker && State == RequestState.Open && TakerParticipantIds.Count > 0);
 
-    public bool IsTerminal => State is RequestState.Completed or RequestState.Cancelled or RequestState.Expired;
+    public bool IsTerminal => State is RequestState.Completed or RequestState.Abandoned;
 
     /// <summary>The lowest confidence any point reported, or null when no point reports one.</summary>
     public decimal? MinPointConfidence

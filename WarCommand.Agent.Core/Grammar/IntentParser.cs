@@ -15,9 +15,6 @@ public static class ParseReasons
     /// <summary>A modifier spoken first. Bare 'smoke' is a modifier and never a request.</summary>
     public const string ModifierOnlyNeverInitial = "modifier_only_never_initial";
 
-    /// <summary>An adjust direction spoken first. 'left' and 'right' are never initial tokens.</summary>
-    public const string AdjustDirectionNeverInitial = "adjust_direction_never_initial";
-
     /// <summary>Nothing in the initial class matched.</summary>
     public const string NotInVocabulary = "not_in_vocabulary";
 
@@ -107,10 +104,6 @@ public sealed record ParsedCommand : ParseResult
 
     /// <summary>The digit a slot ref names, or null for next, top, all.</summary>
     public int? Slot { get; init; }
-
-    public AdjustDirection? Direction { get; init; }
-
-    public int? Metres { get; init; }
 
     /// <summary>The role the role verb toggles, or null when it is a read back.</summary>
     public string? RoleId { get; init; }
@@ -240,15 +233,6 @@ public sealed class IntentParser
 
         // Position first: a word that is legal in another class was heard in the wrong position,
         // which is a more useful thing to say than 'forbidden'.
-        if (_grammar.LongestMatch(PositionClass.AdjustDirection, utterance.Tokens, 0) is not null)
-        {
-            return new ParsedRejection
-            {
-                Reason = ParseReasons.AdjustDirectionNeverInitial,
-                Transcript = whole,
-            };
-        }
-
         if (_grammar.LongestMatch(PositionClass.Modifier, utterance.Tokens, 0) is { } modifier
             && modifier.Token.Kind is GrammarTokenKind.Modifier or GrammarTokenKind.PriorityModifier)
         {
@@ -472,38 +456,11 @@ public sealed class IntentParser
 
         index = slot.End;
 
-        AdjustDirection? direction = null;
-        int? metres = null;
-        if (initial.Token.Kind == GrammarTokenKind.VerbEntry)
-        {
-            var directionMatch = _grammar.LongestMatch(PositionClass.AdjustDirection, tokens, index);
-            if (directionMatch is null)
-            {
-                return new ParsedCommand
-                {
-                    VerbId = verb.Id,
-                    SlotRef = slot.Token.Id,
-                    Slot = slot.Token.Value,
-                    Prompt = ParsePrompts.WhichOne,
-                };
-            }
-
-            direction = ToDirection(directionMatch.Token.SecondaryId ?? directionMatch.Token.Phrase);
-            index = directionMatch.End;
-
-            if (verb.TakesMetres && index < tokens.Count)
-            {
-                metres = ReadNumber(tokens, index);
-            }
-        }
-
         return new ParsedCommand
         {
             VerbId = verb.Id,
             SlotRef = slot.Token.Id,
             Slot = slot.Token.Value,
-            Direction = direction,
-            Metres = metres,
             ClientOnly = verb.ClientOnly,
         };
     }
@@ -631,13 +588,4 @@ public sealed class IntentParser
 
         return NumberWords.Value(tokens[start].Text);
     }
-
-    private static AdjustDirection? ToDirection(string phrase) => phrase switch
-    {
-        "over" => AdjustDirection.Over,
-        "short" => AdjustDirection.Short,
-        "left" => AdjustDirection.Left,
-        "right" => AdjustDirection.Right,
-        _ => null,
-    };
 }

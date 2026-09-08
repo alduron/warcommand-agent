@@ -25,14 +25,12 @@ public static class FrameTypes
     public const string RequestSubmitted = "request.submitted";
     public const string RequestClaimed = "request.claimed";
     public const string RequestStarted = "request.started";
-    public const string RequestRoundsAway = "request.rounds_away";
-    public const string RequestAdjusted = "request.adjusted";
     public const string RequestCompleted = "request.completed";
     public const string RequestReleased = "request.released";
     public const string RequestSuperseded = "request.superseded";
     public const string RequestEscalated = "request.escalated";
-    public const string RequestCancelled = "request.cancelled";
-    public const string RequestExpired = "request.expired";
+    public const string RequestAbandoned = "request.abandoned";
+    public const string RequestReopened = "request.reopened";
     public const string DeploymentEntered = "deployment.entered";
     public const string DeploymentRoster = "deployment.roster";
     public const string DeploymentClosed = "deployment.closed";
@@ -48,11 +46,10 @@ public static class FrameTypes
     public const string DeploymentJoin = "deployment.join";
     public const string Resume = "resume";
     public const string RequestClaim = "request.claim";
-    public const string RequestRoundsAwayCommand = "request.rounds_away";
-    public const string RequestAdjust = "request.adjust";
     public const string RequestComplete = "request.complete";
     public const string RequestRelease = "request.release";
-    public const string RequestCancel = "request.cancel";
+    public const string RequestAbandon = "request.abandon";
+    public const string RequestReopen = "request.reopen";
 
     /// <summary>
     /// Frames that put a row back on a board. Every one carries a full request body, so a consumer
@@ -162,8 +159,6 @@ public record RequestBody
 
     public int? QuantityRequested { get; init; }
 
-    public int? QuantityDelivered { get; init; }
-
     public Guid? ClaimedByParticipantId { get; init; }
 
     public string? ClaimedByCallsign { get; init; }
@@ -208,7 +203,6 @@ public record RequestBody
         Priority = Priority,
         Modifiers = Modifiers,
         QuantityRequested = QuantityRequested,
-        QuantityDelivered = QuantityDelivered,
         Points = [.. Points.Select(p => p.ToBoardPoint())],
         RequestedByParticipantId = RequestedByParticipantId,
         // The board always renders a name. A row the server did not resolve one for shows the
@@ -354,35 +348,7 @@ public sealed record RequestStartedPayload
     public required int Version { get; init; }
 }
 
-/// <summary>Non-terminal. State stays in_progress and the adjust loop begins.</summary>
-public sealed record RequestRoundsAwayPayload
-{
-    public required Guid RequestId { get; init; }
-
-    public required int Version { get; init; }
-
-    /// <summary>Time of flight when the claimant computed one locally.</summary>
-    public double? EtaS { get; init; }
-}
-
-/// <summary>Non-terminal. The spotter correction loop; the state does not move.</summary>
-public sealed record RequestAdjustedPayload
-{
-    public required Guid RequestId { get; init; }
-
-    public required int Version { get; init; }
-
-    public required AdjustDirection Direction { get; init; }
-
-    public int? Metres { get; init; }
-
-    public string? ActorCallsign { get; init; }
-}
-
-/// <summary>
-/// Terminal for serviced and no_longer_required. On <see cref="Model.Outcome.Unable"/> the request
-/// returns to open and <see cref="Request"/> carries the whole row.
-/// </summary>
+/// <summary>Terminal, and it carries nothing but how long the job took.</summary>
 public sealed record RequestCompletedPayload
 {
     public required Guid RequestId { get; init; }
@@ -391,38 +357,6 @@ public sealed record RequestCompletedPayload
 
     public double? DurationS { get; init; }
 
-    /// <summary>No default. An old agent that assumes one gets unable wrong.</summary>
-    public required Outcome Outcome { get; init; }
-
-    public int? QuantityDelivered { get; init; }
-
-    /// <summary>Present on unable only.</summary>
-    public string? Reason { get; init; }
-
-    /// <summary>
-    /// The full row when the outcome is unable. NESTED form, kept for older servers.
-    /// </summary>
-    /// <remarks>
-    /// The live server flattens it: complete_request does payload.update(request_body(updated)),
-    /// so id, points and state sit BESIDE request_id rather than under a request key. This stayed
-    /// null on every real unable completion and ReopenedRow threw, so the reopened row never
-    /// returned to any board.
-    /// </remarks>
-    public RequestBody? Request { get; init; }
-
-
-
-    [JsonIgnore]
-    public bool ReturnsToOpen => Outcome == Outcome.Unable;
-
-    /// <summary>The row to put back on the board, from whichever shape the server used.</summary>
-    public RequestBody ReopenedRow => Request ?? Flat
-        ?? throw new InvalidOperationException(
-            $"request.completed outcome {Outcome} for {RequestId} carries no request body to re-render.");
-
-    /// <summary>The flat row the live server sends, filled by the reader when there is one.</summary>
-    [JsonIgnore]
-    public RequestBody? Flat { get; init; }
 }
 
 /// <summary>
@@ -455,18 +389,23 @@ public sealed record RequestEscalatedPayload : RequestBody
     public double? UnclaimedS { get; init; }
 }
 
-public sealed record RequestCancelledPayload
+/// <summary>Terminal, and it says nothing about how it got there. Drop the row.</summary>
+public sealed record RequestAbandonedPayload
 {
     public required Guid RequestId { get; init; }
 
     public string? ActorCallsign { get; init; }
 
-    public required int Version { get; init; }
+    public int Version { get; init; }
 }
 
-public sealed record RequestExpiredPayload
+/// <summary>
+/// A terminal task back on the board under the same ticket. A full row, because every board
+/// dropped it when it ended. Upsert and reacquire a slot; this is never a delta.
+/// </summary>
+public sealed record RequestReopenedPayload : RequestBody
 {
-    public required Guid RequestId { get; init; }
+    public string? ActorCallsign { get; init; }
 }
 
 /// <summary>
@@ -533,7 +472,7 @@ public sealed record DeploymentRosterPayload
 }
 
 /// <summary>
-/// One frame for the whole stand-down, never N request.cancelled. Abort the draft, clear the board,
+/// One frame for the whole stand-down, never one per request. Abort the draft, clear the board,
 /// reset the allocator.
 /// </summary>
 public sealed record DeploymentClosedPayload
@@ -614,37 +553,10 @@ public sealed record RequestClaimCommand
     public required int Version { get; init; }
 }
 
-/// <summary>Non-terminal. Starts a row claimed before claim-starts-it on the way through.</summary>
-public sealed record RequestRoundsAwayCommand
-{
-    public required Guid RequestId { get; init; }
-
-    public required int Version { get; init; }
-}
-
-/// <summary>Non-terminal. Sender holds the paired spotter request or is the requester.</summary>
-public sealed record RequestAdjustCommand
-{
-    public required Guid RequestId { get; init; }
-
-    public required AdjustDirection Direction { get; init; }
-
-    public int? Metres { get; init; }
-
-    public required int Version { get; init; }
-}
-
-/// <summary>Unable returns the request to open and the answering frame carries the full body.</summary>
+/// <summary>Terminal, and it carries nothing: no outcome, no reason, no count.</summary>
 public sealed record RequestCompleteCommand
 {
     public required Guid RequestId { get; init; }
-
-    public required Outcome Outcome { get; init; }
-
-    public int? QuantityDelivered { get; init; }
-
-    /// <summary>Short reason, on unable.</summary>
-    public string? Reason { get; init; }
 
     public required int Version { get; init; }
 }
@@ -657,7 +569,16 @@ public sealed record RequestReleaseCommand
     public required int Version { get; init; }
 }
 
-public sealed record RequestCancelCommand
+/// <summary>Ends it for everyone, recording no reason.</summary>
+public sealed record RequestAbandonCommand
+{
+    public required Guid RequestId { get; init; }
+
+    public required int Version { get; init; }
+}
+
+/// <summary>Puts a completed or abandoned task back on the board, same ticket, same id.</summary>
+public sealed record RequestReopenCommand
 {
     public required Guid RequestId { get; init; }
 

@@ -118,6 +118,7 @@ public class RealtimeClientTests
     [Theory]
     [InlineData(FrameTypes.RequestReleased)]
     [InlineData(FrameTypes.RequestEscalated)]
+    [InlineData(FrameTypes.RequestReopened)]
     public async Task A_row_returning_frame_upserts_a_row_the_client_never_held(string type)
     {
         var channel = new FakeWebSocketChannel();
@@ -149,39 +150,6 @@ public class RealtimeClientTests
         Assert.Equal("Bear", rendered.RequestedByCallsign);
         Assert.Single(rendered.Points);
         Assert.Equal("85.53", rendered.Points[0].X);
-    }
-
-    [Fact]
-    public async Task Completed_with_outcome_unable_carries_the_row_back_onto_the_board()
-    {
-        var channel = new FakeWebSocketChannel();
-        channel.Push(Ready("s-1", DateTimeOffset.UtcNow));
-
-        var observer = new RecordingObserver();
-        var client = Build(new FakeTicketSource(), new FakeChannelFactory(channel), observer, new TestDelay(PresenceInterval), out _);
-
-        using var cts = new CancellationTokenSource(Timeout);
-        var run = client.RunAsync(cts.Token);
-        Assert.True(observer.ReadySignal.Wait(Timeout));
-
-        var id = Guid.NewGuid();
-        channel.Push(ServerFrame.Of(
-            FrameTypes.RequestCompleted,
-            new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                ["request_id"] = id,
-                ["version"] = 5,
-                ["outcome"] = "unable",
-                ["duration_s"] = 30.0,
-                ["request"] = ServerFrame.RequestRow(id, Guid.NewGuid()),
-            },
-            seq: 2));
-
-        await Until(() => observer.Board.ContainsKey(id));
-        await cts.CancelAsync();
-        await run;
-
-        Assert.Equal("Bear", observer.Board[id].RequestedByCallsign);
     }
 
     [Fact]

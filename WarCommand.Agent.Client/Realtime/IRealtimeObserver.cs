@@ -94,14 +94,6 @@ public interface IRealtimeObserver
     {
     }
 
-    void OnRequestRoundsAway(RequestRoundsAwayPayload payload)
-    {
-    }
-
-    void OnRequestAdjusted(RequestAdjustedPayload payload)
-    {
-    }
-
     /// <summary>On outcome unable the row returns to open and the payload carries the whole body.</summary>
     void OnRequestCompleted(RequestCompletedPayload payload)
     {
@@ -121,11 +113,12 @@ public interface IRealtimeObserver
     {
     }
 
-    void OnRequestCancelled(RequestCancelledPayload payload)
+    void OnRequestAbandoned(RequestAbandonedPayload payload)
     {
     }
 
-    void OnRequestExpired(RequestExpiredPayload payload)
+    /// <summary>A terminal row back on the board. A full body: upsert it and reacquire a slot.</summary>
+    void OnRequestReopened(RequestReopenedPayload payload)
     {
     }
 

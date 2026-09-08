@@ -238,15 +238,7 @@ internal sealed class RecordingObserver : IRealtimeObserver
 
     public void OnRequestCompleted(RequestCompletedPayload payload)
     {
-        if (payload.ReturnsToOpen)
-        {
-            Board[payload.RequestId] = payload.ReopenedRow;
-        }
-        else
-        {
-            Board.Remove(payload.RequestId);
-        }
-
+        Board.Remove(payload.RequestId);
         Order.Add("completed");
     }
 
@@ -254,6 +246,12 @@ internal sealed class RecordingObserver : IRealtimeObserver
     {
         Board[payload.Id] = payload;
         Order.Add("escalated");
+    }
+
+    public void OnRequestReopened(RequestReopenedPayload payload)
+    {
+        Board[payload.Id] = payload;
+        Order.Add("reopened");
     }
 
     public void OnClaimsReconcile(ClaimsReconcilePayload payload)

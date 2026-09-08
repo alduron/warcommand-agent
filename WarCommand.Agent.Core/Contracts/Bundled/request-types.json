@@ -2046,7 +2046,7 @@
       "multi_taker": false
     }
   ],
-  "quantity_note": "takes_quantity names the thing the count counts. It is NOT a modifier. Count used to be stuffed into modifiers text[], which made a partially delivered request unrepresentable: a driver asked for four runs who delivered two could only lie with 'done' or leave the row open, and two drivers could not split one request. It is now quantity_requested and quantity_delivered on Request, and the done verb carries a delivered count. A short completion re-opens the remainder under the SAME ticket rather than creating a second one. The numeral is still spoken in the modifier position class ('lift 6', 'resupply 4 pallets'); only its storage moved. A count belongs to a type only where the number IS the ask. Owner's call: move_transport keeps 'passengers' and nothing else does. attack_position lost 'rounds' (six target roles, and a fireteam cannot send three rounds to a position), resupply lost 'pallets' and build_builders lost 'bodies'. Do not add takes_quantity to a new type without asking. A type with no takes_quantity has no quantity, and quantity is never inferred from a modifier.",
+  "quantity_note": "takes_quantity names the thing the count counts. It is NOT a modifier. A count is set ONCE, at request time, on a type that declares takes_quantity, and nobody updates it afterwards: there is no partial completion and no delivered count. done carries no outcome, no reason and no count. The numeral is spoken in the modifier position class ('lift 6'); only its storage is quantity_requested on Request. A count belongs to a type only where the number IS the ask. Owner's call: move_transport keeps 'passengers' and nothing else does. attack_position lost 'rounds' (six target roles, and a fireteam cannot send three rounds to a position), resupply lost 'pallets' and build_builders lost 'bodies'. Do not add takes_quantity to a new type without asking. A type with no takes_quantity has no quantity, and quantity is never inferred from a modifier.",
   "command_verbs": [
     {
       "id": "accept",
@@ -2084,39 +2084,8 @@
         "delivered"
       ],
       "terminal": true,
-      "takes_quantity": true,
-      "note": "The only terminal completion verb. Carries an outcome (serviced, no_longer_required, unable) on the completed event and an optional delivered count on a type with takes_quantity.",
-      "alias_note": "'splash' and 'rounds out' were aliases here and were WRONG. Both mean the rounds are in the air, which is exactly when the adjust loop should begin, so the most natural word in a gunner's vocabulary closed the mission before the spotter could speak and the requester's strip read ROUNDS OUT as completion. They now belong to rounds_away."
-    },
-    {
-      "id": "rounds_away",
-      "aliases": [
-        "splash",
-        "rounds out",
-        "shot",
-        "on the way"
-      ],
-      "terminal": false,
-      "note": "NON-TERMINAL. Writes the rounds_away RequestEvent and leaves state at in_progress so the spotter can still adjust. Also supplies the requester's ETA for free, because time of flight is already computed locally.",
-      "alias_note": "'shot' sits one feature above the floor against the adjust direction 'short' (AA1 versus AO1, S versus SH, T versus R-T: three of four). They are in DIFFERENT position classes, which is what makes the pair safe, and the cost of a swap is bounded because neither verb is terminal. Re-run the floor before either word moves class. 'on the way' shares its onset with the start alias 'on it'; longest_match_wins resolves it, and both readings are non-terminal. 'rounds out' as a first token does not collide with the 'rounds' quantity unit or the ammo supply alias, because those live in the modifier and kind classes."
-    },
-    {
-      "id": "adjust",
-      "aliases": [
-        "over",
-        "short",
-        "left",
-        "right"
-      ],
-      "terminal": false,
-      "position_class": "adjust_direction",
-      "entry_aliases": [
-        "adjust",
-        "correction"
-      ],
-      "takes_metres": true,
-      "note": "NON-TERMINAL, spotter side. Spoken by whoever holds the paired spotter request, or by the requester. The matched alias IS the direction on the adjusted event payload; a trailing numeral supplies optional metres. 'adjust 3 over 50'.",
-      "alias_note": "These four words are NOT initial-class tokens, and that is load-bearing rather than tidy. Bare 'left' is L EH1 F T against the incumbent 'lift' L IH1 F T: same syllable count, same onset, same coda, differing only in stressed vowel. One feature of four, REFUSED. Bare 'right' is R AY1 T against the incumbent 'ride' R AY1 D: same syllable count, same stressed vowel, same onset, differing only in coda voicing. One feature of four, REFUSED. Both would have routed a fire correction into a transport request. Confining them to the adjust_direction class, reachable only after 'adjust' or 'correction' plus a slot ref, removes the collision outright instead of papering it, and the four directions clear the floor comfortably against each other."
+      "note": "The only completion verb, and it carries NOTHING: no outcome, no reason, no delivered count. A task is completed or it is abandoned. A completed task can be reopened onto the board under the same ticket.",
+      "alias_note": "'splash' and 'rounds out' were aliases here and were WRONG. Both mean the shells are still in flight, not that the job is finished, so the most natural word in a gunner's vocabulary closed the mission early and the requester's strip read ROUNDS OUT as completion. 'splash', 'rounds out', 'shot' and 'on the way' are now aliases of NOTHING and must never be reattached here. See docs/design/17-review-findings.md C6."
     },
     {
       "id": "release",
@@ -2125,6 +2094,16 @@
         "drop it",
         "hand off"
       ]
+    },
+    {
+      "id": "reopen",
+      "aliases": [
+        "reopen",
+        "back on the board"
+      ],
+      "terminal": false,
+      "note": "Puts a completed or abandoned task back on the board under the SAME ticket and the SAME request id, unclaimed, with the full TTL again. Requester, admin or any member; never a visitor. It has no menu entry because a terminal row is not on the board to press a digit against.",
+      "alias_note": "'reopen' is three syllables and shares no stressed vowel with any incumbent initial-class word. 'back on the board' is a phrase form for the same reason 'drop it' and 'hand off' are: it cannot be misheard as one word."
     },
     {
       "id": "cancel",
@@ -2344,7 +2323,6 @@
     "modifier": "Modifiers and counts. Only after a request type. A takes_quantity numeral is spoken here.",
     "kind": "Supply kinds and structure kinds. Only after a type that takes one.",
     "slot": "1-9, next, top, all. Only after a command verb.",
-    "adjust_direction": "over, short, left, right. Only after the adjust verb and its slot ref. Kept out of the initial class because 'left' and 'right' both fall below the floor there, against 'lift' and 'ride'.",
     "digit": "0-9. Only after join, and exactly six of them."
   },
   "phonetic_floor": {
@@ -2368,11 +2346,10 @@
       "fob": "F AA1 B",
       "fpv": "EH2 F P IY2 V IY1",
       "medevac": "M EH1 D IH0 V AE2 K",
-      "rounds out": "R AW1 N D Z AW1 T",
-      "on the way": "AA1 N DH AH0 W EY1"
+      "reopen": "R IY0 OW1 P AH0 N"
     },
     "worked_example": "lmg is EH2 L EH2 M JH IY1 and smg is EH2 S EH2 M JH IY1. Same syllable count, same stressed vowel IY1, same JH-IY coda, differing only in the onset of the first letter. One feature of four. REFUSED, which is why weapon_lmg says \"machine gun\" and weapon_smg says \"sub gun\". Nobody spells a weapon class out loud under fire anyway.",
-    "worked_example_2": "left is L EH1 F T and lift is L IH1 F T. One syllable each, same L onset, same F-T coda, differing only in the stressed vowel. One feature of four. REFUSED in the initial class, which is why the adjust directions live in their own position class instead. right versus ride fails the same way on coda voicing alone.",
+    "worked_example_2": "left is L EH1 F T and lift is L IH1 F T. One syllable each, same L onset, same F-T coda, differing only in the stressed vowel. One feature of four. REFUSED, which is why bare 'left' is forbidden outright. right versus ride fails the same way on coda voicing alone.",
     "cross_class_note": "The floor is computed PER POSITION CLASS. Moving a token to a class where its rival cannot appear is a legitimate fix and is not the same as suppressing the check: the recognizer genuinely never chooses between them. Moving a token to dodge a floor failure without checking it against its NEW class is the way to reintroduce the bug somewhere else."
   },
   "ambiguous_aliases_note": "An alias listed under a type's ambiguous_aliases is recognised but NEVER resolved by confidence. When it is the top hypothesis and a competing type is within the margin, the agent shows a two-item menu instead of guessing. It costs one keypress in the rare case and makes a confidently wrong request impossible. The generator also adds any pair it finds within 1.25x the floor.",
@@ -2407,9 +2384,8 @@
     "fuel": "Already a supply kind on resupply. For one stranded vehicle use 'refuel'.",
     "a t": "Letter names are the worst case for the recognizer and it collides with 'eight'. Use 'anti tank'.",
     "support": "Ambiguous across air_support, the two transports and the Wardogs Support track. Name the effect instead.",
-    "left": "FORBIDDEN in the initial class. One feature from 'lift' (same syllables, same L onset, same F-T coda). It is legal in adjust_direction, where 'lift' cannot appear.",
-    "right": "FORBIDDEN in the initial class. One feature from 'ride' (same syllables, same AY1, same R onset, coda differing only in voicing). It is legal in adjust_direction, where 'ride' cannot appear.",
-    "rover": "Never add it. One feature from the adjust direction 'over': same syllable count, same OW1, same coda, differing only in a null versus R onset. If a ground-vehicle type ever wants this word it must take a two-word form."
+    "left": "FORBIDDEN. One feature from 'lift' (same syllables, same L onset, same F-T coda). There is no class it is legal in: the adjust verb that once held it is gone.",
+    "right": "FORBIDDEN. One feature from 'ride' (same syllables, same AY1, same R onset, coda differing only in voicing). There is no class it is legal in: the adjust verb that once held it is gone."
   },
   "color_groups_note": "A colour group answers what the role DOES, so a queue glyph reads without its label: fire, recon, move, build, medic, command. It is not the domain the role sits in.",
   "icon_note": "Two SVG path `d` strings on a 24x24 viewBox, stroke only, no fill. d2 may be empty. Served, never compiled in, so a glyph can be corrected without shipping a client.",

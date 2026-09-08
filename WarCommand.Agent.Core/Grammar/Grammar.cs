@@ -32,8 +32,6 @@ public enum GrammarTokenKind
 
     SlotRef,
 
-    AdjustDirection,
-
     Digit,
 
     /// <summary>A cardinal or numeral used for a count or for metres.</summary>
@@ -85,19 +83,11 @@ public sealed record GrammarContext
     /// <summary>No claimed rows means done, release and start are not legal.</summary>
     public bool HasClaimedRows { get; init; }
 
-    /// <summary>rounds_away is legal only on a row the speaker started.</summary>
-    public bool HasStartedRows { get; init; }
-
-    /// <summary>adjust only on a row the speaker requested or holds the paired spotter request for.</summary>
-    public bool HasAdjustableRows { get; init; }
-
     /// <summary>Nothing is pruned. For the collision suite, which measures the whole catalog.</summary>
     public static GrammarContext Everything { get; } = new()
     {
         HasAnyRows = true,
         HasClaimedRows = true,
-        HasStartedRows = true,
-        HasAdjustableRows = true,
     };
 
     /// <summary>The board state the verb pruning rules read.</summary>
@@ -114,10 +104,6 @@ public sealed record GrammarContext
             EnabledRoleIds = enabledRoleIds,
             HasAnyRows = visible.Count > 0,
             HasClaimedRows = held.Count > 0,
-            HasStartedRows = held.Exists(r => r.State == RequestState.InProgress),
-            HasAdjustableRows = visible.Exists(r =>
-                r.RequestedByParticipantId == board.ViewerParticipantId
-                || (r.RelatedRequestId is not null && held.Exists(h => h.Id == r.RelatedRequestId))),
         };
     }
 }
@@ -146,8 +132,6 @@ public sealed class Grammar
         {
             ["done"] = ["claimed"],
             ["release"] = ["claimed"],
-            ["rounds_away"] = ["started"],
-            ["adjust"] = ["adjustable"],
         };
 
     private readonly Dictionary<PositionClass, List<GrammarToken>> _byClass = [];
@@ -363,9 +347,6 @@ public sealed class Grammar
             }
 
             var aliasClass = PositionClasses.TryParse(verb.PositionClass) ?? PositionClass.Initial;
-            var aliasKind = aliasClass == PositionClass.AdjustDirection
-                ? GrammarTokenKind.AdjustDirection
-                : GrammarTokenKind.CommandVerb;
 
             foreach (var alias in verb.Aliases)
             {
@@ -373,9 +354,8 @@ public sealed class Grammar
                 {
                     Phrase = alias,
                     Class = aliasClass,
-                    Kind = aliasKind,
+                    Kind = GrammarTokenKind.CommandVerb,
                     Id = verb.Id,
-                    SecondaryId = aliasClass == PositionClass.AdjustDirection ? alias : null,
                 });
             }
 
@@ -407,8 +387,6 @@ public sealed class Grammar
         return needs[0] switch
         {
             "claimed" => Context.HasClaimedRows,
-            "started" => Context.HasStartedRows,
-            "adjustable" => Context.HasAdjustableRows,
             _ => Context.HasAnyRows,
         };
     }

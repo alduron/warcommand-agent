@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Runs the build and test gates and refuses the push if either fails. release.yml repeats them
-# on a tag, but that is the release, not a gate on main. RELEASE, not Debug: Directory.Build.props
-# sets TreatWarningsAsErrors, so a Debug-only check misses the analyzer gate that CI applies.
-# Set SKIP_VERIFY=1 to bypass, which is for a broken toolchain, never for a red step.
+# Runs the build and test gates and refuses the push if either fails, then tags main so the push
+# actually ships. release.yml repeats the gates on a tag, but that is the release, not a gate on
+# main. RELEASE, not Debug: Directory.Build.props sets TreatWarningsAsErrors, so a Debug-only check
+# misses the analyzer gate that CI applies.
+# Set SKIP_VERIFY=1 to bypass the gates, which is for a broken toolchain, never for a red step.
+# Set WARCMD_AUTOTAG=0 to push main without cutting a tag.
 # The body is ONE brace group ending in `exit`, and that is load-bearing rather than style.
 # Bash reads a script from its file in chunks, seeking back to just past the last command it
 # parsed, so a script edited WHILE IT RUNS resumes at a stale byte offset and runs garbage. A
@@ -18,19 +20,76 @@
 {
   set -euo pipefail
 
+  remote="${1:-origin}"
+  zero="0000000000000000000000000000000000000000"
+
+  # stdin is one "<local ref> <local sha> <remote ref> <remote sha>" line per ref being pushed.
+  # Read it before anything else: the gates below take minutes and nothing else consumes it.
+  main_sha=""
+  main_was=""
+  while read -r _local_ref local_sha remote_ref remote_was; do
+    if [ "$remote_ref" = "refs/heads/main" ] && [ "$local_sha" != "$zero" ]; then
+      main_sha="$local_sha"
+      main_was="$remote_was"
+    fi
+  done
+
   if [ "${SKIP_VERIFY:-0}" = "1" ]; then
     echo "pre-push: SKIP_VERIFY=1, not verifying." >&2
+  else
+    cd "$(git rev-parse --show-toplevel)"
+    echo "pre-push: running the agent CI locally, Release."
+
+    dotnet restore WarCommand.Agent.sln
+    dotnet build WarCommand.Agent.sln -c Release --no-restore
+    dotnet test WarCommand.Agent.sln -c Release --no-build
+
+    echo "pre-push: green."
+  fi
+
+  # A push to main that is not tagged reaches nobody. release.yml builds on a v* tag and nothing
+  # else, so an untagged main is code that exists, passes, and that every installed agent's update
+  # check correctly reports as not published. Five commits sat that way and read as a broken
+  # updater. The tag is part of the push, not a thing to remember afterwards.
+  if [ "${WARCMD_AUTOTAG:-1}" != "1" ] || [ -z "$main_sha" ]; then
     exit 0
   fi
 
-  cd "$(git rev-parse --show-toplevel)"
-  echo "pre-push: running the agent CI locally, Release."
+  existing="$(git tag --points-at "$main_sha" --list 'v*' | head -n 1)"
+  if [ -n "$existing" ]; then
+    echo "pre-push: $existing already tags this commit, not cutting another."
+    exit 0
+  fi
 
-  dotnet restore WarCommand.Agent.sln
-  dotnet build WarCommand.Agent.sln -c Release --no-restore
-  dotnet test WarCommand.Agent.sln -c Release --no-build
+  # Only when this push fast-forwards the remote. A rejected branch push would otherwise leave a
+  # published release for a commit that never landed on main.
+  if [ "$main_was" != "$zero" ] && ! git merge-base --is-ancestor "$main_was" "$main_sha"; then
+    echo "pre-push: main is not a fast-forward, not tagging. Tag by hand once it lands." >&2
+    exit 0
+  fi
 
-  echo "pre-push: green."
+  last="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+  version="${last#v}"
+  major="${version%%.*}"
+  rest="${version#*.}"
+  minor="${rest%%.*}"
+  patch="${rest##*.}"
+
+  case "$major.$minor.$patch" in
+    *[!0-9.]*|*..*|.*|*.) echo "pre-push: cannot read a version out of '${last:-<no tag>}'. Tag by hand." >&2 ; exit 1 ;;
+  esac
+
+  next="v$major.$minor.$((patch + 1))"
+  echo "pre-push: tagging $next so the release builds."
+
+  git tag "$next" "$main_sha"
+
+  # The gates just ran against this exact sha, and this nested push must not re-enter the tagger.
+  if ! SKIP_VERIFY=1 WARCMD_AUTOTAG=0 git push "$remote" "refs/tags/$next"; then
+    git tag -d "$next"
+    echo "pre-push: pushing $next failed, tag removed. Nothing was released." >&2
+    exit 1
+  fi
 
   exit 0
 }

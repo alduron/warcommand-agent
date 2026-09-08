@@ -23,6 +23,7 @@ public sealed class LocalPairingListenerTests : IDisposable
     private readonly bool _bound;
 
     private string? _userId;
+    private string? _callsign;
     private bool _redeemThrows;
 
     public LocalPairingListenerTests()
@@ -38,9 +39,13 @@ public sealed class LocalPairingListenerTests : IDisposable
 
                 _redeemed.Add(ticket);
                 _userId = LinkedUserId;
+                _callsign = "ALDURON";
                 return Task.CompletedTask;
             },
-            () => _userId);
+            () => _userId,
+            log: null,
+            currentDeviceId: null,
+            currentUserCallsign: () => _callsign);
 
         _bound = _listener.Start();
     }
@@ -96,6 +101,7 @@ public sealed class LocalPairingListenerTests : IDisposable
         Assert.True(hello!.Agent);
         Assert.False(hello.Paired);
         Assert.Null(hello.UserId);
+        Assert.Null(hello.UserCallsign);
     }
 
     [Fact]
@@ -135,6 +141,9 @@ public sealed class LocalPairingListenerTests : IDisposable
 
         Assert.True(hello!.Paired);
         Assert.Equal(LinkedUserId, hello.UserId);
+
+        // The callsign is what a second signed-in session names when it refuses to take the agent.
+        Assert.Equal("ALDURON", hello.UserCallsign);
     }
 
     [Fact]

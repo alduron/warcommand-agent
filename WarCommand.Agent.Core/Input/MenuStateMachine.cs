@@ -413,18 +413,7 @@ public sealed record MenuRequestReady(
 public sealed record MenuJoinReady(string InviteCode) : MenuOutcome;
 
 /// <summary>A verb against one slot, executed immediately. Board actions never preview.</summary>
-public sealed record MenuBoardAction(string VerbId, int Slot) : MenuOutcome
-{
-    /// <summary>Which way to walk the rounds, on adjust only.</summary>
-    /// <remarks>
-    /// Carried here because the voice path parses it and the board path needs it. Dropping it made
-    /// "adjust 3 over 50" unroutable, so the whole spotter correction loop was unreachable.
-    /// </remarks>
-    public AdjustDirection? Direction { get; init; }
-
-    /// <summary>How far, on adjust only.</summary>
-    public int? Metres { get; init; }
-}
+public sealed record MenuBoardAction(string VerbId, int Slot) : MenuOutcome;
 
 /// <summary>
 /// A panel off the MORE page: help, roles, match, people, restart, link. The panel owns the digits
@@ -650,18 +639,12 @@ public sealed class MenuStateMachine
     /// filtered by row state and the states are disjoint, so ordering by what that state needs most
     /// keeps every offer inside five and keeps it stable: on an open row 1 is always ACCEPT, on a
     /// row you hold 1 is always DONE.
-    /// <para>
-    /// ADJUST is absent on purpose. It carries a direction and a distance that this surface has no
-    /// way to ask for, so offering it here would be a press that always refuses. It stays a voice
-    /// verb until the menu can collect a direction.
-    /// </para>
     /// </remarks>
     private static readonly (string VerbId, string Label)[] BoardVerbs =
     [
         ("accept", "ACCEPT"),
         ("done", "DONE"),
         ("cancel", "CANCEL"),
-        ("rounds_away", "ROUNDS AWAY"),
         ("release", "RELEASE"),
         ("pass", "PASS"),
         ("copy", "COPY"),
@@ -2038,7 +2021,6 @@ public sealed class MenuStateMachine
             // left it on your list with no verb that could ever close it.
             "done" => mine,
             "release" => mine,
-            "rounds_away" => mine,
 
             // Only the person who asked for it can call it off, and doing so takes it off whoever
             // accepted it so they can go and do something else. Parsed from voice and offered

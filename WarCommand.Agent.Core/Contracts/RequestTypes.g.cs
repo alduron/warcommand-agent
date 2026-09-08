@@ -115,8 +115,7 @@ public static class StructureKinds
 }
 
 // A verb that is not terminal leaves the request in its current state.
-// splash and rounds out are rounds_away, never done.
-// See Convention_WarCommandSplashIsNotDone.
+// splash, rounds out, shot and on the way are DELETED aliases. Never reattach one to done.
 public static class TerminalVerbs
 {
     public const string Done = "done";

@@ -142,11 +142,10 @@ public sealed record CommandVerbDef
     /// <summary>The verb takes no slot ref at all.</summary>
     public bool NoSlotRef { get; init; }
 
-    public bool TakesMetres { get; init; }
-
+    /// <summary>Only move_transport declares one, and it is set once at submit.</summary>
     public bool TakesQuantity { get; init; }
 
-    /// <summary>Only a terminal verb closes a request. splash and rounds out are not terminal.</summary>
+    /// <summary>Only a terminal verb closes a request.</summary>
     public bool Terminal { get; init; }
 
     /// <summary>Never reaches the server. mute, copy and pass are local board actions.</summary>

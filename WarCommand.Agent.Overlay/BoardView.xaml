@@ -230,6 +230,24 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+
+                            <!-- The note, under the chip band, on the rows that carry one. Grows
+                                 downward like the band, so it moves nothing above it. -->
+                            <TextBlock x:Name="NoteLine" TextWrapping="Wrap"
+                                       FontSize="{StaticResource SmallSize}"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding NoteDisplay}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource DimMono}">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding NoteDisplay}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                         </StackPanel>
                     </DockPanel>
                   </Grid>
@@ -301,75 +319,6 @@
                 </DataTemplate.Triggers>
             </DataTemplate>
 
-            <!-- The requester's own strip: ticket, type, point, then who has it. -->
-            <DataTemplate x:Key="StripRowTemplate" DataType="{x:Type local:BoardRowViewModel}">
-                <Border x:Name="StripRoot" Background="{DynamicResource PanelGround}"
-                        BorderBrush="{StaticResource Edge}" BorderThickness="1,0,1,1" Padding="0,4,9,4">
-                    <DockPanel LastChildFill="True">
-                        <!--
-                            06-overlay-ux.md: green left edge for the row you took, amber for the
-                            row taken off you. One coloured word at the far right was the whole
-                            signal, and at a glance across a dim strip it read as no signal at all.
-                        -->
-                        <Rectangle x:Name="StripEdge" DockPanel.Dock="Left" Width="2" Margin="0,0,7,0"
-                                   Fill="{StaticResource Transparent}" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="StripTicket" Grid.Column="0" VerticalAlignment="Center"
-                                       Style="{StaticResource DimMono}" Text="{Binding TicketCode}" />
-                            <TextBlock x:Name="StripType" Grid.Column="1" VerticalAlignment="Center"
-                                       Style="{StaticResource Up}" Foreground="{StaticResource Dim}"
-                                       Margin="10,0,0,0" Text="{Binding TypeAndQualifier}" />
-                            <TextBlock Grid.Column="2" VerticalAlignment="Center"
-                                       Style="{StaticResource DimMono}" Margin="10,0,0,0"
-                                       Text="{Binding CoordinatesDisplay}" />
-                            <!--
-                                The two halves of a claim do not look alike. Green [YOU] is a job
-                                you took; amber is a request of yours somebody else took, which is
-                                news. One colour for both was the bug: they read as the same event.
-                            -->
-                            <TextBlock x:Name="StripState" Grid.Column="3" VerticalAlignment="Center"
-                                       HorizontalAlignment="Right" Margin="10,0,0,0" Text="{Binding StateWord}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Up}">
-                                        <Setter Property="Foreground" Value="{StaticResource Squad}" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Accent}" Value="Mine">
-                                                <Setter Property="Foreground" Value="{StaticResource Yours}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Accent}" Value="Warned">
-                                                <Setter Property="Foreground" Value="{StaticResource Warn}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Grid>
-                    </DockPanel>
-                </Border>
-                <DataTemplate.Triggers>
-                    <!-- Green: a job you are expected to act on. The edge, the ticket and the type
-                         all carry it, so the row reads as yours before the eye reaches the word. -->
-                    <DataTrigger Binding="{Binding Accent}" Value="Mine">
-                        <Setter TargetName="StripEdge" Property="Fill" Value="{StaticResource Yours}" />
-                        <Setter TargetName="StripTicket" Property="Foreground" Value="{StaticResource Yours}" />
-                        <Setter TargetName="StripType" Property="Foreground" Value="{StaticResource Yours}" />
-                    </DataTrigger>
-                    <!-- Amber: somebody took your request, so you are waiting on them. Same wash
-                         the board row uses for a taken row, so the two agree. -->
-                    <DataTrigger Binding="{Binding Accent}" Value="Warned">
-                        <Setter TargetName="StripEdge" Property="Fill" Value="{StaticResource Warn}" />
-                        <Setter TargetName="StripTicket" Property="Foreground" Value="{StaticResource Warn}" />
-                        <Setter TargetName="StripType" Property="Foreground" Value="{StaticResource Warn}" />
-                        <Setter TargetName="StripRoot" Property="Background" Value="{StaticResource TakenWash}" />
-                    </DataTrigger>
-                </DataTemplate.Triggers>
-            </DataTemplate>
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -662,7 +611,7 @@
                         <TextBlock x:Name="YoursLabel" Style="{StaticResource Up}"
                                    Foreground="{StaticResource Dim}" Text="ACTIVE" />
                     </Border>
-                    <ItemsControl x:Name="SecondaryList" ItemTemplate="{StaticResource StripRowTemplate}" />
+                    <ItemsControl x:Name="SecondaryList" ItemTemplate="{StaticResource RowTemplate}" />
                 </StackPanel>
 
                 <!-- RANGE: a section of the board, not a line inside a menu. The numbers used

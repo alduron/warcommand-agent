@@ -94,10 +94,6 @@ internal sealed class UtteranceExpectation
 
     public string? SlotRef { get; set; }
 
-    public string? Direction { get; set; }
-
-    public int? Metres { get; set; }
-
     public string? Role { get; set; }
 
     public string? InviteCode { get; set; }

@@ -22,9 +22,6 @@ public enum PositionClass
     /// <summary>After a command verb. 1-9, next, top, all.</summary>
     Slot,
 
-    /// <summary>After adjust and its slot ref. over, short, left, right.</summary>
-    AdjustDirection,
-
     /// <summary>After join only, and exactly six of them. Zero is legal here and nowhere else.</summary>
     Digit,
 }
@@ -38,7 +35,6 @@ public static class PositionClasses
         (PositionClass.Modifier, "modifier"),
         (PositionClass.Kind, "kind"),
         (PositionClass.Slot, "slot"),
-        (PositionClass.AdjustDirection, "adjust_direction"),
         (PositionClass.Digit, "digit"),
     ];
 

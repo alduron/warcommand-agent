@@ -128,29 +128,37 @@ public class BoardRealtimeObserverTests
     }
 
     /// <summary>
-    /// completed with outcome unable puts the row back, and the payload carries the whole body
-    /// because every board already dropped it.
+    /// A terminal task back on the board. The payload carries the whole body because every board
+    /// dropped the row when it ended.
     /// </summary>
     [Fact]
-    public void Completed_unable_reopens_the_row_from_the_body_it_carries()
+    public void Reopened_puts_the_row_back_from_the_body_it_carries()
     {
         var h = Build();
         var row = Row("MTR-14");
 
-        h.Observer.OnRequestCompleted(new RequestCompletedPayload
+        h.Observer.OnRequestReopened(new RequestReopenedPayload
         {
-            RequestId = row.Id,
-            Version = 3,
-            Outcome = Outcome.Unable,
-            Reason = "out of range",
-            Request = row,
+            Id = row.Id,
+            GroupId = row.GroupId,
+            DeploymentId = row.DeploymentId,
+            TicketCode = row.TicketCode,
+            TypeId = row.TypeId,
+            TargetRoleIds = row.TargetRoleIds,
+            Priority = row.Priority,
+            State = RequestState.Open,
+            RequestedByParticipantId = row.RequestedByParticipantId,
+            ExpiresAt = row.ExpiresAt,
+            CreatedAt = row.CreatedAt,
+            Version = row.Version + 1,
+            Points = row.Points,
         });
 
         Assert.NotNull(h.Board.ById(row.Id));
     }
 
     [Fact]
-    public void Completed_delivered_leaves_the_row_off_the_board()
+    public void Completed_leaves_the_row_off_the_board()
     {
         var h = Build();
         var row = Row("MTR-14");
@@ -160,15 +168,13 @@ public class BoardRealtimeObserverTests
         {
             RequestId = row.Id,
             Version = 3,
-            Outcome = Outcome.Serviced,
         });
 
         Assert.Null(h.Board.ById(row.Id));
     }
 
     [Theory]
-    [InlineData("cancelled")]
-    [InlineData("expired")]
+    [InlineData("abandoned")]
     [InlineData("superseded")]
     public void The_terminal_frames_all_drop_the_row(string frame)
     {
@@ -178,11 +184,8 @@ public class BoardRealtimeObserverTests
 
         switch (frame)
         {
-            case "cancelled":
-                h.Observer.OnRequestCancelled(new RequestCancelledPayload { RequestId = row.Id, Version = 2 });
-                break;
-            case "expired":
-                h.Observer.OnRequestExpired(new RequestExpiredPayload { RequestId = row.Id });
+            case "abandoned":
+                h.Observer.OnRequestAbandoned(new RequestAbandonedPayload { RequestId = row.Id, Version = 2 });
                 break;
             default:
                 h.Observer.OnRequestSuperseded(new RequestSupersededPayload

@@ -54,6 +54,16 @@ internal static class ContractFixtures
     /// <summary>The umbrella's copy of a served contract, or null in a standalone clone.</summary>
     public static string? UmbrellaContract(string fileName) => TryReadUmbrella($"contracts/{fileName}");
 
+    /// <summary>
+    /// The row-field parity list. Not a served contract and not bundled: it is the shared fixture
+    /// the web suite reads too, so it is reachable only from inside the umbrella.
+    /// </summary>
+    public static string RowFieldsJson =>
+        UmbrellaContract("row-fields.json")
+        ?? throw new InvalidOperationException(
+            "contracts/row-fields.json was not found above the solution. It is shared with the web "
+            + "suite and is never copied into this repo; run scripts/bootstrap.ps1 in the umbrella.");
+
     private static T Load<T>(string resourceName)
         where T : class, IValidatableContract
     {

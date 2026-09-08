@@ -525,31 +525,6 @@
         "coda"
       ],
       "a": {
-        "alias": "pass",
-        "owner": "verb:pass",
-        "ambiguous": false
-      },
-      "b": {
-        "alias": "splash",
-        "owner": "verb:rounds_away",
-        "ambiguous": false
-      },
-      "phonemes": {
-        "a": "P AE1 S",
-        "b": "S P L AE1 SH"
-      }
-    },
-    {
-      "position_class": "initial",
-      "reason": "near_floor",
-      "score": 1.2,
-      "cleared_by": "features",
-      "segment_distance": 0.6,
-      "differing_features": [
-        "onset",
-        "coda"
-      ],
-      "a": {
         "alias": "people",
         "owner": "verb:people",
         "ambiguous": false
@@ -562,56 +537,6 @@
       "phonemes": {
         "a": "P IY1 P AH0 L",
         "b": "R IY0 P IY1 T"
-      }
-    },
-    {
-      "position_class": "initial",
-      "reason": "near_floor",
-      "score": 1.2,
-      "cleared_by": "features",
-      "segment_distance": 0.6,
-      "differing_features": [
-        "onset",
-        "coda"
-      ],
-      "a": {
-        "alias": "scratch",
-        "owner": "verb:cancel",
-        "ambiguous": false
-      },
-      "b": {
-        "alias": "splash",
-        "owner": "verb:rounds_away",
-        "ambiguous": false
-      },
-      "phonemes": {
-        "a": "S K R AE1 CH",
-        "b": "S P L AE1 SH"
-      }
-    },
-    {
-      "position_class": "initial",
-      "reason": "near_floor",
-      "score": 1.2,
-      "cleared_by": "features",
-      "segment_distance": 0.6,
-      "differing_features": [
-        "onset",
-        "coda"
-      ],
-      "a": {
-        "alias": "shot",
-        "owner": "verb:rounds_away",
-        "ambiguous": false
-      },
-      "b": {
-        "alias": "start",
-        "owner": "verb:accept",
-        "ambiguous": false
-      },
-      "phonemes": {
-        "a": "SH AA1 T",
-        "b": "S T AA1 R T"
       }
     },
     {

@@ -15,14 +15,13 @@ public class GrammarTests
     private static IReadOnlyList<RecognizedToken> Words(string text) => Utterance.FromWords(text, 0.9).Tokens;
 
     [Fact]
-    public void The_adjust_directions_are_never_initial_class_tokens()
+    public void The_removed_correction_words_are_never_initial_class_tokens()
     {
         var grammar = Everything();
 
         foreach (var direction in new[] { "left", "right", "over", "short" })
         {
             Assert.False(grammar.Contains(PositionClass.Initial, direction), $"'{direction}' reached the initial class");
-            Assert.True(grammar.Contains(PositionClass.AdjustDirection, direction));
         }
 
         // The incumbents keep the whole first position.
@@ -62,7 +61,7 @@ public class GrammarTests
             var match = grammar.LongestMatch(PositionClass.Initial, Words(forbidden), 0);
 
             // forbidden_aliases is scoped: 'fuel' is banned as a TYPE alias and is still the supply
-            // kind shortcut, and 'left' is banned in the initial class and lives in adjust_direction.
+            // kind shortcut. 'left' and 'right' are banned outright.
             Assert.False(
                 match?.Token.Kind == GrammarTokenKind.RequestType,
                 $"forbidden alias '{forbidden}' resolves to request type '{match?.Token.Id}'");
@@ -127,7 +126,6 @@ public class GrammarTests
 
         Assert.False(grammar.Contains(PositionClass.Initial, "accept"));
         Assert.False(grammar.Contains(PositionClass.Initial, "done"));
-        Assert.False(grammar.Contains(PositionClass.Initial, "splash"));
     }
 
     [Fact]
@@ -155,30 +153,16 @@ public class GrammarTests
     }
 
     [Fact]
-    public void Rounds_away_is_legal_only_on_a_row_the_speaker_started()
+    public void The_removed_progress_verbs_are_in_no_vocabulary()
     {
-        var claimedOnly = Grammar.Compile(
+        var grammar = Grammar.Compile(
             ContractFixtures.Catalog,
             new GrammarContext { HasAnyRows = true, HasClaimedRows = true });
-        var started = Grammar.Compile(
-            ContractFixtures.Catalog,
-            new GrammarContext { HasAnyRows = true, HasClaimedRows = true, HasStartedRows = true });
 
-        Assert.False(claimedOnly.Contains(PositionClass.Initial, "splash"));
-        Assert.True(started.Contains(PositionClass.Initial, "splash"));
-    }
-
-    [Fact]
-    public void Adjust_needs_a_row_the_speaker_requested_or_spots_for()
-    {
-        var without = Grammar.Compile(ContractFixtures.Catalog, new GrammarContext { HasAnyRows = true });
-        var with = Grammar.Compile(
-            ContractFixtures.Catalog,
-            new GrammarContext { HasAnyRows = true, HasAdjustableRows = true });
-
-        Assert.False(without.Contains(PositionClass.Initial, "correction"));
-        Assert.True(with.Contains(PositionClass.Initial, "correction"));
-        Assert.True(with.Contains(PositionClass.AdjustDirection, "over"));
+        foreach (var word in new[] { "splash", "rounds out", "shot", "on the way", "correction", "adjust" })
+        {
+            Assert.False(grammar.Contains(PositionClass.Initial, word), $"'{word}' is still a verb");
+        }
     }
 
     [Fact]
@@ -196,7 +180,6 @@ public class GrammarTests
         board.Upsert(mine, Rows.Epoch);
         var held = GrammarContext.FromBoard(board, ["mortar"]);
         Assert.True(held.HasClaimedRows);
-        Assert.True(held.HasStartedRows);
     }
 
     [Fact]

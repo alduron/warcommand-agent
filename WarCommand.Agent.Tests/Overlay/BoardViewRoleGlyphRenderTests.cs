@@ -117,9 +117,13 @@ public class BoardViewRoleGlyphRenderTests
         return found;
     }
 
+    /// <summary>
+    /// Glyph paths only: the ones inside a row's glyph Canvas. Line 2 carries a plain Path for the
+    /// second-point arrow, which is not a glyph and never carries a role hue.
+    /// </summary>
     private static void Walk(DependencyObject node, List<ShapePath> found)
     {
-        if (node is ShapePath path)
+        if (node is ShapePath path && VisualTreeHelper.GetParent(path) is System.Windows.Controls.Canvas)
         {
             found.Add(path);
         }

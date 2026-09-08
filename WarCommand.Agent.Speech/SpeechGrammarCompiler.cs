@@ -9,13 +9,12 @@ namespace WarCommand.Agent.Speech;
 
 /// <summary>
 /// One catalog verb as the compiler reads it: <c>position_class</c>, <c>entry_aliases</c>,
-/// <c>takes_metres</c>, <c>terminal</c> and <c>takes_quantity</c>.
+/// <c>terminal</c> and <c>takes_quantity</c>.
 /// </summary>
 /// <param name="Id">Catalog verb id.</param>
 /// <param name="AliasClass">Where the aliases live. Not the initial class when the verb declares one.</param>
 /// <param name="Aliases">The verb's aliases, in <paramref name="AliasClass"/>.</param>
 /// <param name="EntryAliases">Initial-class words that open the verb. Empty when the aliases are initial.</param>
-/// <param name="TakesMetres">A trailing numeral supplies metres, so number words must be loaded.</param>
 /// <param name="TakesQuantity">A trailing numeral supplies a count, so number words must be loaded.</param>
 /// <param name="Terminal">Only a terminal verb closes a request.</param>
 public sealed record SpeechVerb(
@@ -23,7 +22,6 @@ public sealed record SpeechVerb(
     PositionClass AliasClass,
     IReadOnlyList<string> Aliases,
     IReadOnlyList<string> EntryAliases,
-    bool TakesMetres,
     bool TakesQuantity,
     bool Terminal);
 
@@ -163,7 +161,6 @@ public static class SpeechGrammarCompiler
                 aliasClass,
                 aliases,
                 entries,
-                def.TakesMetres,
                 def.TakesQuantity,
                 def.Terminal));
         }
@@ -173,7 +170,7 @@ public static class SpeechGrammarCompiler
 
     /// <summary>
     /// The union the decoder is handed. Number words ride in when a legal verb takes metres or a
-    /// quantity: 'adjust 3 over fifty' cannot be heard if 'fifty' was never loaded.
+    /// quantity: 'lift 6' cannot be heard if the number words were never loaded.
     /// </summary>
     private static IReadOnlyList<string> RecognizerPhrases(
         IEnumerable<SpeechVocabulary> vocabularies,
@@ -188,7 +185,7 @@ public static class SpeechGrammarCompiler
 
         phrases.UnionWith(roles.Phrases);
 
-        if (verbs.Any(v => v.TakesMetres || v.TakesQuantity))
+        if (verbs.Any(v => v.TakesQuantity))
         {
             phrases.UnionWith(NumberWords.All);
             for (var digit = 0; digit <= 9; digit++)

@@ -213,34 +213,22 @@ public sealed class RealtimeClient : IAsyncDisposable
     public bool Claim(Guid requestId, int version) =>
         Send(FrameTypes.RequestClaim, new RequestClaimCommand { RequestId = requestId, Version = version });
 
-    /// <summary>Non-terminal. A row claimed before claim-starts-it is started on the way through.</summary>
-    public bool RoundsAway(Guid requestId, int version) =>
-        Send(FrameTypes.RequestRoundsAwayCommand, new RequestRoundsAwayCommand { RequestId = requestId, Version = version });
-
-    public bool Adjust(Guid requestId, AdjustDirection direction, int? metres, int version) =>
-        Send(FrameTypes.RequestAdjust, new RequestAdjustCommand
-        {
-            RequestId = requestId,
-            Direction = direction,
-            Metres = metres,
-            Version = version,
-        });
-
-    public bool Complete(Guid requestId, Outcome outcome, int? quantityDelivered, string? reason, int version) =>
+    public bool Complete(Guid requestId, int version) =>
         Send(FrameTypes.RequestComplete, new RequestCompleteCommand
         {
             RequestId = requestId,
-            Outcome = outcome,
-            QuantityDelivered = quantityDelivered,
-            Reason = reason,
             Version = version,
         });
 
     public bool Release(Guid requestId, int version) =>
         Send(FrameTypes.RequestRelease, new RequestReleaseCommand { RequestId = requestId, Version = version });
 
-    public bool Cancel(Guid requestId, int version) =>
-        Send(FrameTypes.RequestCancel, new RequestCancelCommand { RequestId = requestId, Version = version });
+    public bool Abandon(Guid requestId, int version) =>
+        Send(FrameTypes.RequestAbandon, new RequestAbandonCommand { RequestId = requestId, Version = version });
+
+    /// <summary>A terminal task goes back on the board. Same ticket, same id, unclaimed.</summary>
+    public bool Reopen(Guid requestId, int version) =>
+        Send(FrameTypes.RequestReopen, new RequestReopenCommand { RequestId = requestId, Version = version });
 
     /// <summary>The override. Pins the member until their reported server key changes.</summary>
     public bool EnterDeployment(Guid deploymentId) =>
@@ -537,24 +525,8 @@ public sealed class RealtimeClient : IAsyncDisposable
                 Deliver<RequestStartedPayload>(envelope, _observer.OnRequestStarted);
                 break;
 
-            case FrameTypes.RequestRoundsAway:
-                Deliver<RequestRoundsAwayPayload>(envelope, _observer.OnRequestRoundsAway);
-                break;
-
-            case FrameTypes.RequestAdjusted:
-                Deliver<RequestAdjustedPayload>(envelope, _observer.OnRequestAdjusted);
-                break;
-
             case FrameTypes.RequestCompleted:
-                // The row on an unable completion arrives FLAT, beside request_id, because the
-                // server does payload.update(request_body(...)). Read the same payload object a
-                // second time as a row so the reopened request can be put back.
-                Deliver<RequestCompletedPayload>(
-                    envelope,
-                    payload => _observer.OnRequestCompleted(
-                        payload.Request is null && payload.ReturnsToOpen
-                            ? payload with { Flat = envelope.PayloadAs<RequestBody>() }
-                            : payload));
+                Deliver<RequestCompletedPayload>(envelope, _observer.OnRequestCompleted);
                 break;
 
             case FrameTypes.RequestReleased:
@@ -569,12 +541,12 @@ public sealed class RealtimeClient : IAsyncDisposable
                 Deliver<RequestEscalatedPayload>(envelope, _observer.OnRequestEscalated);
                 break;
 
-            case FrameTypes.RequestCancelled:
-                Deliver<RequestCancelledPayload>(envelope, _observer.OnRequestCancelled);
+            case FrameTypes.RequestAbandoned:
+                Deliver<RequestAbandonedPayload>(envelope, _observer.OnRequestAbandoned);
                 break;
 
-            case FrameTypes.RequestExpired:
-                Deliver<RequestExpiredPayload>(envelope, _observer.OnRequestExpired);
+            case FrameTypes.RequestReopened:
+                Deliver<RequestReopenedPayload>(envelope, _observer.OnRequestReopened);
                 break;
 
             case FrameTypes.ClaimsReconcile:
@@ -749,8 +721,8 @@ public sealed class RealtimeClient : IAsyncDisposable
             return;
         }
 
-        // One frame for the whole stand-down. The individual request.cancelled frames are
-        // deliberately suppressed server-side, so nothing else is coming.
+        // One frame for the whole stand-down. The server publishes no per-request frame at all,
+        // so nothing else is coming.
         _observer.OnPendingDraftAborted(DraftAbortReason.DeploymentClosed);
         _observer.OnBoardCleared(BoardClearReason.DeploymentClosed);
         _observer.OnDeploymentClosed(payload);
