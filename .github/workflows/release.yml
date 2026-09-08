@@ -59,8 +59,9 @@ jobs:
           sparse-checkout-cone-mode: false
           ssh-key: ${{ secrets.CONTRACTS_REPO_KEY }}
 
-      # The generated near-floor pair list lives only in the umbrella, and the parser degrades
-      # without it: two IntentParser rows resolve differently. Sparse, read-only, same deploy-key
+      # Two things live only in the umbrella. The generated near-floor pair list, without which the
+      # parser degrades and two IntentParser rows resolve differently; and row-fields.json, the row
+      # parity list this suite and the web suite both answer to. Sparse, read-only, same deploy-key
       # pattern as above.
       - name: Check out the generated contracts
         continue-on-error: true
@@ -68,7 +69,9 @@ jobs:
         with:
           repository: alduron/warcommand
           path: _umbrella
-          sparse-checkout: contracts/generated
+          sparse-checkout: |
+            contracts/generated
+            contracts/row-fields.json
           sparse-checkout-cone-mode: false
           ssh-key: ${{ secrets.UMBRELLA_REPO_KEY }}
 
@@ -86,6 +89,11 @@ jobs:
           else
             echo "the umbrella checkout produced nothing; the next step reports why"
           fi
+          # Not under generated/: row-fields.json is hand-authored and shared with the web suite,
+          # so it is fetched and placed by name rather than coming along with the directory.
+          if [ -f _umbrella/contracts/row-fields.json ]; then
+            cp _umbrella/contracts/row-fields.json contracts/row-fields.json
+          fi
 
       - name: Confirm the parse spec is present
         shell: bash
@@ -96,6 +104,10 @@ jobs:
           fi
           if [ ! -f ../contracts/generated/near-floor-pairs.json ]; then
             echo "::error::near-floor-pairs.json is missing. UMBRELLA_REPO_KEY must be a read-only deploy key for alduron/warcommand."
+            exit 1
+          fi
+          if [ ! -f ../contracts/row-fields.json ]; then
+            echo "::error::row-fields.json is missing. It is fetched from the umbrella by name, not under contracts/generated: check the sparse-checkout list above."
             exit 1
           fi
 
