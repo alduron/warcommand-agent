@@ -318,6 +318,8 @@ public partial class App : Application, IDisposable
             SettingsAvailable = true,
             ScreenCaptureEnabled = _settings.Current.ScreenCaptureEnabled,
             SoundsEnabled = _settings.Current.Sounds.AllSound,
+            PushToTalkLabel = ChordLabelOrNull(_bindings[BindingAction.Ptt]),
+            PanicChordLabel = ChordLabelOrNull(_bindings[BindingAction.Panic]),
         };
         // The registry is the source of truth for autostart, so it is read here rather than
         // mirrored: a user who switched it off in Task Manager must see "off" in the tray.
@@ -517,8 +519,18 @@ public partial class App : Application, IDisposable
         // of them, so holding push-to-talk opened the keyboard menu and listened to nothing.
         // The roles THIS player enabled, not the catalog's defaults. Pruning the vocabulary against
         // the defaults dropped the request types of every role the player had turned on.
+        // The capture endpoint the tray's microphone row names. Held so its health can be watched:
+        // Device is null until the first hold opens it, and a lost device falls back to Default.
+        var audioCapture = EnsureAudioDevices() ?? new WasapiAudioCapture(SpeechEvents());
+        _menuState = _menuState with
+        {
+            MicrophoneName = audioCapture.Device?.FriendlyName ?? audioCapture.DefaultInput?.FriendlyName,
+        };
+        audioCapture.HealthChanged += (_, health) =>
+            _menuState = _menuState with { MicrophoneName = health.DeviceName };
+
         _voice = new Composition.VoiceDriver(
-            EnsureAudioDevices() ?? (IAudioCapture)new WasapiAudioCapture(SpeechEvents()),
+            audioCapture,
             () => BundledContracts.Catalog().Current,
             () => _observer?.Board,
             () => _enabledRoleIds,
@@ -547,6 +559,10 @@ public partial class App : Application, IDisposable
             // assembly must not take a dependency on the input layer.
             screenCapture: new Suspendable(readout.Suspend, readout.Resume),
             audioCapture: _voice);
+
+        // Absent until now: Start() above throws rather than returning with a partial switch, so
+        // reaching this line means every PanicSubsystem is registered and Arm() succeeded.
+        _menuState = _menuState with { PanicArmed = _input.Panic.IsArmed };
 
         // The settings window captures HOTAS presses from the same reader the bridge dispatches
         // from, so a button bound there is the button the hook resolves.
@@ -1355,6 +1371,9 @@ public partial class App : Application, IDisposable
 
     private string KeyLabel(BindingAction action) =>
         _bindings[action].IsBound ? _bindings[action].Label.ToUpperInvariant() : "UNBOUND";
+
+    /// <summary>The tray's rendering of a chord: its display label, or null to hide the row.</summary>
+    internal static string? ChordLabelOrNull(Chord chord) => chord.IsBound ? chord.Label : null;
 
     /// <summary>Pushes the menu's current state onto the surface, closed included.</summary>
     private void RenderMenu(BoardPresenter presenter)
@@ -2683,6 +2702,11 @@ public partial class App : Application, IDisposable
     {
         _input?.Bridge.Rearm();
         _observer?.SetHint(HeaderHint(_standingOn is null));
+        _menuState = _menuState with
+        {
+            PushToTalkLabel = ChordLabelOrNull(_bindings[BindingAction.Ptt]),
+            PanicChordLabel = ChordLabelOrNull(_bindings[BindingAction.Panic]),
+        };
         _log?.Info("Bindings changed.");
     }
 
