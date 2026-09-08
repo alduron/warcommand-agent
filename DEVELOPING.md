@@ -5,9 +5,9 @@ screen capture. Read `../CLAUDE.md` and `../docs/design/10-agent-spec.md` first 
 
 ## What this buys you
 
-- **Second-screen mode** (`WarCommand.Agent.Overlay/BoardWindow`) is a normal, draggable window that
-  renders the board. It needs no game window, no exclusive-fullscreen handling, and no layered
-  window. It is the window the dev profile shows.
+- **The overlay** (`WarCommand.Agent.Overlay/OverlayWindow` + `BoardView`) draws the board once a
+  game window is found, or with no game at all if `overlayMode` is set to `AlwaysOn`. See "0b. The
+  overlay" below.
 - **A dev profile** points the agent at your local API and keeps its device token between runs, so
   you register and pair once, not on every launch.
 - **A fake coordinate source** (`WarCommand.Agent.Core.Dev.FakeCoordinateSource`) yields scripted
@@ -67,8 +67,7 @@ browser and a live stream. `Overlay when unfocused` on the Overlay tab switches 
 deliberate second-monitor setup, and Dim is what the demo loop leans on to draw with no game at all.
 
 **Exclusive fullscreen is a hard limit, not a bug.** A topmost layered window does not draw over it.
-The agent detects it, raises a tray balloon naming the setting to change, and second-screen mode
-carries on.
+The agent detects it, raises a tray balloon naming the setting to change, and carries on.
 
 ## 1. Start the local stack
 
@@ -132,7 +131,7 @@ dotnet run --project WarCommand.Agent
 ```
 
 First run registers a device against your local API and activates it cold-start (a guest user, no
-membership yet), then shows second-screen mode. That is normal, not a fault: `AgentConfig.BelongsToNothing`
+membership yet), then arms and shows an empty board. That is normal, not a fault: `AgentConfig.BelongsToNothing`
 says so explicitly. Every later run reuses the same device and tokens; watch
 `%LOCALAPPDATA%\WarCommand\dev\logs\agent-dev.log` for `Reusing a device registration from a
 previous run.` / `Reusing tokens from a previous run: no pairing needed.`
@@ -144,9 +143,12 @@ against the same API, or set a real pairing code before the first run:
 $env:WARCOMMAND_PAIR_CODE = "K4M2-9XPT"   # from POST /v1/devices/{id}/pairing-code or the web
 ```
 
-**To exercise the request flow with no game**, use the "Simulate PTT (dev)" button in the window.
-It runs the same `CoordinateSourceRegistry` sweep the real PTT key-down would, lands on
-`FakeCoordinateSource`, and shows the coordinate it returned.
+**To exercise the request flow with no game**, click "Simulate PTT (dev)" in `BoardView`'s dev
+panel. It runs the same `CoordinateSourceRegistry` sweep the real PTT key-down would, lands on
+`FakeCoordinateSource`, and shows the coordinate it returned. That panel only shows on a
+non-overlay `BoardView`, and the overlay's copy (the only one built outside tests today) always
+hides it, so there is currently no window this button is reachable from. Call `OnSimulatePttAsync`
+directly, or drive `CoordinateSourceRegistry` in a test, until a non-overlay surface exists.
 
 ## 4. The fast loop
 
@@ -174,16 +176,18 @@ dotnet publish WarCommand.Agent/WarCommand.Agent.csproj -c Release -o publish/
 
 ## What is still missing
 
-The tray menu renders only the rows this build can honor: the header, the board line, second-screen
-mode, the dev force-state section and Quit. The group, match, map, microphone, push-to-talk, sound,
-pairing, settings and Panic rows are written and tested in `TrayMenu.Build` but stay absent until
-their subsystem fills in the matching `TrayMenuState` field, so the menu never offers a click that
-does nothing. Panic in particular is absent rather than grayed until `PanicSwitch.Arm()` succeeds,
-which it cannot do until every `PanicSubsystem` is registered.
-
 Realtime is wired: the agent seeds the board once over HTTPS and everything after that arrives as a
-frame on the socket, with a two minute config read as the only fallback. Speech and capture are not
-part of this loop.
+frame on the socket, with a two minute config read as the only fallback. The overlay, input hooks
+(push-to-talk, the menu, Panic), Vosk speech and opt-in screen capture are wired too, all from
+`ArmForAccount`.
+
+The tray menu still says less than that, though. The header, the board line, the group and
+deployment rows, screen capture, sounds, start-with-windows, backend, pairing and settings all
+render once an account exists. Map, Microphone, the push-to-talk label (with its Rebind/Test row)
+and Panic do not: `TrayMenu.Build` draws them from `MapName`, `MicrophoneName`,
+`PushToTalkLabel`, `PanicArmed` and `PanicChordLabel`, all covered by `TrayMenuTests.cs`, but
+nothing in `App.xaml.cs` ever sets them, so those four stay absent rather than reflecting the
+subsystems underneath, which are already live.
 
 **The overlay draws nothing while `overlayMode` is `Hidden`.** That is `2` in
 `%LOCALAPPDATA%\WarCommand\dev\settings.json`, and it is a setting, not a fault: the demo loop

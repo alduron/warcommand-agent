@@ -40,8 +40,8 @@ using Application = System.Windows.Application;
 namespace WarCommand.Agent;
 
 /// <summary>
-/// The composition root. Owns the tray icon and, for now, second-screen mode: the layered overlay,
-/// hotkeys, speech and the rest of the startup sequence in 10-agent-spec.md are not wired up yet.
+/// The composition root. Owns the tray icon, the layered overlay, hotkeys, speech, screen capture,
+/// the settings window, and the realtime client.
 /// </summary>
 /// <remarks>
 /// The composition root that owns the realtime client and the PanicSwitch calls
