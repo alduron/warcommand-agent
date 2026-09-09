@@ -279,6 +279,90 @@ public class RealtimeClientTests
         Assert.Equal(standing, revalidator.Calls[^1]);
     }
 
+    /// <summary>
+    /// deployment.closed publishes on group.all, so every member's socket sees a close for a
+    /// deployment that is not the one it stands on. That close must change nothing here.
+    /// </summary>
+    [Fact]
+    public async Task A_closed_frame_for_a_foreign_deployment_leaves_the_board_intact()
+    {
+        var standing = Guid.NewGuid();
+        var group = Guid.NewGuid();
+        var foreign = Guid.NewGuid();
+
+        var channel = new FakeWebSocketChannel();
+        channel.Push(Ready("s-1", DateTimeOffset.UtcNow, group, standing));
+
+        var observer = new RecordingObserver();
+        var revalidator = new FakeRevalidator();
+        var client = Build(new FakeTicketSource(), new FakeChannelFactory(channel), observer, new TestDelay(PresenceInterval), out _, revalidator: revalidator);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var run = client.RunAsync(cts.Token);
+        Assert.True(observer.ReadySignal.Wait(Timeout));
+        await Until(() => revalidator.Calls.Count == 1);
+
+        channel.Push(ServerFrame.Of(
+            FrameTypes.DeploymentClosed,
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["group_id"] = Guid.NewGuid(),
+                ["deployment_id"] = foreign,
+                ["reason"] = "idle",
+            },
+            seq: 2));
+
+        // Nothing observable follows a foreign close, so wait on the presence heartbeat instead of
+        // a condition that a bug would also satisfy by never firing.
+        await Until(() => channel.SentOfType(FrameTypes.Presence).Count >= 1);
+        await cts.CancelAsync();
+        await run;
+
+        Assert.DoesNotContain("closed", observer.Order);
+        Assert.DoesNotContain("cleared:DeploymentClosed", observer.Order);
+        Assert.DoesNotContain("draft:DeploymentClosed", observer.Order);
+        Assert.Contains(standing, client.CurrentDeploymentIds);
+    }
+
+    /// <summary>The deployment closing under this client's feet must still end the draft and clear the board.</summary>
+    [Fact]
+    public async Task A_closed_frame_for_the_current_deployment_clears_the_board()
+    {
+        var standing = Guid.NewGuid();
+        var group = Guid.NewGuid();
+
+        var channel = new FakeWebSocketChannel();
+        channel.Push(Ready("s-1", DateTimeOffset.UtcNow, group, standing));
+
+        var observer = new RecordingObserver();
+        var revalidator = new FakeRevalidator();
+        var client = Build(new FakeTicketSource(), new FakeChannelFactory(channel), observer, new TestDelay(PresenceInterval), out _, revalidator: revalidator);
+
+        using var cts = new CancellationTokenSource(Timeout);
+        var run = client.RunAsync(cts.Token);
+        Assert.True(observer.ReadySignal.Wait(Timeout));
+        await Until(() => revalidator.Calls.Count == 1);
+
+        channel.Push(ServerFrame.Of(
+            FrameTypes.DeploymentClosed,
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["group_id"] = group,
+                ["deployment_id"] = standing,
+                ["reason"] = "owner_ended",
+            },
+            seq: 2));
+
+        await Until(() => observer.Order.Contains("closed"));
+        await cts.CancelAsync();
+        await run;
+
+        var draft = observer.Order.IndexOf("draft:DeploymentClosed");
+        var cleared = observer.Order.IndexOf("cleared:DeploymentClosed");
+        var closed = observer.Order.IndexOf("closed");
+        Assert.True(draft >= 0 && draft < cleared && cleared < closed);
+    }
+
     [Fact]
     public async Task An_empty_subscription_set_is_normal_and_seeds_nothing()
     {

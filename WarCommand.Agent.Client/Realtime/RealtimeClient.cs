@@ -725,6 +725,15 @@ public sealed class RealtimeClient : IAsyncDisposable
             return;
         }
 
+        // deployment.closed publishes on group.all, so every member's socket sees it regardless of
+        // which deployment they stand on. Only a close naming a deployment this client currently
+        // tracks may abort its draft and wipe its board; a foreign close is not about this client's
+        // match and changes nothing here.
+        if (!CurrentDeploymentIds.Contains(payload.DeploymentId))
+        {
+            return;
+        }
+
         // One frame for the whole stand-down. The server publishes no per-request frame at all,
         // so nothing else is coming.
         _observer.OnPendingDraftAborted(DraftAbortReason.DeploymentClosed);
